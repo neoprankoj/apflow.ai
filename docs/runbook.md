@@ -176,6 +176,23 @@ All current ERP calls are deterministic mocks. Failures are routed through `Erro
 
 Cloud OCR adapters fail safely when credentials are missing. They do not log raw secrets and route extraction failures to review.
 
+OCR.space setup:
+
+1. Set `OCR_PROVIDER=ocr_space`.
+2. Set `OCR_SPACE_API_KEY` in `.env` or `.env.staging`; never commit the key.
+3. Optional overrides: `OCR_SPACE_API_URL`, `OCR_SPACE_LANGUAGE`, `OCR_SPACE_ENGINE`, and `OCR_SPACE_TIMEOUT_SECONDS`.
+4. Restart FastAPI or the API container.
+5. Check `GET /ocr/test-provider?provider_name=ocr_space`.
+6. Upload a PDF/image and run `POST /documents/invoices/{document_id}/extract?tenant_id={uuid}`.
+
+OCR.space returns generic parsed text rather than a finance-specific invoice schema. APFlow uses conservative label-based parsing; unclear or missing totals, currency, invoice number, vendor, or dates are marked for human review instead of being invented. To fall back to deterministic local extraction, set `OCR_PROVIDER=mock` and restart.
+
+Live OCR.space file test:
+
+```powershell
+python scripts/test_ocr_space.py samples/invoices/invoice.pdf --out samples/ocr-results/ocr-space.json
+```
+
 ## Invoice Document Uploads
 
 1. Keep `DOCUMENT_STORAGE_PROVIDER=memory` for fast local tests and demos.

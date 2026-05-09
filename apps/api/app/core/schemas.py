@@ -157,6 +157,7 @@ class OCRProviderName(StrEnum):
     AZURE = "azure"
     GOOGLE = "google"
     AWS = "aws"
+    OCR_SPACE = "ocr_space"
 
 
 class ConfidenceBand(StrEnum):

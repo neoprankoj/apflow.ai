@@ -62,7 +62,7 @@ class MockOCRProvider:
                 error="unsupported invoice MIME type",
             )
 
-        text = content.decode("utf-8") if isinstance(content, bytes) else content or ""
+        text = self._safe_text(content)
         default_confidence = float(self._read_token(text, "confidence") or 0.96)
         field_confidence = {
             "invoice_number": float(self._read_token(text, "confidence_invoice_number") or default_confidence),
@@ -92,7 +92,7 @@ class MockOCRProvider:
             "subtotal": subtotal,
             "tax_total": tax_total,
             "grand_total": grand_total,
-            "po_number": self._read_token(text, "po_number"),
+            "po_number": self._read_token(text, "po_number") or "PO-100",
         }
         fields = [
             OCRExtractedField(
@@ -210,6 +210,13 @@ class MockOCRProvider:
             if token.startswith(prefix):
                 return token.removeprefix(prefix).strip()
         return None
+
+    def _safe_text(self, content: str | bytes | None) -> str:
+        if content is None:
+            return ""
+        if isinstance(content, bytes):
+            return content.decode("utf-8", errors="ignore")
+        return str(content)
 
     def _string(self, value: str | float | int | None) -> str | None:
         return str(value) if value is not None else None

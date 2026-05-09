@@ -64,6 +64,42 @@ def test_ready_endpoint_reports_selected_azure_ocr_missing_credentials_as_not_re
     assert body["checks"]["ocr"]["provider_status"] == "missing_credentials"
 
 
+def test_ready_endpoint_reports_selected_ocr_space_missing_credentials_as_not_ready():
+    original_provider = settings.ocr_provider
+    original_key = settings.ocr_space_api_key
+    settings.ocr_provider = "ocr_space"
+    settings.ocr_space_api_key = ""
+    try:
+        response = TestClient(create_app()).get("/ready")
+    finally:
+        settings.ocr_provider = original_provider
+        settings.ocr_space_api_key = original_key
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "not_ready"
+    assert body["checks"]["ocr"]["provider"] == "ocr_space"
+    assert body["checks"]["ocr"]["status"] == "degraded"
+    assert body["checks"]["ocr"]["provider_status"] == "missing_credentials"
+
+
+def test_ready_endpoint_stays_ready_in_mock_mode_without_ocr_space_key():
+    original_provider = settings.ocr_provider
+    original_key = settings.ocr_space_api_key
+    settings.ocr_provider = "mock"
+    settings.ocr_space_api_key = ""
+    try:
+        response = TestClient(create_app()).get("/ready")
+    finally:
+        settings.ocr_provider = original_provider
+        settings.ocr_space_api_key = original_key
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "ready"
+    assert body["checks"]["ocr"]["provider"] == "mock"
+
+
 def test_cors_origins_parse_and_deduplicate():
     config = Settings(
         cors_allowed_origins="http://localhost:3000, http://localhost:3000/,https://staging.example.com/"

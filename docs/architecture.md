@@ -68,11 +68,14 @@ ERP sync logs and external references are tenant-scoped. Real ERP adapters can b
 Supported providers:
 
 - `mock`, default and fully deterministic.
+- `ocr_space`, real OCR.space adapter for PDF/image OCR when `OCR_SPACE_API_KEY` is configured.
 - `azure`, real Azure Document Intelligence adapter using `prebuilt-invoice` when endpoint/key are configured.
 - `google`, safe Google Document AI placeholder until credentials are configured.
 - `aws`, safe AWS Textract placeholder until credentials are configured.
 
 Every OCR result includes field-level confidence, confidence bands, required-field gaps, and provider metadata. `HumanReviewAgent` inspects OCR output and creates tenant-scoped review tasks for low-confidence required fields, missing required fields, suspicious totals, and provider failures.
+
+OCR.space extraction sends uploaded PDF/image bytes through multipart upload, then maps `ParsedText` with conservative label-based parsing into the shared `OCRExtractionResult` schema. Missing or unclear required fields are routed to human review instead of being guessed.
 
 Azure extraction maps invoice ID, vendor name, vendor tax ID, dates, currency, subtotal, tax, invoice total, purchase order number, and line items into the shared `OCRExtractionResult` schema. Low-confidence Azure fields follow the same human-review path as mock OCR.
 

@@ -13,6 +13,7 @@ from app.integrations.ocr.cloud import (
 )
 from app.integrations.ocr.factory import OCRProviderFactory
 from app.integrations.ocr.mock import MockOCRProvider
+from app.integrations.ocr.ocr_space import OCRSpaceOCRAdapter
 
 
 def test_mock_ocr_returns_field_level_confidence(tenant_id):
@@ -38,7 +39,7 @@ def test_ocr_provider_factory_selects_provider():
     provider = factory.get_provider()
 
     assert provider.get_provider_name() == OCRProviderName.MOCK
-    assert {"mock", "azure", "google", "aws"}.issubset(set(factory.available_providers()))
+    assert {"mock", "azure", "google", "aws", "ocr_space"}.issubset(set(factory.available_providers()))
 
 
 def test_ocr_provider_factory_selects_azure_when_configured_provider():
@@ -56,6 +57,27 @@ def test_ocr_provider_factory_selects_azure_when_configured_provider():
     assert provider.is_configured() is True
 
 
+def test_ocr_provider_factory_selects_ocr_space_when_configured_provider():
+    factory = OCRProviderFactory(Settings(ocr_provider="ocr_space", ocr_space_api_key="test-key"))
+
+    provider = factory.get_provider()
+
+    assert provider.get_provider_name() == OCRProviderName.OCR_SPACE
+    assert provider.is_configured() is True
+
+
+def test_mock_ocr_handles_binary_pdf_and_invalid_utf8(tenant_id):
+    provider = MockOCRProvider()
+
+    for content in (b"%PDF-1.7\xff\xfe\x00binary", b"\xff\xfe\xfa", b""):
+        result = provider.extract_invoice({"mime_type": "application/pdf", "content": content}, tenant_id)
+
+        field_map = {field.field_name: field.value for field in result.fields}
+        assert result.error is None
+        assert field_map["invoice_number"] == "INV-MOCK-001"
+        assert result.confidence_summary.average_confidence > 0.9
+
+
 def test_cloud_ocr_adapters_fail_safely_without_credentials(tenant_id):
     adapters = [
         AzureDocumentIntelligenceOCRAdapter(Settings()),
@@ -68,6 +90,92 @@ def test_cloud_ocr_adapters_fail_safely_without_credentials(tenant_id):
         assert adapter.is_configured() is False
         assert result.error
         assert result.confidence_summary.required_fields_missing
+
+
+def test_ocr_space_adapter_reports_missing_credentials(tenant_id):
+    adapter = OCRSpaceOCRAdapter(Settings())
+
+    health = adapter.health_check()
+    result = adapter.extract_invoice({"mime_type": "application/pdf", "content": b"pdf"}, tenant_id)
+
+    assert health["provider"] == OCRProviderName.OCR_SPACE
+    assert health["configured"] is False
+    assert health["status"] == "missing_credentials"
+    assert result.error == "OCR.space API key is not configured"
+
+
+def test_ocr_space_maps_parsed_text_to_extraction_result(tenant_id):
+    adapter = OCRSpaceOCRAdapter(Settings(ocr_space_api_key="test-key"))
+
+    result = adapter.normalize_provider_response(
+        {
+            "IsErroredOnProcessing": False,
+            "ParsedResults": [
+                {
+                    "ParsedText": (
+                        "Vendor: Northstar Components\n"
+                        "Invoice Number: INV-SPACE-1\n"
+                        "Invoice Date: 2026-05-05\n"
+                        "Due Date: 2026-06-04\n"
+                        "Currency: USD\n"
+                        "Subtotal: 1000.00\n"
+                        "Tax: 170.00\n"
+                        "Total: 1170.00\n"
+                        "PO Number: PO-100\n"
+                    )
+                }
+            ],
+        },
+        tenant_id,
+    )
+    field_map = {field.field_name: field for field in result.fields}
+
+    assert result.provider_metadata.provider_name == OCRProviderName.OCR_SPACE
+    assert field_map["invoice_number"].value == "INV-SPACE-1"
+    assert field_map["supplier_name"].value == "Northstar Components"
+    assert field_map["grand_total"].value == 1170.0
+    assert field_map["po_number"].value == "PO-100"
+    assert result.confidence_summary.required_fields_missing == []
+    assert result.confidence_summary.average_confidence >= 0.75
+
+
+def test_ocr_space_provider_error_is_safe(tenant_id):
+    adapter = OCRSpaceOCRAdapter(Settings(ocr_space_api_key="test-key"))
+
+    result = adapter.normalize_provider_response(
+        {
+            "IsErroredOnProcessing": True,
+            "ErrorMessage": ["Unable to recognize the file"],
+        },
+        tenant_id,
+    )
+
+    assert result.error == "Unable to recognize the file"
+    assert result.provider_metadata.raw_provider_status == "provider_error"
+    assert result.confidence_summary.required_fields_missing
+
+
+def test_ocr_space_extract_uses_multipart_without_logging_key(tenant_id, caplog, monkeypatch):
+    adapter = OCRSpaceOCRAdapter(Settings(ocr_space_api_key="secret-test-key"))
+
+    def fake_post(file_name: str, content: bytes, content_type: str) -> dict:
+        assert file_name == "invoice.pdf"
+        assert content == b"pdf-bytes"
+        assert content_type == "application/pdf"
+        return {
+            "IsErroredOnProcessing": False,
+            "ParsedResults": [{"ParsedText": "Invoice Number: INV-SPACE-2\nTotal: 10.00"}],
+        }
+
+    monkeypatch.setattr(adapter, "_post_to_ocr_space", fake_post)
+
+    result = adapter.extract_invoice(
+        {"file_name": "invoice.pdf", "mime_type": "application/pdf", "content": b"pdf-bytes"},
+        tenant_id,
+    )
+
+    assert result.error is None
+    assert "secret-test-key" not in caplog.text
 
 
 def test_azure_adapter_health_check_reports_missing_credentials():

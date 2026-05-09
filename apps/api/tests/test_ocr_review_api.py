@@ -26,16 +26,18 @@ def test_ocr_providers_endpoint():
 
     assert response.status_code == 200
     providers = {provider["provider"]: provider for provider in response.json()}
-    assert {"mock", "azure", "google", "aws"}.issubset(set(providers))
+    assert {"mock", "azure", "google", "aws", "ocr_space"}.issubset(set(providers))
     assert providers["azure"]["configured"] is False
     assert providers["azure"]["status"] == "missing_credentials"
+    assert providers["ocr_space"]["configured"] is False
+    assert providers["ocr_space"]["status"] == "missing_credentials"
 
 
 def test_ocr_providers_endpoint_can_return_legacy_provider_names():
     response = TestClient(create_app()).get("/ocr/providers?include_status=false")
 
     assert response.status_code == 200
-    assert {"mock", "azure", "google", "aws"}.issubset(set(response.json()))
+    assert {"mock", "azure", "google", "aws", "ocr_space"}.issubset(set(response.json()))
 
 
 def test_ocr_test_provider_endpoint():
@@ -43,6 +45,14 @@ def test_ocr_test_provider_endpoint():
 
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
+
+
+def test_ocr_space_test_provider_reports_missing_credentials():
+    response = TestClient(create_app()).get("/ocr/test-provider?provider_name=ocr_space")
+
+    assert response.status_code == 200
+    assert response.json()["provider"] == "ocr_space"
+    assert response.json()["status"] == "missing_credentials"
 
 
 def test_ocr_extract_endpoint_uses_mock_provider():
