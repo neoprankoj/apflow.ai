@@ -66,12 +66,12 @@ export async function apiFetch<T>(
     });
   } catch (error) {
     logApiError(action, error);
-    throw new ApiRequestError(`${action} failed: API unavailable: failed to fetch`);
+    throw new ApiRequestError(`${action} failed (${path}): API unavailable: failed to fetch`);
   }
 
   if (!response.ok) {
     const detail = await readResponseDetail(response);
-    const message = `${action} failed: ${response.status} ${detail}`;
+    const message = `${action} failed (${path}): ${response.status} ${detail}`;
     logApiError(action, { status: response.status, detail });
     throw new ApiRequestError(message, response.status, detail);
   }
