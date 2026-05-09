@@ -1,16 +1,8 @@
 "use client";
 
-import {
-  AlertTriangle,
-  CheckCircle2,
-  ExternalLink,
-  FileText,
-  Play,
-  ScanText,
-  Send,
-  UploadCloud
-} from "lucide-react";
+import { AlertTriangle, CheckCircle2, ExternalLink, FileText, Play, ScanText, Send, UploadCloud } from "lucide-react";
 import { useMemo, useState } from "react";
+import { AuthStatus, apiFetch } from "./frontend-api";
 import { TimelineStage, WorkflowTimeline } from "./workflow-timeline";
 
 type UploadedDocument = {
@@ -21,9 +13,7 @@ type UploadedDocument = {
   storage_provider: string;
 };
 
-type UploadResult = {
-  document: UploadedDocument;
-};
+type UploadResult = { document: UploadedDocument };
 
 type ConfidenceSummary = {
   average_confidence: number;
@@ -42,9 +32,7 @@ type ExtractedField = {
 type ExtractResult = {
   confidence_summary?: ConfidenceSummary;
   review_status?: string;
-  ocr_result?: {
-    fields?: ExtractedField[];
-  };
+  ocr_result?: { fields?: ExtractedField[] };
 };
 
 type PipelineResult = {
@@ -98,13 +86,26 @@ type VendorInvoiceStatus = {
 type StepStatus = "pending" | "active" | "completed" | "failed";
 
 type Props = {
-  apiBaseUrl: string;
-  tenantId: string;
+  accessToken: string | null;
+  apiBaseUrl: string | null;
+  authStatus: AuthStatus;
+  tenantId: string | null;
   selectedOcrProvider?: string;
   selectedOcrStatus?: string;
+  canExportErp?: boolean;
+  onDemoLogin: () => void;
 };
 
-export function InvoiceUploadPanel({ apiBaseUrl, tenantId, selectedOcrProvider = "mock", selectedOcrStatus = "ok" }: Props) {
+export function InvoiceUploadPanel({
+  accessToken,
+  apiBaseUrl,
+  authStatus,
+  tenantId,
+  selectedOcrProvider = "mock",
+  selectedOcrStatus = "ok",
+  canExportErp = true,
+  onDemoLogin
+}: Props) {
   const [file, setFile] = useState<File | null>(null);
   const [uploadResult, setUploadResult] = useState<UploadResult | null>(null);
   const [extractResult, setExtractResult] = useState<ExtractResult | null>(null);
@@ -116,6 +117,8 @@ export function InvoiceUploadPanel({ apiBaseUrl, tenantId, selectedOcrProvider =
   const [error, setError] = useState<string | null>(null);
   const [timestamps, setTimestamps] = useState<Record<string, string>>({});
 
+  const isSignedIn = authStatus === "authenticated" && Boolean(accessToken && tenantId);
+  const signInRequired = !isSignedIn;
   const documentId = uploadResult?.document.document_id;
   const pipeline = processResult?.pipeline_result;
   const invoice = pipeline?.invoice?.canonical_invoice;
@@ -125,7 +128,161 @@ export function InvoiceUploadPanel({ apiBaseUrl, tenantId, selectedOcrProvider =
   const reviewRequiredFields = fields.filter((field) => field.requires_review).map((field) => field.field_name);
   const erpExportReady = Boolean(pipeline?.erp_export_ready);
   const selectedFileName = useMemo(() => file?.name ?? "No file selected", [file]);
+  const timelineStages = buildTimeline({ uploadResult, extractResult, processResult, erpResult, timestamps });
+
+  function requestContext() {
+    if (!apiBaseUrl) {
+      setError("NEXT_PUBLIC_API_BASE_URL is missing or invalid.");
+      return null;
+    }
+    if (!accessToken || !tenantId) {
+      setError("Sign in required. Use Demo login before upload, extraction, processing, or ERP export.");
+      return null;
+    }
+    return { apiBaseUrl, accessToken, tenantId };
+  }
+
+  function walkthroughAction(label: string) {
+    if (signInRequired) return { label: "Demo login", action: onDemoLogin, disabled: authStatus === "authenticating" };
+    if (label === "Step 2") return { label: "Upload", action: upload, disabled: !file || Boolean(uploadResult) };
+    if (label === "Step 3") return { label: "Extract", action: extractOnly, disabled: !documentId };
+    if (label === "Step 4") return { label: "Process", action: processPipeline, disabled: !documentId };
+    if (label === "Step 6") return { label: "Export", action: exportToMockErp, disabled: !canExportErp || !erpExportReady || Boolean(erpResult) };
+    if (label === "Step 7") return { label: "Preview", action: loadVendorPreview, disabled: !invoiceId };
+    return null;
+  }
+
+  async function upload() {
+    const context = requestContext();
+    if (!context) return;
+    if (!file) {
+      setError("Select a PDF or image first.");
+      return;
+    }
+    setError(null);
+    setStatus("uploading");
+    const form = new FormData();
+    form.append("tenant_id", context.tenantId);
+    form.append("file", file);
+    try {
+      const result = await apiFetch<UploadResult>(context.apiBaseUrl, "/documents/invoices/upload", {
+        method: "POST",
+        body: form,
+        token: context.accessToken,
+        action: "Upload invoice"
+      });
+      setUploadResult(result);
+      setExtractResult(null);
+      setProcessResult(null);
+      setErpResult(null);
+      setVendorPreview(null);
+      mark("uploaded");
+      setStatus("uploaded");
+    } catch (error) {
+      setStatus("failed");
+      setError(error instanceof Error ? error.message : "Upload failed: API unavailable.");
+    }
+  }
+
+  async function extractOnly() {
+    const context = requestContext();
+    if (!context || !documentId) return;
+    setError(null);
+    setStatus("extracting");
+    try {
+      const result = await apiFetch<ExtractResult>(
+        context.apiBaseUrl,
+        `/documents/invoices/${documentId}/extract?tenant_id=${context.tenantId}`,
+        { method: "POST", token: context.accessToken, action: "Extract invoice" }
+      );
+      setExtractResult(result);
+      mark("extracted");
+      setStatus("extracted");
+    } catch (error) {
+      setStatus("failed");
+      setError(error instanceof Error ? error.message : "Extraction failed because the API is unavailable.");
+    }
+  }
+
+  async function processPipeline() {
+    const context = requestContext();
+    if (!context || !documentId) return;
+    setError(null);
+    setStatus("processing");
+    try {
+      const result = await apiFetch<ProcessResult>(context.apiBaseUrl, `/documents/invoices/${documentId}/process`, {
+        method: "POST",
+        body: JSON.stringify({ tenant_id: context.tenantId }),
+        token: context.accessToken,
+        action: "Process invoice"
+      });
+      setProcessResult(result);
+      mark("processed");
+      setStatus("processed");
+    } catch (error) {
+      setStatus("failed");
+      setError(error instanceof Error ? error.message : "Processing failed because the API is unavailable.");
+    }
+  }
+
+  async function exportToMockErp() {
+    const context = requestContext();
+    if (!context || !invoiceId || !erpExportReady || !canExportErp) return;
+    setError(null);
+    setStatus("exporting");
+    try {
+      const result = await apiFetch<ERPSyncResult>(context.apiBaseUrl, "/erp/export-invoice", {
+        method: "POST",
+        body: JSON.stringify({ tenant_id: context.tenantId, adapter_type: "priority", invoice_id: invoiceId }),
+        token: context.accessToken,
+        action: "Export invoice to ERP"
+      });
+      setErpResult(result);
+      mark("exported_to_erp");
+      setStatus("exported");
+      const logs = await apiFetch<ERPSyncResult[]>(context.apiBaseUrl, `/erp/sync-logs?tenant_id=${context.tenantId}`, {
+        token: context.accessToken,
+        action: "Load ERP sync logs"
+      });
+      setErpLogs(logs.slice(-3).reverse());
+    } catch (error) {
+      setStatus("failed");
+      setError(error instanceof Error ? error.message : "ERP export failed because the API is unavailable.");
+    }
+  }
+
+  async function loadVendorPreview() {
+    const context = requestContext();
+    if (!context || !invoiceId) return;
+    setError(null);
+    setStatus("loading vendor preview");
+    try {
+      const access = await apiFetch<{ access_token: string }>(context.apiBaseUrl, "/vendor/access", {
+        method: "POST",
+        body: JSON.stringify({ tenant_id: context.tenantId, email: "vendor-demo@example.com" }),
+        token: context.accessToken,
+        action: "Create vendor preview access"
+      });
+      const preview = await apiFetch<VendorInvoiceStatus>(
+        context.apiBaseUrl,
+        `/vendor/invoices/${invoiceId}?tenant_id=${context.tenantId}&access_token=${encodeURIComponent(access.access_token)}`,
+        { action: "Load vendor-safe status" }
+      );
+      setVendorPreview(preview);
+      mark("vendor_preview");
+      setStatus("vendor preview ready");
+    } catch (error) {
+      setStatus("failed");
+      setError(error instanceof Error ? error.message : "Vendor preview failed because the API is unavailable.");
+    }
+  }
+
+  function mark(stage: string) {
+    setTimestamps((current) => ({ ...current, [stage]: new Date().toISOString() }));
+  }
+
   const demoSteps = buildDemoSteps({
+    signedIn: isSignedIn,
     file,
     uploadResult,
     extractResult,
@@ -136,188 +293,6 @@ export function InvoiceUploadPanel({ apiBaseUrl, tenantId, selectedOcrProvider =
     error,
     erpExportReady
   });
-  const timelineStages = buildTimeline({
-    uploadResult,
-    extractResult,
-    processResult,
-    erpResult,
-    timestamps
-  });
-
-  function walkthroughAction(label: string) {
-    if (label === "Step 2") {
-      return { label: "Upload", action: upload, disabled: !file || Boolean(uploadResult) };
-    }
-    if (label === "Step 3") {
-      return { label: "Extract", action: extractOnly, disabled: !documentId };
-    }
-    if (label === "Step 4") {
-      return { label: "Process", action: processPipeline, disabled: !documentId };
-    }
-    if (label === "Step 6") {
-      return { label: "Export", action: exportToMockErp, disabled: !erpExportReady || Boolean(erpResult) };
-    }
-    if (label === "Step 7") {
-      return { label: "Preview", action: loadVendorPreview, disabled: !invoiceId };
-    }
-    return null;
-  }
-
-  async function upload() {
-    if (!file) {
-      setError("Select a PDF or image first.");
-      return;
-    }
-    setError(null);
-    setStatus("uploading");
-    const form = new FormData();
-    form.append("tenant_id", tenantId);
-    form.append("file", file);
-    try {
-      const response = await fetch(`${apiBaseUrl}/documents/invoices/upload`, {
-        method: "POST",
-        body: form
-      });
-      if (!response.ok) {
-        setStatus("failed");
-        setError(await readError(response));
-        return;
-      }
-      setUploadResult((await response.json()) as UploadResult);
-      setExtractResult(null);
-      setProcessResult(null);
-      setErpResult(null);
-      setVendorPreview(null);
-      mark("uploaded");
-      setStatus("uploaded");
-    } catch {
-      setStatus("failed");
-      setError("API unavailable.");
-    }
-  }
-
-  async function extractOnly() {
-    if (!documentId) return;
-    setError(null);
-    setStatus("extracting");
-    try {
-      const response = await fetch(
-        `${apiBaseUrl}/documents/invoices/${documentId}/extract?tenant_id=${tenantId}`,
-        { method: "POST" }
-      );
-      if (!response.ok) {
-        setStatus("failed");
-        setError(await readError(response));
-        return;
-      }
-      setExtractResult((await response.json()) as ExtractResult);
-      mark("extracted");
-      setStatus("extracted");
-    } catch {
-      setStatus("failed");
-      setError("Extraction failed because the API is unavailable.");
-    }
-  }
-
-  async function processPipeline() {
-    if (!documentId) return;
-    setError(null);
-    setStatus("processing");
-    try {
-      const response = await fetch(`${apiBaseUrl}/documents/invoices/${documentId}/process`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ tenant_id: tenantId })
-      });
-      if (!response.ok) {
-        setStatus("failed");
-        setError(await readError(response));
-        return;
-      }
-      setProcessResult((await response.json()) as ProcessResult);
-      mark("processed");
-      setStatus("processed");
-    } catch {
-      setStatus("failed");
-      setError("Processing failed because the API is unavailable.");
-    }
-  }
-
-  async function exportToMockErp() {
-    if (!invoiceId || !erpExportReady) return;
-    setError(null);
-    setStatus("exporting");
-    try {
-      const response = await fetch(`${apiBaseUrl}/erp/export-invoice`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          tenant_id: tenantId,
-          adapter_type: "priority",
-          invoice_id: invoiceId
-        })
-      });
-      if (!response.ok) {
-        setStatus("failed");
-        setError(await readError(response));
-        return;
-      }
-      const result = (await response.json()) as ERPSyncResult;
-      setErpResult(result);
-      mark("exported_to_erp");
-      setStatus("exported");
-      const logsResponse = await fetch(`${apiBaseUrl}/erp/sync-logs?tenant_id=${tenantId}`, { cache: "no-store" });
-      if (logsResponse.ok) {
-        setErpLogs(((await logsResponse.json()) as ERPSyncResult[]).slice(-3).reverse());
-      }
-    } catch {
-      setStatus("failed");
-      setError("ERP export failed because the API is unavailable.");
-    }
-  }
-
-  async function loadVendorPreview() {
-    if (!invoiceId) return;
-    setError(null);
-    setStatus("loading vendor preview");
-    try {
-      const accessResponse = await fetch(`${apiBaseUrl}/vendor/access`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          tenant_id: tenantId,
-          email: "vendor-demo@example.com"
-        })
-      });
-      if (!accessResponse.ok) {
-        setStatus("failed");
-        setError(await readError(accessResponse));
-        return;
-      }
-      const access = (await accessResponse.json()) as { access_token: string };
-      const invoiceResponse = await fetch(
-        `${apiBaseUrl}/vendor/invoices/${invoiceId}?tenant_id=${tenantId}&access_token=${encodeURIComponent(
-          access.access_token
-        )}`,
-        { cache: "no-store" }
-      );
-      if (!invoiceResponse.ok) {
-        setStatus("failed");
-        setError("Vendor-safe status is not available for this invoice.");
-        return;
-      }
-      setVendorPreview((await invoiceResponse.json()) as VendorInvoiceStatus);
-      mark("vendor_preview");
-      setStatus("vendor preview ready");
-    } catch {
-      setStatus("failed");
-      setError("Vendor preview failed because the API is unavailable.");
-    }
-  }
-
-  function mark(stage: string) {
-    setTimestamps((current) => ({ ...current, [stage]: new Date().toISOString() }));
-  }
 
   return (
     <div className="space-y-5">
@@ -330,9 +305,7 @@ export function InvoiceUploadPanel({ apiBaseUrl, tenantId, selectedOcrProvider =
           <span className="text-xs text-muted">{status}</span>
         </div>
         <div className="divide-y divide-border">
-          {demoSteps.map((step) => (
-            <WalkthroughStep key={step.label} action={walkthroughAction(step.label)} step={step} />
-          ))}
+          {demoSteps.map((step) => <WalkthroughStep key={step.label} action={walkthroughAction(step.label)} step={step} />)}
         </div>
       </section>
 
@@ -345,133 +318,81 @@ export function InvoiceUploadPanel({ apiBaseUrl, tenantId, selectedOcrProvider =
           <span className="text-xs text-muted">{uploadResult ? "document stored" : "waiting for file"}</span>
         </div>
         <div className="space-y-4 p-4">
+          <div className="rounded-md border border-border bg-[hsl(var(--background))] px-4 py-3 text-sm text-muted">
+            Need a safe demo file? Download the generated <a className="font-medium text-foreground underline" href="/demo/fake-apflow-invoice.pdf">fake APFlow invoice</a>.
+          </div>
+          {signInRequired ? (
+            <div className="flex items-center justify-between gap-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              <span>Sign in required before uploading or processing invoices.</span>
+              <button className="rounded-md border border-amber-300 bg-white px-3 py-2 text-sm disabled:text-muted" disabled={authStatus === "authenticating"} onClick={onDemoLogin} type="button">
+                Demo login
+              </button>
+            </div>
+          ) : null}
           <div className="grid gap-3 md:grid-cols-[1fr_auto_auto_auto]">
             <label className="flex min-h-11 items-center gap-3 rounded-md border border-border px-3 py-2 text-sm">
               <FileText className="h-4 w-4 text-muted" />
               <span className="min-w-0 flex-1 truncate">{selectedFileName}</span>
-              <input
-                accept="application/pdf,image/png,image/jpeg"
-                className="sr-only"
-                type="file"
-                onChange={(event) => {
-                  setFile(event.target.files?.[0] ?? null);
-                  setError(null);
-                }}
-              />
+              <input accept="application/pdf,image/png,image/jpeg" className="sr-only" type="file" onChange={(event) => { setFile(event.target.files?.[0] ?? null); setError(null); }} />
             </label>
-            <button className="rounded-md bg-black px-3 py-2 text-sm text-white" onClick={upload} type="button">
-              <UploadCloud className="mr-2 inline h-4 w-4" />
-              Upload
-            </button>
-            <button
-              className="rounded-md border border-border px-3 py-2 text-sm disabled:text-muted"
-              disabled={!documentId}
-              onClick={extractOnly}
-              type="button"
-            >
-              <ScanText className="mr-2 inline h-4 w-4" />
-              Extract
-            </button>
-            <button
-              className="rounded-md border border-border px-3 py-2 text-sm disabled:text-muted"
-              disabled={!documentId}
-              onClick={processPipeline}
-              type="button"
-            >
-              <Play className="mr-2 inline h-4 w-4" />
-              Process
-            </button>
+            <ActionButton disabled={!file || signInRequired} label="Upload" onClick={upload} icon={<UploadCloud className="mr-2 inline h-4 w-4" />} primary />
+            <ActionButton disabled={!documentId || signInRequired} label="Extract" onClick={extractOnly} icon={<ScanText className="mr-2 inline h-4 w-4" />} />
+            <ActionButton disabled={!documentId || signInRequired} label="Process" onClick={processPipeline} icon={<Play className="mr-2 inline h-4 w-4" />} />
           </div>
-
-          {error ? (
-            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div>
-          ) : null}
-
-          {!uploadResult ? (
-            <div className="rounded-md border border-border px-4 py-5 text-sm text-muted">
-              No uploaded invoice document in this walkthrough yet.
-            </div>
-          ) : (
+          {error ? <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div> : null}
+          {uploadResult ? (
             <div className="grid gap-3 text-sm sm:grid-cols-4">
-              <Metric label="Document" value={uploadResult.document.original_file_name} />
-              <Metric label="Type" value={uploadResult.document.content_type} />
-              <Metric label="Size" value={`${uploadResult.document.size_bytes} bytes`} />
-              <Metric label="Storage" value={uploadResult.document.storage_provider} />
+              <SmallMetric label="Document" value={uploadResult.document.original_file_name} />
+              <SmallMetric label="Type" value={uploadResult.document.content_type} />
+              <SmallMetric label="Size" value={`${uploadResult.document.size_bytes} bytes`} />
+              <SmallMetric label="Storage" value={uploadResult.document.storage_provider} />
             </div>
-          )}
+          ) : <EmptyState text="No uploaded invoice document in this walkthrough yet." />}
         </div>
       </section>
 
       <section className="rounded-md border border-border bg-white">
-        <div className="border-b border-border px-4 py-3">
-          <h2 className="text-base font-semibold">Workflow Timeline</h2>
-        </div>
-        <div className="p-4">
-          <WorkflowTimeline stages={timelineStages} />
-        </div>
+        <div className="border-b border-border px-4 py-3"><h2 className="text-base font-semibold">Workflow Timeline</h2></div>
+        <div className="p-4"><WorkflowTimeline stages={timelineStages} /></div>
       </section>
 
       <section className="rounded-md border border-border bg-white">
-        <div className="border-b border-border px-4 py-3">
-          <h2 className="text-base font-semibold">Invoice Result Summary</h2>
-        </div>
+        <div className="border-b border-border px-4 py-3"><h2 className="text-base font-semibold">Invoice Result Summary</h2></div>
         <div className="space-y-4 p-4">
           {processResult ? (
             <div className="grid gap-3 text-sm sm:grid-cols-3 xl:grid-cols-4">
-              <Metric label="Invoice" value={invoice?.invoice_number ?? "pending review"} />
-              <Metric label="Vendor" value={invoice?.supplier_name ?? "pending review"} />
-              <Metric label="Total" value={invoice ? money(invoice.grand_total, invoice.currency) : "n/a"} />
-              <Metric label="OCR provider" value={`${selectedOcrProvider} / ${selectedOcrStatus}`} />
-              <Metric label="OCR confidence" value={confidence ? `${Math.round(confidence.average_confidence * 100)}%` : "n/a"} />
-              <Metric label="Review" value={processResult.review_status.replaceAll("_", " ")} />
-              <Metric label="Workflow" value={processResult.workflow_status.replaceAll("_", " ")} />
-              <Metric label="PO match" value={pipeline?.po_match_result?.match_status.replaceAll("_", " ") ?? "n/a"} />
-              <Metric label="Risk" value={pipeline?.fraud_risk_result?.risk_level ?? "n/a"} />
-              <Metric label="Approval" value={pipeline?.approval_result?.route.replaceAll("_", " ") ?? "n/a"} />
-              <Metric label="ERP ready" value={erpExportReady ? "yes" : "no"} />
-              <Metric label="Review fields" value={reviewRequiredFields.length ? reviewRequiredFields.join(", ") : "none"} />
+              <SmallMetric label="Invoice" value={invoice?.invoice_number ?? "pending review"} />
+              <SmallMetric label="Vendor" value={invoice?.supplier_name ?? "pending review"} />
+              <SmallMetric label="Total" value={invoice ? money(invoice.grand_total, invoice.currency) : "n/a"} />
+              <SmallMetric label="OCR provider" value={`${selectedOcrProvider} / ${selectedOcrStatus}`} />
+              <SmallMetric label="OCR confidence" value={confidence ? `${Math.round(confidence.average_confidence * 100)}%` : "n/a"} />
+              <SmallMetric label="Review" value={processResult.review_status.replaceAll("_", " ")} />
+              <SmallMetric label="Workflow" value={processResult.workflow_status.replaceAll("_", " ")} />
+              <SmallMetric label="PO match" value={pipeline?.po_match_result?.match_status.replaceAll("_", " ") ?? "n/a"} />
+              <SmallMetric label="Risk" value={pipeline?.fraud_risk_result?.risk_level ?? "n/a"} />
+              <SmallMetric label="Approval" value={pipeline?.approval_result?.route.replaceAll("_", " ") ?? "n/a"} />
+              <SmallMetric label="ERP ready" value={erpExportReady ? "yes" : "no"} />
+              <SmallMetric label="Review fields" value={reviewRequiredFields.length ? reviewRequiredFields.join(", ") : "none"} />
             </div>
-          ) : (
-            <div className="rounded-md border border-border px-4 py-5 text-sm text-muted">
-              Process an uploaded invoice to populate the summary.
-            </div>
-          )}
+          ) : <EmptyState text="Process an uploaded invoice to populate the summary." />}
         </div>
       </section>
 
       <section className="rounded-md border border-border bg-white">
-        <div className="border-b border-border px-4 py-3">
-          <h2 className="text-base font-semibold">Extracted Fields</h2>
-        </div>
+        <div className="border-b border-border px-4 py-3"><h2 className="text-base font-semibold">Extracted Fields</h2></div>
         <div className="p-4">
           {fields.length ? (
-            <div className="space-y-3">
-              {reviewRequiredFields.length ? (
-                <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                  Review required: {reviewRequiredFields.join(", ")}
+            <div className="divide-y divide-border rounded-md border border-border">
+              {fields.map((field) => (
+                <div className="grid gap-3 px-3 py-2 text-sm sm:grid-cols-[170px_1fr_100px_120px]" key={field.field_name}>
+                  <span className="font-medium">{field.field_name.replaceAll("_", " ")}</span>
+                  <span className="truncate text-muted">{field.value ?? "missing"}</span>
+                  <span>{Math.round(field.confidence * 100)}%</span>
+                  <span className={field.requires_review ? "text-amber-700" : "text-green-700"}>{field.requires_review ? "yes" : "no"}</span>
                 </div>
-              ) : null}
-              <div className="divide-y divide-border rounded-md border border-border">
-                {fields.map((field) => (
-                  <div
-                    className="grid gap-3 px-3 py-2 text-sm sm:grid-cols-[170px_1fr_100px_120px]"
-                    key={field.field_name}
-                  >
-                    <span className="font-medium">{field.field_name.replaceAll("_", " ")}</span>
-                    <span className="truncate text-muted">{field.value ?? "missing"}</span>
-                    <span>{Math.round(field.confidence * 100)}%</span>
-                    <span className={field.requires_review ? "text-amber-700" : "text-green-700"}>
-                      {field.requires_review ? "yes" : "no"}
-                    </span>
-                  </div>
-                ))}
-              </div>
+              ))}
             </div>
-          ) : (
-            <div className="rounded-md border border-border px-4 py-5 text-sm text-muted">
-              Run extraction to view field confidence.
-            </div>
-          )}
+          ) : <EmptyState text="Run extraction to view field confidence." />}
         </div>
       </section>
 
@@ -479,72 +400,21 @@ export function InvoiceUploadPanel({ apiBaseUrl, tenantId, selectedOcrProvider =
         <div className="rounded-md border border-border bg-white">
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <h2 className="text-base font-semibold">Mock ERP Export</h2>
-            <button
-              className="rounded-md border border-border px-3 py-2 text-sm disabled:text-muted"
-              disabled={!erpExportReady || Boolean(erpResult)}
-              onClick={exportToMockErp}
-              type="button"
-            >
-              <Send className="mr-2 inline h-4 w-4" />
-              Export to Mock ERP
-            </button>
+            <ActionButton disabled={signInRequired || !canExportErp || !erpExportReady || Boolean(erpResult)} label="Export to Mock ERP" onClick={exportToMockErp} icon={<Send className="mr-2 inline h-4 w-4" />} />
           </div>
           <div className="space-y-4 p-4 text-sm">
-            {erpResult ? (
-              <div className="grid gap-3 sm:grid-cols-3">
-                <Metric label="Sync" value={erpResult.status} />
-                <Metric label="Adapter" value={erpResult.adapter_type} />
-                <Metric label="External ID" value={erpResult.external_id ?? "not returned"} />
-              </div>
-            ) : (
-              <div className="rounded-md border border-border px-4 py-5 text-muted">
-                {erpExportReady ? "Invoice is ready for explicit mock ERP export." : "Process an approval-ready invoice first."}
-              </div>
-            )}
-            {erpLogs.length ? (
-              <div className="divide-y divide-border rounded-md border border-border">
-                {erpLogs.map((log) => (
-                  <div className="grid gap-3 px-3 py-2 sm:grid-cols-[120px_1fr_140px]" key={log.sync_id}>
-                    <span className="font-medium">{log.status}</span>
-                    <span>{log.operation.replaceAll("_", " ")}</span>
-                    <span className="text-muted">{log.external_id ?? "no external id"}</span>
-                  </div>
-                ))}
-              </div>
-            ) : null}
+            {erpResult ? <div className="grid gap-3 sm:grid-cols-3"><SmallMetric label="Sync" value={erpResult.status} /><SmallMetric label="Adapter" value={erpResult.adapter_type} /><SmallMetric label="External ID" value={erpResult.external_id ?? "not returned"} /></div> : <EmptyState text={signInRequired ? "Sign in before exporting invoices to ERP." : !canExportErp ? "Your current role cannot export invoices to ERP." : erpExportReady ? "Invoice is ready for explicit mock ERP export." : "Process an approval-ready invoice first."} />}
+            {erpLogs.length ? <div className="divide-y divide-border rounded-md border border-border">{erpLogs.map((log) => <div className="grid gap-3 px-3 py-2 sm:grid-cols-[120px_1fr_140px]" key={log.sync_id}><span className="font-medium">{log.status}</span><span>{log.operation.replaceAll("_", " ")}</span><span className="text-muted">{log.external_id ?? "no external id"}</span></div>)}</div> : null}
           </div>
         </div>
 
         <div className="rounded-md border border-border bg-white">
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <h2 className="text-base font-semibold">Vendor-Safe Status Preview</h2>
-            <button
-              className="rounded-md border border-border px-3 py-2 text-sm disabled:text-muted"
-              disabled={!invoiceId}
-              onClick={loadVendorPreview}
-              type="button"
-            >
-              <ExternalLink className="mr-2 inline h-4 w-4" />
-              Preview
-            </button>
+            <ActionButton disabled={signInRequired || !invoiceId} label="Preview" onClick={loadVendorPreview} icon={<ExternalLink className="mr-2 inline h-4 w-4" />} />
           </div>
           <div className="p-4 text-sm">
-            {vendorPreview ? (
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Metric label="Invoice" value={vendorPreview.invoice_number} />
-                <Metric label="Vendor status" value={vendorPreview.status.replaceAll("_", " ")} />
-                <Metric label="Payment" value={vendorPreview.payment_status ?? "not scheduled"} />
-                <Metric label="Visible total" value={money(vendorPreview.grand_total, vendorPreview.currency)} />
-                <div className="rounded-md border border-border px-3 py-2 sm:col-span-2">
-                  <p className="text-xs text-muted">Public message</p>
-                  <p className="mt-1">{vendorPreview.public_message}</p>
-                </div>
-              </div>
-            ) : (
-              <div className="rounded-md border border-border px-4 py-5 text-muted">
-                Process an invoice, then preview the restricted vendor view.
-              </div>
-            )}
+            {vendorPreview ? <div className="grid gap-3 sm:grid-cols-2"><SmallMetric label="Invoice" value={vendorPreview.invoice_number} /><SmallMetric label="Vendor status" value={vendorPreview.status.replaceAll("_", " ")} /><SmallMetric label="Payment" value={vendorPreview.payment_status ?? "not scheduled"} /><SmallMetric label="Visible total" value={money(vendorPreview.grand_total, vendorPreview.currency)} /><div className="rounded-md border border-border px-3 py-2 sm:col-span-2"><p className="text-xs text-muted">Public message</p><p className="mt-1">{vendorPreview.public_message}</p></div></div> : <EmptyState text={signInRequired ? "Sign in before preparing a vendor-safe preview." : "Process an invoice, then preview the restricted vendor view."} />}
           </div>
         </div>
       </section>
@@ -553,6 +423,7 @@ export function InvoiceUploadPanel({ apiBaseUrl, tenantId, selectedOcrProvider =
 }
 
 function buildDemoSteps(input: {
+  signedIn: boolean;
   file: File | null;
   uploadResult: UploadResult | null;
   extractResult: ExtractResult | null;
@@ -565,185 +436,61 @@ function buildDemoSteps(input: {
 }): Array<{ label: string; status: StepStatus; description: string }> {
   const failed = input.status === "failed";
   return [
-    {
-      label: "Step 1",
-      status: "completed" as StepStatus,
-      description: "Demo tenant and local session are active."
-    },
-    {
-      label: "Step 2",
-      status: statusFor(Boolean(input.uploadResult), input.file ? "active" : "pending", failed && !input.uploadResult),
-      description: "Upload an invoice PDF or image into tenant-scoped storage."
-    },
-    {
-      label: "Step 3",
-      status: statusFor(Boolean(input.extractResult || input.processResult), input.uploadResult ? "active" : "pending", failed),
-      description: "Run OCR and inspect confidence before processing."
-    },
-    {
-      label: "Step 4",
-      status: statusFor(Boolean(input.processResult), input.extractResult || input.uploadResult ? "active" : "pending", failed),
-      description: "Continue through validation, duplicate check, PO match, risk, and approval."
-    },
-    {
-      label: "Step 5",
-      status: input.processResult ? "completed" : "pending",
-      description: input.processResult
-        ? `Workflow is ${input.processResult.workflow_status.replaceAll("_", " ")}.`
-        : "Review the workflow result after processing."
-    },
-    {
-      label: "Step 6",
-      status: input.erpResult ? "completed" : input.erpExportReady ? "active" : "pending",
-      description: input.erpResult
-        ? `Exported to ${input.erpResult.external_id ?? "mock ERP"}.`
-        : "Export approval-ready invoices to the mock Priority adapter."
-    },
-    {
-      label: "Step 7",
-      status: input.vendorPreview ? "completed" : input.processResult ? "active" : "pending",
-      description: input.vendorPreview
-        ? `Vendor sees ${input.vendorPreview.status.replaceAll("_", " ")}.`
-        : "Preview the vendor-safe status without internal risk details."
-    }
+    { label: "Step 1", status: input.signedIn ? "completed" : "active", description: input.signedIn ? "Demo tenant session is signed in." : "Click Demo login to start a tenant session." },
+    { label: "Step 2", status: statusFor(Boolean(input.uploadResult), input.file ? "active" : "pending", failed && !input.uploadResult), description: "Upload an invoice PDF or image into tenant-scoped storage." },
+    { label: "Step 3", status: statusFor(Boolean(input.extractResult || input.processResult), input.uploadResult ? "active" : "pending", failed), description: "Run OCR and inspect confidence before processing." },
+    { label: "Step 4", status: statusFor(Boolean(input.processResult), input.extractResult || input.uploadResult ? "active" : "pending", failed), description: "Continue through validation, duplicate check, PO match, risk, and approval." },
+    { label: "Step 5", status: input.processResult ? "completed" : "pending", description: input.processResult ? `Workflow is ${input.processResult.workflow_status.replaceAll("_", " ")}.` : "Review the workflow result after processing." },
+    { label: "Step 6", status: input.erpResult ? "completed" : input.erpExportReady ? "active" : "pending", description: input.erpResult ? `Exported to ${input.erpResult.external_id ?? "mock ERP"}.` : "Export approval-ready invoices to the mock Priority adapter." },
+    { label: "Step 7", status: input.vendorPreview ? "completed" : input.processResult ? "active" : "pending", description: input.vendorPreview ? `Vendor sees ${input.vendorPreview.status.replaceAll("_", " ")}.` : "Preview the vendor-safe status without internal risk details." }
   ];
 }
 
-function WalkthroughStep({
-  step,
-  action
-}: {
-  step: { label: string; status: StepStatus; description: string };
-  action: { label: string; action: () => void; disabled: boolean } | null;
-}) {
+function WalkthroughStep({ step, action }: { step: { label: string; status: StepStatus; description: string }; action: { label: string; action: () => void; disabled: boolean } | null; }) {
   return (
     <div className="grid gap-3 px-4 py-3 text-sm md:grid-cols-[170px_1fr_auto]">
       <div className="flex items-center gap-2">
-        {step.status === "completed" ? (
-          <CheckCircle2 className="h-4 w-4 text-green-700" />
-        ) : step.status === "failed" ? (
-          <AlertTriangle className="h-4 w-4 text-red-700" />
-        ) : (
-          <span className="h-2.5 w-2.5 rounded-full bg-border" />
-        )}
+        {step.status === "completed" ? <CheckCircle2 className="h-4 w-4 text-green-700" /> : step.status === "failed" ? <AlertTriangle className="h-4 w-4 text-red-700" /> : <span className="h-2.5 w-2.5 rounded-full bg-border" />}
         <span className="font-medium">{step.label}</span>
       </div>
       <span className="text-muted">{step.description}</span>
-      {action ? (
-        <button
-          className="rounded-md border border-border px-3 py-2 text-sm disabled:text-muted"
-          disabled={action.disabled}
-          onClick={action.action}
-          type="button"
-        >
-          {action.label}
-        </button>
-      ) : (
-        <span className="text-xs text-muted">{step.status}</span>
-      )}
+      {action ? <button className="rounded-md border border-border px-3 py-2 text-sm disabled:text-muted" disabled={action.disabled} onClick={action.action} type="button">{action.label}</button> : <span className="text-xs text-muted">{step.status}</span>}
     </div>
   );
 }
 
-function buildTimeline(input: {
-  uploadResult: UploadResult | null;
-  extractResult: ExtractResult | null;
-  processResult: ProcessResult | null;
-  erpResult: ERPSyncResult | null;
-  timestamps: Record<string, string>;
-}): TimelineStage[] {
+function buildTimeline(input: { uploadResult: UploadResult | null; extractResult: ExtractResult | null; processResult: ProcessResult | null; erpResult: ERPSyncResult | null; timestamps: Record<string, string>; }): TimelineStage[] {
   const pipeline = input.processResult?.pipeline_result;
   const reviewStatus = input.processResult?.review_status ?? input.extractResult?.review_status;
   const processed = Boolean(input.processResult);
   const reviewRequired = reviewStatus === "review_required";
   const poStatus = pipeline?.po_match_result?.match_status;
   const riskLevel = pipeline?.fraud_risk_result?.risk_level;
-
   return [
-    {
-      id: "uploaded",
-      label: "Uploaded",
-      status: input.uploadResult ? "completed" : "pending",
-      timestamp: input.timestamps.uploaded,
-      summary: input.uploadResult
-        ? `${input.uploadResult.document.original_file_name} stored in ${input.uploadResult.document.storage_provider}.`
-        : "Waiting for invoice upload."
-    },
-    {
-      id: "extracted",
-      label: "Extracted",
-      status: input.extractResult || input.processResult ? "completed" : input.uploadResult ? "active" : "pending",
-      timestamp: input.timestamps.extracted ?? input.timestamps.processed,
-      summary: input.extractResult || input.processResult ? "OCR fields and confidence are available." : "OCR has not run yet."
-    },
-    {
-      id: "review",
-      label: reviewRequired ? "Review Required" : "Review Not Required",
-      status: reviewStatus ? (reviewRequired ? "warning" : "completed") : "pending",
-      timestamp: input.timestamps.extracted ?? input.timestamps.processed,
-      summary: reviewStatus ? `Human review status is ${reviewStatus.replaceAll("_", " ")}.` : "Review status pending.",
-      warning: reviewRequired ? "Required fields need human review before approval." : undefined
-    },
-    {
-      id: "validated",
-      label: "Validated",
-      status: processed && !reviewRequired ? "completed" : "pending",
-      timestamp: input.timestamps.processed,
-      summary: pipeline?.validation_result?.validation_status
-        ? `Validation ${pipeline.validation_result.validation_status}.`
-        : "Validation waits for processing."
-    },
-    {
-      id: "duplicate_checked",
-      label: "Duplicate Checked",
-      status: processed && !reviewRequired ? "completed" : "pending",
-      timestamp: input.timestamps.processed,
-      summary: pipeline?.duplicate_result?.status
-        ? `Duplicate status ${pipeline.duplicate_result.status.replaceAll("_", " ")}.`
-        : "Duplicate check waits for processing."
-    },
-    {
-      id: "po_matched",
-      label: "PO Matched",
-      status: poStatus ? (poStatus === "matched" ? "completed" : "warning") : "pending",
-      timestamp: input.timestamps.processed,
-      summary: poStatus ? `PO match is ${poStatus.replaceAll("_", " ")}.` : "PO matching waits for processing.",
-      warning: poStatus && poStatus !== "matched" ? "AP review may be required." : undefined
-    },
-    {
-      id: "risk_scored",
-      label: "Risk Scored",
-      status: riskLevel ? (["high", "critical"].includes(riskLevel) ? "warning" : "completed") : "pending",
-      timestamp: input.timestamps.processed,
-      summary: riskLevel ? `Risk level is ${riskLevel}.` : "Risk scoring waits for processing.",
-      warning: riskLevel && ["high", "critical"].includes(riskLevel) ? "Review risk evidence before payment." : undefined
-    },
-    {
-      id: "approval_routed",
-      label: "Approval Routed",
-      status: pipeline?.approval_result ? "completed" : "pending",
-      timestamp: input.timestamps.processed,
-      summary: pipeline?.approval_result
-        ? `Approval route is ${pipeline.approval_result.route.replaceAll("_", " ")}.`
-        : "Approval route waits for processing."
-    },
-    {
-      id: "erp_export_ready",
-      label: "ERP Export Ready",
-      status: pipeline?.erp_export_ready ? "completed" : processed ? "warning" : "pending",
-      timestamp: input.timestamps.processed,
-      summary: pipeline?.erp_export_ready ? "Invoice can be exported explicitly." : "Invoice is not ready for export yet."
-    },
-    {
-      id: "exported_to_erp",
-      label: "Exported To ERP",
-      status: input.erpResult ? "completed" : "pending",
-      timestamp: input.timestamps.exported_to_erp,
-      summary: input.erpResult
-        ? `Mock ERP export ${input.erpResult.status}; external ID ${input.erpResult.external_id ?? "not returned"}.`
-        : "No ERP export has been triggered."
-    }
+    { id: "uploaded", label: "Uploaded", status: input.uploadResult ? "completed" : "pending", timestamp: input.timestamps.uploaded, summary: input.uploadResult ? `${input.uploadResult.document.original_file_name} stored in ${input.uploadResult.document.storage_provider}.` : "Waiting for invoice upload." },
+    { id: "extracted", label: "Extracted", status: input.extractResult || input.processResult ? "completed" : input.uploadResult ? "active" : "pending", timestamp: input.timestamps.extracted ?? input.timestamps.processed, summary: input.extractResult || input.processResult ? "OCR fields and confidence are available." : "OCR has not run yet." },
+    { id: "review", label: reviewRequired ? "Review Required" : "Review Not Required", status: reviewStatus ? (reviewRequired ? "warning" : "completed") : "pending", timestamp: input.timestamps.extracted ?? input.timestamps.processed, summary: reviewStatus ? `Human review status is ${reviewStatus.replaceAll("_", " ")}.` : "Review status pending.", warning: reviewRequired ? "Required fields need human review before approval." : undefined },
+    { id: "validated", label: "Validated", status: processed && !reviewRequired ? "completed" : "pending", timestamp: input.timestamps.processed, summary: pipeline?.validation_result?.validation_status ? `Validation ${pipeline.validation_result.validation_status}.` : "Validation waits for processing." },
+    { id: "duplicate_checked", label: "Duplicate Checked", status: processed && !reviewRequired ? "completed" : "pending", timestamp: input.timestamps.processed, summary: pipeline?.duplicate_result?.status ? `Duplicate status ${pipeline.duplicate_result.status.replaceAll("_", " ")}.` : "Duplicate check waits for processing." },
+    { id: "po_matched", label: "PO Matched", status: poStatus ? (poStatus === "matched" ? "completed" : "warning") : "pending", timestamp: input.timestamps.processed, summary: poStatus ? `PO match is ${poStatus.replaceAll("_", " ")}.` : "PO matching waits for processing.", warning: poStatus && poStatus !== "matched" ? "AP review may be required." : undefined },
+    { id: "risk_scored", label: "Risk Scored", status: riskLevel ? (["high", "critical"].includes(riskLevel) ? "warning" : "completed") : "pending", timestamp: input.timestamps.processed, summary: riskLevel ? `Risk level is ${riskLevel}.` : "Risk scoring waits for processing.", warning: riskLevel && ["high", "critical"].includes(riskLevel) ? "Review risk evidence before payment." : undefined },
+    { id: "approval_routed", label: "Approval Routed", status: pipeline?.approval_result ? "completed" : "pending", timestamp: input.timestamps.processed, summary: pipeline?.approval_result ? `Approval route is ${pipeline.approval_result.route.replaceAll("_", " ")}.` : "Approval route waits for processing." },
+    { id: "erp_export_ready", label: "ERP Export Ready", status: pipeline?.erp_export_ready ? "completed" : processed ? "warning" : "pending", timestamp: input.timestamps.processed, summary: pipeline?.erp_export_ready ? "Invoice can be exported explicitly." : "Invoice is not ready for export yet." },
+    { id: "exported_to_erp", label: "Exported To ERP", status: input.erpResult ? "completed" : "pending", timestamp: input.timestamps.exported_to_erp, summary: input.erpResult ? `Mock ERP export ${input.erpResult.status}; external ID ${input.erpResult.external_id ?? "not returned"}.` : "No ERP export has been triggered." }
   ];
+}
+
+function ActionButton({ disabled, label, onClick, icon, primary = false }: { disabled: boolean; label: string; onClick: () => void; icon: React.ReactNode; primary?: boolean }) {
+  const classes = primary ? "rounded-md bg-black px-3 py-2 text-sm text-white disabled:bg-neutral-300" : "rounded-md border border-border px-3 py-2 text-sm disabled:text-muted";
+  return <button className={classes} disabled={disabled} onClick={onClick} type="button">{icon}{label}</button>;
+}
+
+function EmptyState({ text }: { text: string }) {
+  return <div className="rounded-md border border-border px-4 py-5 text-sm text-muted">{text}</div>;
+}
+
+function SmallMetric({ label, value }: { label: string; value: string }) {
+  return <div className="rounded-md border border-border px-3 py-2"><p className="text-xs text-muted">{label}</p><p className="mt-1 truncate font-medium">{value}</p></div>;
 }
 
 function statusFor(done: boolean, waiting: StepStatus, failed: boolean): StepStatus {
@@ -752,30 +499,6 @@ function statusFor(done: boolean, waiting: StepStatus, failed: boolean): StepSta
   return waiting;
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-md border border-border px-3 py-2">
-      <p className="text-xs text-muted">{label}</p>
-      <p className="mt-1 truncate font-medium">{value}</p>
-    </div>
-  );
-}
-
 function money(value: number, currency: string) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: currency || "USD",
-    maximumFractionDigits: 2
-  }).format(value || 0);
-}
-
-async function readError(response: Response) {
-  if (response.status === 401) return "Unauthorized. Sign in or enable demo mode.";
-  if (response.status === 403) return "Permission denied for this demo action.";
-  try {
-    const body = (await response.json()) as { detail?: string };
-    return body.detail ?? `Request failed with ${response.status}`;
-  } catch {
-    return `Request failed with ${response.status}`;
-  }
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: currency || "USD", maximumFractionDigits: 2 }).format(value || 0);
 }
