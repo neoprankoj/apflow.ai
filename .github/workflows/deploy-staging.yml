@@ -18,11 +18,6 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - name: Checkout staging branch
-        uses: actions/checkout@v4
-        with:
-          ref: staging
-
       - name: Validate required deployment secrets
         shell: bash
         run: |
@@ -34,7 +29,7 @@ jobs:
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1.2.0
         env:
-          APP_DIR: ${{ vars.STAGING_APP_DIR || '/opt/apflow-ai' }}
+          APP_DIR: ${{ vars.STAGING_APP_DIR || '/opt/b2b-app/apflowai' }}
           API_HEALTH_URL: ${{ vars.STAGING_API_HEALTH_URL || 'http://127.0.0.1:8000/health' }}
           API_READY_URL: ${{ vars.STAGING_API_READY_URL || 'http://127.0.0.1:8000/ready' }}
         with:
@@ -55,10 +50,24 @@ jobs:
             git reset --hard origin/staging
 
             export APFLOW_ENV_FILE=.env.staging
-            docker compose -f docker-compose.yml -f docker-compose.staging.yml --env-file .env.staging config --quiet
-            docker compose -f docker-compose.yml -f docker-compose.staging.yml --env-file .env.staging up --build -d
 
-            docker compose -f docker-compose.yml -f docker-compose.staging.yml --env-file .env.staging ps
+            docker compose \
+              -f docker-compose.yml \
+              -f docker-compose.staging.yml \
+              --env-file .env.staging \
+              config --quiet
+
+            docker compose \
+              -f docker-compose.yml \
+              -f docker-compose.staging.yml \
+              --env-file .env.staging \
+              up --build -d
+
+            docker compose \
+              -f docker-compose.yml \
+              -f docker-compose.staging.yml \
+              --env-file .env.staging \
+              ps
 
             curl -fsS "$API_HEALTH_URL" >/dev/null
             curl -fsS "$API_READY_URL" >/dev/null
