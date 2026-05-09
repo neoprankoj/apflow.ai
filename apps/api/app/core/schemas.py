@@ -645,6 +645,11 @@ class OCRProviderMetadata(APFlowModel):
     configured: bool
     model_version: str | None = None
     raw_provider_status: str | None = None
+    is_errored_on_processing: bool | None = None
+    ocr_exit_code: int | str | None = None
+    parsed_result_count: int | None = None
+    parsed_text_length: int | None = None
+    detected_content_type: str | None = None
 
 
 class OCRExtractedField(APFlowModel):

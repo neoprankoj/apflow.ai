@@ -151,6 +151,39 @@ def test_low_confidence_uploaded_document_creates_review_task():
     assert body["pipeline_result"]["review_tasks"]
 
 
+def test_corrected_review_task_allows_uploaded_document_processing():
+    client = TestClient(create_app())
+    tenant_id = str(uuid4())
+    uploaded = _upload(
+        client,
+        tenant_id,
+        _invoice_content("INV-UPLOAD-CORRECT", extra="confidence_invoice_number=0.4"),
+    ).json()
+    first_process = client.post(
+        f"/documents/invoices/{uploaded['document']['document_id']}/process",
+        json={"tenant_id": tenant_id},
+    ).json()
+    task_id = first_process["pipeline_result"]["review_tasks"][0]["task_id"]
+
+    correction = client.post(
+        f"/review/tasks/{task_id}/corrections",
+        json={
+            "tenant_id": tenant_id,
+            "corrections": {"invoice_number": "INV-UPLOAD-CORRECT"},
+            "reviewer_id": "test-reviewer",
+        },
+    )
+    second_process = client.post(
+        f"/documents/invoices/{uploaded['document']['document_id']}/process",
+        json={"tenant_id": tenant_id},
+    )
+
+    assert correction.status_code == 200
+    assert correction.json()["status"] == "corrected"
+    assert second_process.status_code == 200
+    assert second_process.json()["workflow_status"] == "approval_ready"
+
+
 def test_tenant_cannot_process_another_tenant_uploaded_document():
     client = TestClient(create_app())
     tenant_a = str(uuid4())

@@ -137,6 +137,99 @@ def test_ocr_space_maps_parsed_text_to_extraction_result(tenant_id):
     assert field_map["po_number"].value == "PO-100"
     assert result.confidence_summary.required_fields_missing == []
     assert result.confidence_summary.average_confidence >= 0.75
+    assert result.provider_metadata.parsed_result_count == 1
+    assert result.provider_metadata.parsed_text_length > 0
+    assert result.raw_response["ocr_text_preview"].startswith("Vendor: Northstar")
+
+
+def test_ocr_space_parser_handles_common_invoice_variants(tenant_id):
+    adapter = OCRSpaceOCRAdapter(Settings(ocr_space_api_key="test-key"))
+
+    result = adapter.normalize_provider_response(
+        {
+            "IsErroredOnProcessing": False,
+            "OCRExitCode": 1,
+            "ParsedResults": [
+                {
+                    "ParsedText": (
+                        "Northstar Components LLC\n"
+                        "Tax Invoice\n"
+                        "Inv No: TX-9981\n"
+                        "Date: 05/07/2026\n"
+                        "Payment Due: 06/07/2026\n"
+                        "Net Amount USD 1,000.00\n"
+                        "VAT USD 170.00\n"
+                        "Amount Due USD 1,170.00\n"
+                        "P.O. # PO-100\n"
+                    )
+                }
+            ],
+        },
+        tenant_id,
+    )
+    field_map = {field.field_name: field for field in result.fields}
+
+    assert field_map["invoice_number"].value == "TX-9981"
+    assert field_map["supplier_name"].value == "Northstar Components LLC"
+    assert field_map["supplier_name"].confidence == 0.62
+    assert field_map["invoice_date"].value == "05/07/2026"
+    assert field_map["due_date"].value == "06/07/2026"
+    assert field_map["subtotal"].value == 1000.0
+    assert field_map["tax_total"].value == 170.0
+    assert field_map["grand_total"].value == 1170.0
+    assert field_map["po_number"].value == "PO-100"
+    assert result.provider_metadata.ocr_exit_code == 1
+    assert result.confidence_summary.average_confidence > 0.5
+
+
+def test_ocr_space_parser_handles_empty_parsed_text_safely(tenant_id):
+    adapter = OCRSpaceOCRAdapter(Settings(ocr_space_api_key="test-key"))
+
+    result = adapter.normalize_provider_response(
+        {"IsErroredOnProcessing": False, "ParsedResults": [{"ParsedText": ""}]},
+        tenant_id,
+    )
+
+    assert result.error is None
+    assert result.provider_metadata.raw_provider_status == "no_parsed_text"
+    assert result.provider_metadata.parsed_text_length == 0
+    assert result.raw_response["ocr_text_preview"] == ""
+    assert result.confidence_summary.average_confidence == 0
+    assert set(result.confidence_summary.required_fields_missing) == {
+        "invoice_number",
+        "supplier_name",
+        "invoice_date",
+        "currency",
+        "grand_total",
+    }
+
+
+def test_ocr_space_parser_does_not_guess_total_from_noisy_text(tenant_id):
+    adapter = OCRSpaceOCRAdapter(Settings(ocr_space_api_key="test-key"))
+
+    result = adapter.normalize_provider_response(
+        {
+            "IsErroredOnProcessing": False,
+            "ParsedResults": [
+                {
+                    "ParsedText": (
+                        "Random Trading Company\n"
+                        "Invoice # ABC-44\n"
+                        "Invoice Date: 2026-05-08\n"
+                        "Quantity 17 Reference 922810\n"
+                    )
+                }
+            ],
+        },
+        tenant_id,
+    )
+    field_map = {field.field_name: field for field in result.fields}
+
+    assert field_map["invoice_number"].value == "ABC-44"
+    assert field_map["supplier_name"].value == "Random Trading Company"
+    assert field_map["grand_total"].value is None
+    assert "grand_total" in result.confidence_summary.required_fields_missing
+    assert result.confidence_summary.average_confidence > 0
 
 
 def test_ocr_space_provider_error_is_safe(tenant_id):

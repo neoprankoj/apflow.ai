@@ -221,6 +221,28 @@ def verify_upload_process_export_vendor_flow(context: RuntimeContext, skip_vendo
     document_id = upload["document"]["document_id"]
     extract = post(context, f"/documents/invoices/{document_id}/extract?tenant_id={tenant_id}", None)
     process = post(context, f"/documents/invoices/{document_id}/process", {"tenant_id": tenant_id})
+    ocr_result = extract.get("ocr_result") or {}
+    confidence = extract.get("confidence_summary") or {}
+    provider_metadata = ocr_result.get("provider_metadata") or {}
+    raw_response = ocr_result.get("raw_response") or {}
+    review_required_fields = sorted(
+        set((confidence.get("required_fields_missing") or []) + (confidence.get("required_fields_low_confidence") or []))
+    )
+    print(
+        json.dumps(
+            {
+                "upload_process_summary": {
+                    "workflow_status": process["workflow_status"],
+                    "provider": provider_metadata.get("provider_name"),
+                    "extracted_field_count": len(ocr_result.get("fields") or []),
+                    "parsed_text_length": raw_response.get("parsed_text_length")
+                    or provider_metadata.get("parsed_text_length"),
+                    "review_required_fields": review_required_fields,
+                }
+            },
+            sort_keys=True,
+        )
+    )
     if process["workflow_status"] in {"review_required", "needs_review"}:
         return {
             "review_status": extract["review_status"],

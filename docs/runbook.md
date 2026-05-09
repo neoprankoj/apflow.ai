@@ -185,7 +185,15 @@ OCR.space setup:
 5. Check `GET /ocr/test-provider?provider_name=ocr_space`.
 6. Upload a PDF/image and run `POST /documents/invoices/{document_id}/extract?tenant_id={uuid}`.
 
-OCR.space returns generic parsed text rather than a finance-specific invoice schema. APFlow uses conservative label-based parsing; unclear or missing totals, currency, invoice number, vendor, or dates are marked for human review instead of being invented. To fall back to deterministic local extraction, set `OCR_PROVIDER=mock` and restart.
+OCR.space returns generic parsed text rather than a finance-specific invoice schema. APFlow uses conservative label-based parsing; unclear or missing totals, currency, invoice number, vendor, or dates are marked for human review instead of being invented. `review_required` is a valid safe outcome, not a failed extraction. The dashboard OCR Review section shows parsed result count, parsed text length, OCR exit code, required fields, and a truncated OCR text preview to help tune real sample invoices. To fall back to deterministic local extraction, set `OCR_PROVIDER=mock` and restart.
+
+When OCR.space extraction reaches review:
+
+1. Expand the OCR text preview in the dashboard.
+2. Check missing or low-confidence required fields.
+3. Enter corrected values in Human review corrections.
+4. Submit corrections.
+5. Click Process again. The uploaded-document process endpoint applies corrected fields before validation, PO matching, risk scoring, and approval routing.
 
 Live OCR.space file test:
 
