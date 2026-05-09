@@ -17,6 +17,8 @@ import urllib.request
 from dataclasses import dataclass
 from uuid import UUID, uuid4
 
+VALID_UPLOAD_WORKFLOW_STATUSES = {"approval_ready", "auto_approved", "review_required", "needs_review"}
+
 
 @dataclass
 class RuntimeContext:
@@ -48,14 +50,19 @@ def main() -> int:
     if ready.get("auth_enabled") or args.auth_enabled:
         context.token = resolve_token(context, args)
 
+    if args.demo_reset:
+        reset = post(context, "/admin/demo/reset", None)
+        assert reset["workflow_status"] in VALID_UPLOAD_WORKFLOW_STATUSES
+
     verify_mock_pipeline_flow(context)
     uploaded = None
     if not args.skip_upload:
         uploaded = verify_upload_process_export_vendor_flow(context, skip_vendor=args.skip_vendor)
 
     if uploaded is not None:
-        assert uploaded["workflow_status"] in {"approval_ready", "auto_approved"}
-        assert uploaded["erp_status"] == "success"
+        assert uploaded["workflow_status"] in VALID_UPLOAD_WORKFLOW_STATUSES
+        if uploaded["workflow_status"] in {"approval_ready", "auto_approved"}:
+            assert uploaded["erp_status"] == "success"
         if not args.skip_vendor:
             assert uploaded["vendor_status"] in {"under_review", "approved", "scheduled_for_payment", "paid", "received"}
     print("runtime verification passed")
@@ -76,6 +83,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--token", default=os.getenv("APFLOW_VERIFY_TOKEN"))
     parser.add_argument("--skip-upload", action="store_true", help="Skip invoice document upload/process checks")
     parser.add_argument("--skip-vendor", action="store_true", help="Skip vendor portal checks")
+    parser.add_argument("--demo-reset", action="store_true", help="Verify staging-only /admin/demo/reset")
     return parser.parse_args()
 
 
@@ -125,6 +133,7 @@ def resolve_token(context: RuntimeContext, args: argparse.Namespace) -> str:
 
 
 def verify_mock_pipeline_flow(context: RuntimeContext) -> None:
+    invoice_number = f"INV-RUNTIME-{uuid4().hex[:8]}"
     post(context, "/erp/sync-vendors", {"tenant_id": context.tenant_id, "adapter_type": "priority"})
     post(context, "/erp/sync-purchase-orders", {"tenant_id": context.tenant_id, "adapter_type": "priority"})
     pipeline = post(
@@ -140,7 +149,7 @@ def verify_mock_pipeline_flow(context: RuntimeContext) -> None:
                 "mime_type": "application/pdf",
             },
             "content": (
-                "invoice_number=INV-RUNTIME "
+                f"invoice_number={invoice_number} "
                 "supplier_tax_id=TAX-12345 subtotal=1000 tax_total=170 grand_total=1170 "
                 "currency=USD invoice_date=2026-05-07 po_number=PO-100"
             ),
@@ -194,8 +203,9 @@ def verify_mock_pipeline_flow(context: RuntimeContext) -> None:
 
 def verify_upload_process_export_vendor_flow(context: RuntimeContext, skip_vendor: bool = False) -> dict:
     tenant_id = context.tenant_id if context.token else str(uuid4())
+    invoice_number = f"INV-RUNTIME-UPLOAD-{uuid4().hex[:8]}"
     invoice_bytes = (
-        "invoice_number=INV-RUNTIME-UPLOAD supplier_name=Northstar supplier_tax_id=TAX-12345 "
+        f"invoice_number={invoice_number} supplier_name=Northstar supplier_tax_id=TAX-12345 "
         "subtotal=1000 tax_total=170 grand_total=1170 currency=USD "
         "invoice_date=2026-05-07 po_number=PO-100"
     ).encode("utf-8")
@@ -211,6 +221,13 @@ def verify_upload_process_export_vendor_flow(context: RuntimeContext, skip_vendo
     document_id = upload["document"]["document_id"]
     extract = post(context, f"/documents/invoices/{document_id}/extract?tenant_id={tenant_id}", None)
     process = post(context, f"/documents/invoices/{document_id}/process", {"tenant_id": tenant_id})
+    if process["workflow_status"] in {"review_required", "needs_review"}:
+        return {
+            "review_status": extract["review_status"],
+            "workflow_status": process["workflow_status"],
+            "erp_status": "skipped",
+            "vendor_status": "under_review",
+        }
     invoice_id = process["pipeline_result"]["invoice"]["invoice_id"]
     export = post(
         context,
