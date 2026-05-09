@@ -1,0 +1,58 @@
+services:
+  api:
+    env_file:
+      - ${APFLOW_ENV_FILE:-.env.staging.example}
+    environment:
+      APP_ENV: staging
+      USE_IN_MEMORY_REPOSITORIES: "false"
+      AUTH_ENABLED: "true"
+      DEMO_MODE: ${DEMO_MODE:-true}
+      DOCUMENT_STORAGE_PROVIDER: filesystem
+      DOCUMENT_STORAGE_PATH: /app/.storage/documents
+    restart: unless-stopped
+
+  web:
+    env_file:
+      - ${APFLOW_ENV_FILE:-.env.staging.example}
+    restart: unless-stopped
+
+  postgres:
+    env_file:
+      - ${APFLOW_ENV_FILE:-.env.staging.example}
+    restart: unless-stopped
+
+  redis:
+    restart: unless-stopped
+
+  minio:
+    env_file:
+      - ${APFLOW_ENV_FILE:-.env.staging.example}
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    profiles: ["proxy"]
+    env_file:
+      - ${APFLOW_ENV_FILE:-.env.staging.example}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:2019/config/ >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+volumes:
+  caddy-data:
+  caddy-config:

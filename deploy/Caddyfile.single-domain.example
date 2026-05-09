@@ -1,0 +1,22 @@
+{
+	email {$CADDY_ACME_EMAIL}
+}
+
+# Optional single-domain layout:
+# - frontend at https://{$PUBLIC_APP_HOST}
+# - API under https://{$PUBLIC_APP_HOST}/api/*
+#
+# For this layout, set:
+# PUBLIC_APP_HOST=example.com
+# PUBLIC_APP_URL=https://example.com
+# API_PUBLIC_URL=https://example.com/api
+# NEXT_PUBLIC_API_BASE_URL=https://example.com/api
+{$PUBLIC_APP_HOST} {
+	handle_path /api/* {
+		reverse_proxy api:8000
+	}
+
+	handle {
+		reverse_proxy web:3000
+	}
+}

@@ -1,0 +1,16 @@
+from typing import Protocol
+from uuid import UUID
+
+from app.core.schemas import OCRExtractionResult
+
+
+class OCRAdapterProtocol(Protocol):
+    def get_provider_name(self) -> str: ...
+
+    def is_configured(self) -> bool: ...
+
+    def extract_invoice(self, document_reference: dict, tenant_id: UUID) -> OCRExtractionResult: ...
+
+    def normalize_provider_response(self, raw_response: dict, tenant_id: UUID) -> OCRExtractionResult: ...
+
+    def health_check(self) -> dict: ...

@@ -1,0 +1,44 @@
+# Security
+
+APFlow AI is tenant-first and deny-by-default.
+
+- Every request and workflow event carries `tenant_id`.
+- `TenantSecurityAgent` validates tenant membership and RBAC grants before sensitive access.
+- Audit records are append-only through normal application code.
+- Secrets are represented only by environment variable placeholders.
+- Vendor-facing experiences must call `TenantSecurityAgent` before returning invoice or payment state.
+- SQLAlchemy repositories apply tenant filters on list and lookup methods. Cross-tenant access raises or returns no records.
+- Dashboard integration can run in demo mode, but `/auth/me` now exposes the current demo or authenticated tenant context.
+- ERP adapter calls are mock-only and tenant-scoped. Sync logs and external ERP references are keyed by tenant.
+- Real ERP credentials must be stored through a secrets manager or credential reference, not in request payloads, logs, or audit metadata.
+- OCR provider credentials are read from environment variables only. Missing credentials produce safe placeholder responses.
+- Human review tasks, corrections, and history are tenant-scoped. Correction, approve, and reject actions require `review:correct` when auth is enabled.
+- Local auth uses PBKDF2 password hashing and signed JWT access tokens. `AUTH_SECRET_KEY` must be changed outside local development.
+- Roles are mapped to explicit permissions. Sensitive ERP, audit, review, invoice export, and tenant admin actions are protected by FastAPI RBAC dependencies.
+- Missing or invalid auth returns `401`; valid users without tenant membership or permission receive `403`.
+- Vendor portal tokens are stored only as SHA-256 hashes. Raw tokens are returned once by the demo access endpoint.
+- Vendor users can only retrieve invoices linked to their `vendor_id`.
+- Vendor invoice and chatbot responses exclude fraud scores, internal risk reasons, audit logs, ERP sync logs, approval-policy internals, and other vendors' invoices.
+- Vendor chatbot responses are deterministic and based only on vendor-safe invoice/payment fields. Unsupported or internal questions are deflected to AP contact.
+- Production-like Docker runs should set `USE_IN_MEMORY_REPOSITORIES=false` and use PostgreSQL persistence.
+- Change `AUTH_SECRET_KEY` before enabling auth outside local development.
+- `/ready` exposes operational status only; it must not include credentials, raw tokens, or secrets.
+- Azure Document Intelligence endpoint/key are read only from environment variables. Health checks report configured/unconfigured status without echoing secrets.
+- Do not enable Azure SDK debug logging with request/response bodies in shared environments because document payloads may contain invoice PII.
+- Real invoice samples must stay in `samples/invoices`, which is gitignored. OCR result JSON must stay in `samples/ocr-results`, which is also gitignored.
+- `scripts/test_azure_ocr.py` prints extracted values and confidence, but never prints Azure keys. Do not paste output containing vendor/customer PII into shared tickets.
+- Invoice upload endpoints accept only PDF, PNG, and JPEG content types and enforce `MAX_INVOICE_UPLOAD_BYTES`.
+- Uploaded document metadata and retrieval are tenant-scoped in both in-memory and SQL repositories.
+- When auth is enabled, document upload, extraction, and processing require `invoice:process`; document metadata reads require `invoice:read`.
+- Raw invoice document bytes are never returned by API endpoints and must not be logged.
+- Docker Compose filesystem document storage uses a dedicated mounted volume; production object storage credentials are still pending and must be handled through a secrets manager.
+- Staging and production startup validation rejects wildcard CORS origins, missing public URLs, missing database URL, weak/default `AUTH_SECRET_KEY`, and default MinIO credentials.
+- Production startup validation requires `AUTH_ENABLED=true`.
+- Production rejects `DEMO_MODE=true` unless `ALLOW_DEMO_MODE_IN_PRODUCTION=true` is deliberately set for a controlled private demo.
+- `CORS_ALLOWED_ORIGINS` must name exact frontend origins in staging and production.
+- Startup logs may include environment, auth mode, repository mode, OCR provider, storage provider, ERP adapters, and public URLs; they must not include passwords, tokens, OCR keys, MinIO secrets, or database passwords.
+- `scripts/seed_demo_data.py` prints demo login details but does not print bearer tokens. Rotate seeded credentials before giving access beyond a private staging demo.
+- Back up PostgreSQL and document storage volumes before upgrades. Do not run `docker compose down -v` on staging unless deleting persistent data is intentional.
+- Real VPS staging should be exposed only through HTTPS reverse proxy domains. Do not expose PostgreSQL, Redis, MinIO, FastAPI, or Next.js service ports directly except through trusted firewall rules.
+- `scripts/check_staging.sh` and `scripts/verify_runtime.py --auth-enabled` are intended to validate HTTPS health, auth, upload/process, ERP export, and vendor-safe status without printing secrets.
+- Use `scripts/restore_postgres.sh` without `--yes` as a dry-run before any destructive restore. The `--yes` mode drops and recreates the `apflow` database.

@@ -1,0 +1,24 @@
+{
+	email {$CADDY_ACME_EMAIL}
+}
+
+# Default staging layout:
+# - frontend at https://{$PUBLIC_APP_HOST}
+# - API at https://{$API_PUBLIC_HOST}
+{$PUBLIC_APP_HOST} {
+	encode zstd gzip
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+	}
+	reverse_proxy web:3000
+}
+
+{$API_PUBLIC_HOST} {
+	encode zstd gzip
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+	}
+	reverse_proxy api:8000
+}

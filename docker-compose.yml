@@ -1,0 +1,98 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: apflow
+      POSTGRES_USER: apflow
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-apflow}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U apflow -d apflow"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+
+  api:
+    build:
+      context: ./apps/api
+    env_file:
+      - .env.example
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:-http://127.0.0.1:3000}
+      API_PUBLIC_URL: ${API_PUBLIC_URL:-http://127.0.0.1:8000}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://127.0.0.1:3000,http://localhost:3000}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://apflow:apflow@postgres:5432/apflow}
+      USE_IN_MEMORY_REPOSITORIES: "false"
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-apflow}
+      AUTH_ENABLED: ${AUTH_ENABLED:-false}
+      DEMO_MODE: ${DEMO_MODE:-true}
+      AUTH_SECRET_KEY: ${AUTH_SECRET_KEY:-dev-only-change-me-32-byte-minimum-key}
+      DOCUMENT_STORAGE_PROVIDER: filesystem
+      DOCUMENT_STORAGE_PATH: /app/.storage/documents
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    ports:
+      - "8000:8000"
+    volumes:
+      - document-data:/app/.storage/documents
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=5).read()\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  web:
+    build:
+      context: ./apps/web
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://api:8000}
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://api:8000}
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000 >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+volumes:
+  postgres-data:
+  minio-data:
+  document-data:
