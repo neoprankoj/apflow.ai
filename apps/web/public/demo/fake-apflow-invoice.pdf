@@ -1,0 +1,51 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 604 >>
+stream
+BT
+/F1 18 Tf
+72 730 Td
+(APFlow AI Demo Invoice) Tj
+/F1 11 Tf
+0 -32 Td
+(This is a generated fake invoice for private APFlow AI demos.) Tj
+0 -22 Td
+(No real vendor, tax, bank, or customer data is included.) Tj
+0 -36 Td
+(Invoice Number: INV-DEMO-SAMPLE) Tj
+0 -22 Td
+(Invoice Date: 2026-05-09) Tj
+0 -22 Td
+(Due Date: 2026-06-08) Tj
+0 -22 Td
+(Vendor: Northstar Components Demo Ltd.) Tj
+0 -22 Td
+(Demo Tax ID: TAX-12345-DEMO) Tj
+0 -22 Td
+(Purchase Order: PO-100) Tj
+0 -36 Td
+(Line Item: Mock extracted invoice line) Tj
+0 -22 Td
+(Subtotal: 1000.00 USD) Tj
+0 -22 Td
+(Tax: 170.00 USD) Tj
+0 -22 Td
+(Total: 1170.00 USD) Tj
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+trailer
+<< /Root 1 0 R >>
+%%EOF
