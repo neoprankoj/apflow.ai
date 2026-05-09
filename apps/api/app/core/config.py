@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 60
     demo_mode: bool = True
     allow_demo_mode_in_production: bool = False
+    allow_demo_reset: bool = False
     demo_tenant_id: str = "11111111-1111-1111-1111-111111111111"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
@@ -73,6 +74,8 @@ class Settings(BaseSettings):
         if self.minio_root_user == "minioadmin" or self.minio_root_password == "minioadmin":
             raise ValueError("Default MinIO credentials are not allowed in staging or production")
         if self.app_env == "production":
+            if self.allow_demo_reset:
+                raise ValueError("ALLOW_DEMO_RESET cannot be true in production")
             if not self.auth_enabled:
                 raise ValueError("AUTH_ENABLED must be true in production")
             if self.demo_mode and not self.allow_demo_mode_in_production:
