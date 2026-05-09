@@ -35,12 +35,19 @@ from app.core.repositories import InMemoryAPRepository
 from app.core.schemas import (
     CurrentUserContext,
     DocumentReference,
+    ConfidenceBand,
+    ExtractedInvoiceFields,
     InvoiceExtractionInput,
+    InvoiceExtractionOutput,
     InvoiceIngestionOutput,
     InvoiceProcessFromUploadRequest,
     InvoiceProcessFromUploadResult,
     InvoiceSource,
     InvoiceUploadResult,
+    HumanReviewStatus,
+    OCRConfidenceSummary,
+    OCRExtractedField,
+    OCRExtractionResult,
     Permission,
     UploadedInvoiceDocument,
 )
@@ -169,6 +176,7 @@ def process_invoice_document(
             correlation_id=payload.correlation_id,
         )
     )
+    extraction = _apply_latest_corrected_review_task(payload.tenant_id, raw.raw_invoice_id, extraction, repository)
     pipeline = continue_full_pipeline_from_extraction(
         tenant_id=payload.tenant_id,
         raw_invoice_id=raw.raw_invoice_id,
@@ -228,3 +236,130 @@ def _prepare_raw_invoice_from_document(
 def _enforce_tenant(tenant_id: UUID, context: CurrentUserContext) -> None:
     if settings.auth_enabled and tenant_id != context.tenant.id:
         raise HTTPException(status_code=403, detail="Tenant access denied")
+
+
+def _apply_latest_corrected_review_task(
+    tenant_id: UUID,
+    raw_invoice_id: UUID,
+    extraction: InvoiceExtractionOutput,
+    repository: InMemoryAPRepository,
+) -> InvoiceExtractionOutput:
+    corrected_tasks = [
+        task
+        for task in repository.list_review_tasks(tenant_id)
+        if task.raw_invoice_id == raw_invoice_id
+        and task.status == HumanReviewStatus.CORRECTED
+        and task.corrected_fields
+    ]
+    if not corrected_tasks:
+        return extraction
+    latest = sorted(corrected_tasks, key=lambda task: task.updated_at)[-1]
+    normalized = _normalize_corrections(latest.corrected_fields)
+    if not normalized:
+        return extraction
+
+    fields = extraction.fields.model_copy(update=normalized)
+    confidence = {**extraction.confidence}
+    for field_name in normalized:
+        confidence[field_name] = 1.0
+
+    ocr_result = extraction.ocr_result
+    confidence_summary = extraction.confidence_summary
+    if ocr_result is not None:
+        ocr_result = _apply_corrections_to_ocr_result(ocr_result, normalized)
+        confidence_summary = ocr_result.confidence_summary
+
+    missing_required = [
+        field_name
+        for field_name in ["invoice_number", "supplier_name", "invoice_date", "currency", "grand_total"]
+        if getattr(fields, field_name) in (None, "")
+    ]
+    return extraction.model_copy(
+        update={
+            "fields": fields,
+            "confidence": confidence,
+            "needs_review": bool(missing_required),
+            "review_reasons": [] if not missing_required else extraction.review_reasons,
+            "ocr_result": ocr_result,
+            "confidence_summary": confidence_summary,
+        }
+    )
+
+
+def _apply_corrections_to_ocr_result(
+    ocr_result: OCRExtractionResult,
+    corrections: dict[str, str | float],
+) -> OCRExtractionResult:
+    field_map = {field.field_name: field for field in ocr_result.fields}
+    for field_name, value in corrections.items():
+        field_map[field_name] = OCRExtractedField(
+            field_name=field_name,
+            value=value,
+            confidence=1.0,
+            raw_text="manual correction",
+            requires_review=False,
+        )
+    fields = list(field_map.values())
+    summary = _confidence_summary(fields)
+    return ocr_result.model_copy(
+        update={
+            "fields": fields,
+            "confidence_summary": summary,
+            "error": None,
+        }
+    )
+
+
+def _normalize_corrections(corrections: dict) -> dict[str, str | float]:
+    aliases = {
+        "vendor_name": "supplier_name",
+        "total_amount": "grand_total",
+        "tax_amount": "tax_total",
+        "purchase_order_number": "po_number",
+    }
+    numeric_fields = {"subtotal", "tax_total", "grand_total"}
+    allowed = set(ExtractedInvoiceFields.model_fields)
+    normalized: dict[str, str | float] = {}
+    for raw_name, raw_value in corrections.items():
+        field_name = aliases.get(str(raw_name), str(raw_name))
+        if field_name not in allowed or raw_value in (None, ""):
+            continue
+        if field_name in numeric_fields:
+            try:
+                normalized[field_name] = float(str(raw_value).replace(",", ""))
+            except ValueError:
+                continue
+        else:
+            normalized[field_name] = str(raw_value).strip()
+    return normalized
+
+
+def _confidence_summary(fields: list[OCRExtractedField]) -> OCRConfidenceSummary:
+    required = ["invoice_number", "supplier_name", "invoice_date", "currency", "grand_total"]
+    missing = [
+        field_name
+        for field_name in required
+        if not any(field.field_name == field_name and field.value not in (None, "") for field in fields)
+    ]
+    low_required = [
+        field.field_name
+        for field in fields
+        if field.field_name in required and field.value not in (None, "") and field.confidence < 0.75
+    ]
+    average = round(sum(field.confidence for field in fields) / len(fields), 4) if fields else 0
+    return OCRConfidenceSummary(
+        average_confidence=average,
+        high_confidence_fields=sum(1 for field in fields if _band(field.confidence) == ConfidenceBand.HIGH),
+        medium_confidence_fields=sum(1 for field in fields if _band(field.confidence) == ConfidenceBand.MEDIUM),
+        low_confidence_fields=sum(1 for field in fields if _band(field.confidence) == ConfidenceBand.LOW),
+        required_fields_missing=missing,
+        required_fields_low_confidence=low_required,
+    )
+
+
+def _band(confidence: float) -> ConfidenceBand:
+    if confidence >= 0.9:
+        return ConfidenceBand.HIGH
+    if confidence >= 0.75:
+        return ConfidenceBand.MEDIUM
+    return ConfidenceBand.LOW

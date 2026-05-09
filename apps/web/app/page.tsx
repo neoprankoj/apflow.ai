@@ -543,6 +543,7 @@ export default function Dashboard() {
               accessToken={accessToken}
               apiBaseUrl={apiBaseUrl}
               authStatus={authStatus}
+              canCorrectReview={canReview}
               canExportErp={canExportErp}
               onDemoLogin={demoLogin}
               selectedOcrProvider={selectedOcrProvider?.provider ?? "mock"}

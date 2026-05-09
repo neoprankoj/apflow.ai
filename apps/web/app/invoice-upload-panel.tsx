@@ -31,22 +31,60 @@ type ConfidenceSummary = {
   high_confidence_fields: number;
   medium_confidence_fields: number;
   low_confidence_fields: number;
+  required_fields_missing?: string[];
+  required_fields_low_confidence?: string[];
 };
 
 type ExtractedField = {
   field_name: string;
   value: string | number | null;
   confidence: number;
+  raw_text?: string | null;
   requires_review?: boolean;
+};
+
+type OcrResult = {
+  fields?: ExtractedField[];
+  provider_metadata?: {
+    provider_name?: string;
+    raw_provider_status?: string | null;
+    parsed_result_count?: number | null;
+    parsed_text_length?: number | null;
+    ocr_exit_code?: string | number | null;
+    detected_content_type?: string | null;
+  };
+  raw_response?: {
+    provider?: string;
+    parsed_result_count?: number;
+    parsed_text_length?: number;
+    ocr_text_preview?: string;
+    ocr_exit_code?: string | number | null;
+    detected_content_type?: string | null;
+    is_errored_on_processing?: boolean;
+  };
+  error?: string | null;
+};
+
+type ReviewIssue = {
+  field_name: string;
+  message: string;
+  issue_type?: string;
+  confidence?: number;
+  current_value?: string | number | null;
+};
+
+type ReviewTask = {
+  task_id: string;
+  status: string;
+  issues?: ReviewIssue[];
+  corrected_fields?: Record<string, string | number>;
 };
 
 type ExtractResult = {
   confidence_summary?: ConfidenceSummary;
   review_status?: string;
-  review_tasks?: Array<{ task_id: string; status: string; issues?: Array<{ field_name: string; message: string }> }>;
-  ocr_result?: {
-    fields?: ExtractedField[];
-  };
+  review_tasks?: ReviewTask[];
+  ocr_result?: OcrResult;
 };
 
 type PipelineResult = {
@@ -66,8 +104,8 @@ type PipelineResult = {
   approval_result?: { route: string; assigned_role?: string } | null;
   erp_export_ready?: boolean;
   confidence_summary?: ConfidenceSummary;
-  ocr_result?: { fields?: ExtractedField[] };
-  review_tasks?: Array<{ task_id: string; status: string; issues?: Array<{ field_name: string; message: string }> }>;
+  ocr_result?: OcrResult;
+  review_tasks?: ReviewTask[];
 };
 
 type ProcessResult = {
@@ -108,6 +146,7 @@ type Props = {
   selectedOcrProvider?: string;
   selectedOcrStatus?: string;
   canExportErp?: boolean;
+  canCorrectReview?: boolean;
   onDemoLogin: () => void;
 };
 
@@ -119,6 +158,7 @@ export function InvoiceUploadPanel({
   selectedOcrProvider = "mock",
   selectedOcrStatus = "ok",
   canExportErp = true,
+  canCorrectReview = false,
   onDemoLogin
 }: Props) {
   const [file, setFile] = useState<File | null>(null);
@@ -133,6 +173,8 @@ export function InvoiceUploadPanel({
     "upload" | "extract" | "process" | "export" | "vendor-preview" | null
   >(null);
   const [error, setError] = useState<string | null>(null);
+  const [correctionMessage, setCorrectionMessage] = useState<string | null>(null);
+  const [corrections, setCorrections] = useState<Record<string, string>>({});
   const [timestamps, setTimestamps] = useState<Record<string, string>>({});
 
   const documentId = uploadResult?.document.document_id;
@@ -140,8 +182,22 @@ export function InvoiceUploadPanel({
   const invoice = pipeline?.invoice?.canonical_invoice;
   const invoiceId = pipeline?.invoice?.invoice_id;
   const confidence = pipeline?.confidence_summary ?? extractResult?.confidence_summary;
-  const fields = pipeline?.ocr_result?.fields ?? extractResult?.ocr_result?.fields ?? [];
-  const reviewRequiredFields = fields.filter((field) => field.requires_review).map((field) => field.field_name);
+  const ocrResult = pipeline?.ocr_result ?? extractResult?.ocr_result;
+  const ocrRawResponse = ocrResult?.raw_response;
+  const ocrProviderMetadata = ocrResult?.provider_metadata;
+  const ocrTextPreview = ocrRawResponse?.ocr_text_preview;
+  const parsedTextLength =
+    ocrRawResponse?.parsed_text_length ?? ocrProviderMetadata?.parsed_text_length ?? 0;
+  const parsedResultCount =
+    ocrRawResponse?.parsed_result_count ?? ocrProviderMetadata?.parsed_result_count ?? 0;
+  const fields = ocrResult?.fields ?? [];
+  const reviewRequiredFields = Array.from(
+    new Set([
+      ...fields.filter((field) => field.requires_review).map((field) => field.field_name),
+      ...(confidence?.required_fields_missing ?? []),
+      ...(confidence?.required_fields_low_confidence ?? [])
+    ])
+  );
   const erpExportReady = Boolean(pipeline?.erp_export_ready);
   const selectedFileName = useMemo(() => file?.name ?? "No file selected", [file]);
   const isSignedIn = authStatus === "authenticated" && Boolean(accessToken && tenantId);
@@ -149,6 +205,16 @@ export function InvoiceUploadPanel({
   const isBusy = activeAction !== null;
   const reviewStatus = processResult?.review_status ?? extractResult?.review_status;
   const reviewTasks = extractResult?.review_tasks ?? pipeline?.review_tasks ?? [];
+  const reviewIssues = reviewTasks.flatMap((task) => task.issues ?? []);
+  const correctionFields = Array.from(
+    new Set(
+      [
+        ...reviewIssues.map((issue) => issue.field_name),
+        ...(confidence?.required_fields_missing ?? []),
+        ...(confidence?.required_fields_low_confidence ?? [])
+      ].filter((fieldName) => fieldName !== "document")
+    )
+  );
   const demoSteps = buildDemoSteps({
     signedIn: isSignedIn,
     file,
@@ -274,6 +340,70 @@ export function InvoiceUploadPanel({
     } catch (error) {
       setStatus("failed");
       setError(error instanceof Error ? error.message : "Processing failed because the API is unavailable.");
+    } finally {
+      setActiveAction(null);
+    }
+  }
+
+  async function submitCorrections() {
+    if (!ensureSignedIn()) return;
+    const requestContext = getSignedInRequestContext();
+    if (!requestContext) return;
+    const task = reviewTasks.find((item) => item.status === "review_required") ?? reviewTasks[0];
+    if (!task) {
+      setCorrectionMessage("No review task is available for this extraction.");
+      return;
+    }
+    const cleanCorrections = Object.fromEntries(
+      Object.entries(corrections)
+        .map(([fieldName, value]) => [fieldName, value.trim()])
+        .filter(([, value]) => value)
+    );
+    if (!Object.keys(cleanCorrections).length) {
+      setCorrectionMessage("Enter at least one corrected field before submitting.");
+      return;
+    }
+    setError(null);
+    setCorrectionMessage("Submitting corrections...");
+    setActiveAction("process");
+    try {
+      const result = await apiFetch<{ task_id: string; status: string; corrected_fields: Record<string, string | number> }>(
+        requestContext.apiBaseUrl,
+        `/review/tasks/${task.task_id}/corrections`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            tenant_id: requestContext.tenantId,
+            corrections: cleanCorrections,
+            reviewer_id: "dashboard-demo"
+          }),
+          token: requestContext.accessToken,
+          action: "Submit review corrections"
+        }
+      );
+      setExtractResult((current) =>
+        current
+          ? {
+              ...current,
+              review_status: result.status,
+              review_tasks: (current.review_tasks ?? []).map((item) =>
+                item.task_id === result.task_id
+                  ? { ...item, status: result.status, corrected_fields: result.corrected_fields }
+                  : item
+              ),
+              ocr_result: current.ocr_result
+                ? {
+                    ...current.ocr_result,
+                    fields: mergeCorrectedFields(current.ocr_result.fields ?? [], result.corrected_fields)
+                  }
+                : current.ocr_result
+            }
+          : current
+      );
+      setCorrectionMessage("Corrections saved. Click Process to continue with corrected fields.");
+    } catch (error) {
+      setCorrectionMessage(error instanceof Error ? error.message : "Correction submission failed.");
     } finally {
       setActiveAction(null);
     }
@@ -499,20 +629,28 @@ export function InvoiceUploadPanel({
         </div>
         <div className="space-y-4 p-4">
           {processResult ? (
-            <div className="grid gap-3 text-sm sm:grid-cols-3 xl:grid-cols-4">
-              <Metric label="Invoice" value={invoice?.invoice_number ?? "pending review"} />
-              <Metric label="Vendor" value={invoice?.supplier_name ?? "pending review"} />
-              <Metric label="Total" value={invoice ? money(invoice.grand_total, invoice.currency) : "n/a"} />
-              <Metric label="OCR provider" value={`${selectedOcrProvider} / ${selectedOcrStatus}`} />
-              <Metric label="OCR confidence" value={confidence ? `${Math.round(confidence.average_confidence * 100)}%` : "n/a"} />
-              <Metric label="Review" value={processResult.review_status.replaceAll("_", " ")} />
-              <Metric label="Workflow" value={processResult.workflow_status.replaceAll("_", " ")} />
-              <Metric label="PO match" value={pipeline?.po_match_result?.match_status.replaceAll("_", " ") ?? "n/a"} />
-              <Metric label="Risk" value={pipeline?.fraud_risk_result?.risk_level ?? "n/a"} />
-              <Metric label="Approval" value={pipeline?.approval_result?.route.replaceAll("_", " ") ?? "n/a"} />
-              <Metric label="ERP ready" value={erpExportReady ? "yes" : "no"} />
-              <Metric label="Review fields" value={reviewRequiredFields.length ? reviewRequiredFields.join(", ") : "none"} />
-            </div>
+            <>
+              {processResult.workflow_status === "review_required" ? (
+                <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                  Invoice requires human review before approval. This is a valid safe workflow outcome.
+                </div>
+              ) : null}
+              <div className="grid gap-3 text-sm sm:grid-cols-3 xl:grid-cols-4">
+                <Metric label="Invoice" value={invoice?.invoice_number ?? "pending review"} />
+                <Metric label="Vendor" value={invoice?.supplier_name ?? "pending review"} />
+                <Metric label="Total" value={invoice ? money(invoice.grand_total, invoice.currency) : "n/a"} />
+                <Metric label="OCR provider" value={`${selectedOcrProvider} / ${selectedOcrStatus}`} />
+                <Metric label="OCR confidence" value={confidence ? `${Math.round(confidence.average_confidence * 100)}%` : "n/a"} />
+                <Metric label="OCR text length" value={parsedTextLength ? parsedTextLength.toString() : "0"} />
+                <Metric label="Review" value={processResult.review_status.replaceAll("_", " ")} />
+                <Metric label="Workflow" value={processResult.workflow_status.replaceAll("_", " ")} />
+                <Metric label="PO match" value={pipeline?.po_match_result?.match_status.replaceAll("_", " ") ?? "n/a"} />
+                <Metric label="Risk" value={pipeline?.fraud_risk_result?.risk_level ?? "n/a"} />
+                <Metric label="Approval" value={pipeline?.approval_result?.route.replaceAll("_", " ") ?? "n/a"} />
+                <Metric label="ERP ready" value={erpExportReady ? "yes" : "no"} />
+                <Metric label="Review fields" value={reviewRequiredFields.length ? reviewRequiredFields.join(", ") : "none"} />
+              </div>
+            </>
           ) : (
             <div className="rounded-md border border-border px-4 py-5 text-sm text-muted">
               Process an uploaded invoice to populate the summary.
@@ -523,45 +661,124 @@ export function InvoiceUploadPanel({
 
       <section className="scroll-mt-6 rounded-md border border-border bg-white" id="ocr-review">
         <div className="border-b border-border px-4 py-3">
-          <h2 className="text-base font-semibold">Extracted Fields</h2>
+          <h2 className="text-base font-semibold">OCR Review</h2>
         </div>
-        <div className="p-4">
+        <div className="space-y-4 p-4">
+          {confidence ? (
+            <div className="grid gap-3 text-sm sm:grid-cols-4">
+              <Metric label="Average confidence" value={`${Math.round(confidence.average_confidence * 100)}%`} />
+              <Metric label="Low confidence fields" value={confidence.low_confidence_fields.toString()} />
+              <Metric label="Review status" value={(reviewStatus ?? "pending").replaceAll("_", " ")} />
+              <Metric label="Review tasks" value={reviewTasks.length.toString()} />
+              <Metric label="Parsed text length" value={parsedTextLength.toString()} />
+              <Metric label="Parsed results" value={parsedResultCount.toString()} />
+              <Metric label="OCR exit code" value={String(ocrRawResponse?.ocr_exit_code ?? ocrProviderMetadata?.ocr_exit_code ?? "n/a")} />
+              <Metric label="Content type" value={ocrRawResponse?.detected_content_type ?? ocrProviderMetadata?.detected_content_type ?? "n/a"} />
+            </div>
+          ) : null}
+          {reviewRequiredFields.length ? (
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              Review required: {reviewRequiredFields.join(", ")}
+            </div>
+          ) : null}
+          {ocrResult?.error ? (
+            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+              OCR provider error: {ocrResult.error}
+            </div>
+          ) : null}
           {fields.length ? (
-            <div className="space-y-3">
-              {confidence ? (
-                <div className="grid gap-3 text-sm sm:grid-cols-4">
-                  <Metric label="Average confidence" value={`${Math.round(confidence.average_confidence * 100)}%`} />
-                  <Metric label="Low confidence fields" value={confidence.low_confidence_fields.toString()} />
-                  <Metric label="Review status" value={(reviewStatus ?? "pending").replaceAll("_", " ")} />
-                  <Metric label="Review tasks" value={reviewTasks.length.toString()} />
-                </div>
-              ) : null}
-              {reviewRequiredFields.length ? (
-                <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                  Review required: {reviewRequiredFields.join(", ")}
-                </div>
-              ) : null}
-              <div className="divide-y divide-border rounded-md border border-border">
-                {fields.map((field) => (
-                  <div
-                    className="grid gap-3 px-3 py-2 text-sm sm:grid-cols-[170px_1fr_100px_120px]"
-                    key={field.field_name}
-                  >
-                    <span className="font-medium">{field.field_name.replaceAll("_", " ")}</span>
-                    <span className="truncate text-muted">{field.value ?? "missing"}</span>
-                    <span>{Math.round(field.confidence * 100)}%</span>
-                    <span className={field.requires_review ? "text-amber-700" : "text-green-700"}>
-                      {field.requires_review ? "yes" : "no"}
-                    </span>
-                  </div>
-                ))}
+            <div className="divide-y divide-border rounded-md border border-border">
+              <div className="grid gap-3 bg-[hsl(var(--background))] px-3 py-2 text-xs font-medium text-muted sm:grid-cols-[170px_1fr_100px_120px]">
+                <span>Field</span>
+                <span>Value</span>
+                <span>Confidence</span>
+                <span>Review</span>
               </div>
+              {fields.map((field) => (
+                <div
+                  className="grid gap-3 px-3 py-2 text-sm sm:grid-cols-[170px_1fr_100px_120px]"
+                  key={field.field_name}
+                >
+                  <span className="font-medium">{field.field_name.replaceAll("_", " ")}</span>
+                  <span className="truncate text-muted" title={String(field.value ?? "missing")}>
+                    {field.value ?? "missing"}
+                  </span>
+                  <span>{Math.round(field.confidence * 100)}%</span>
+                  <span className={field.requires_review ? "text-amber-700" : "text-green-700"}>
+                    {field.requires_review ? "yes" : "no"}
+                  </span>
+                </div>
+              ))}
             </div>
           ) : (
             <div className="rounded-md border border-border px-4 py-5 text-sm text-muted">
-              Run extraction to view field confidence.
+              {extractResult || processResult
+                ? parsedTextLength > 0
+                  ? "OCR text was received but invoice fields could not be confidently parsed."
+                  : "OCR provider returned no parsed text."
+                : "Run extraction to view field confidence."}
             </div>
           )}
+          {ocrTextPreview ? (
+            <details className="rounded-md border border-border">
+              <summary className="cursor-pointer px-3 py-2 text-sm font-medium">OCR text preview</summary>
+              <pre className="max-h-64 overflow-auto whitespace-pre-wrap border-t border-border p-3 text-xs text-muted">
+                {ocrTextPreview}
+              </pre>
+            </details>
+          ) : null}
+          {reviewTasks.length ? (
+            <div className="space-y-3 rounded-md border border-border p-3">
+              <div>
+                <h3 className="text-sm font-semibold">Human review corrections</h3>
+                <p className="mt-1 text-xs text-muted">
+                  Save corrected fields, then click Process to continue with the corrected extraction.
+                </p>
+              </div>
+              {reviewIssues.length ? (
+                <div className="space-y-1 text-sm text-amber-800">
+                  {reviewIssues.map((issue) => (
+                    <p key={`${issue.field_name}-${issue.message}`}>
+                      {issue.field_name.replaceAll("_", " ")}: {issue.message}
+                    </p>
+                  ))}
+                </div>
+              ) : null}
+              {correctionFields.length ? (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {correctionFields.map((fieldName) => (
+                    <label className="text-sm" key={fieldName}>
+                      <span className="mb-1 block text-xs text-muted">{fieldName.replaceAll("_", " ")}</span>
+                      <input
+                        className="w-full rounded-md border border-border px-3 py-2"
+                        onChange={(event) =>
+                          setCorrections((current) => ({ ...current, [fieldName]: event.target.value }))
+                        }
+                        placeholder={`Correct ${fieldName.replaceAll("_", " ")}`}
+                        type="text"
+                        value={corrections[fieldName] ?? ""}
+                      />
+                    </label>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted">No missing required fields are waiting for correction.</p>
+              )}
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  className="rounded-md border border-border px-3 py-2 text-sm disabled:text-muted"
+                  disabled={!canCorrectReview || !correctionFields.length || signInRequired || isBusy}
+                  onClick={submitCorrections}
+                  type="button"
+                >
+                  Submit corrections
+                </button>
+                <span className="text-xs text-muted">
+                  {canCorrectReview ? correctionMessage ?? "Correction endpoint is available." : "Your role cannot submit corrections."}
+                </span>
+              </div>
+            </div>
+          ) : null}
         </div>
       </section>
 
@@ -858,6 +1075,20 @@ function Metric({ label, value }: { label: string; value: string }) {
       <p className="mt-1 truncate font-medium">{value}</p>
     </div>
   );
+}
+
+function mergeCorrectedFields(fields: ExtractedField[], correctedFields: Record<string, string | number>) {
+  const merged = new Map(fields.map((field) => [field.field_name, field]));
+  for (const [fieldName, value] of Object.entries(correctedFields)) {
+    merged.set(fieldName, {
+      field_name: fieldName,
+      value,
+      confidence: 1,
+      raw_text: "manual correction",
+      requires_review: false
+    });
+  }
+  return Array.from(merged.values());
 }
 
 function money(value: number, currency: string) {
