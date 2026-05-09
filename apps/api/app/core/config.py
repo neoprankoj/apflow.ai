@@ -24,6 +24,11 @@ class Settings(BaseSettings):
     document_storage_path: str = ".storage/documents"
     max_invoice_upload_bytes: int = 10 * 1024 * 1024
     ocr_provider: str = "mock"
+    ocr_space_api_key: str = ""
+    ocr_space_api_url: str = "https://api.ocr.space/parse/image"
+    ocr_space_language: str = "eng"
+    ocr_space_engine: str = "2"
+    ocr_space_timeout_seconds: int = 60
     azure_document_intelligence_endpoint: str = ""
     azure_document_intelligence_key: str = ""
     google_document_ai_project_id: str = ""

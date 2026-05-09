@@ -95,6 +95,22 @@ def test_extract_uploaded_document_with_mock_ocr():
     assert body["review_status"] == "not_required"
 
 
+def test_extract_uploaded_binary_pdf_with_mock_ocr_does_not_crash():
+    client = TestClient(create_app())
+    tenant_id = str(uuid4())
+    uploaded = _upload(client, tenant_id, b"%PDF-1.7\n%\xff\xfe\x00binary-pdf-content").json()
+
+    response = client.post(
+        f"/documents/invoices/{uploaded['document']['document_id']}/extract?tenant_id={tenant_id}"
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ocr_result"]["provider_metadata"]["provider_name"] == "mock"
+    assert body["review_status"] == "not_required"
+    assert body["confidence_summary"]["average_confidence"] > 0.9
+
+
 def test_process_uploaded_document_through_full_pipeline():
     client = TestClient(create_app())
     tenant_id = str(uuid4())

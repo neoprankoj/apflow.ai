@@ -418,6 +418,7 @@ export default function Dashboard() {
   const recentReviewTasks = reviewTasks.slice(-5).reverse();
   const selectedOcrProvider = ocrProviders.find((provider) => provider.selected);
   const azureOcrProvider = ocrProviders.find((provider) => provider.provider === "azure");
+  const ocrSpaceProvider = ocrProviders.find((provider) => provider.provider === "ocr_space");
   const isSignedIn = authStatus === "authenticated" && Boolean(accessToken && currentUser);
   const unauthorized = ready?.auth_enabled && !isSignedIn;
   const navItems = [
@@ -429,11 +430,18 @@ export default function Dashboard() {
     ["vendor-portal-preview", "Vendor Portal Preview"],
     ["admin", "Admin"]
   ];
-  const ocrGuidance = selectedOcrProvider?.provider === "azure"
-    ? azureOcrProvider?.configured
-      ? "Azure OCR ready. Uploaded PDFs will use Azure while OCR_PROVIDER=azure."
-      : "Azure OCR credentials are missing. Set OCR_PROVIDER=azure, AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT, and AZURE_DOCUMENT_INTELLIGENCE_KEY."
-    : "Mock OCR is active. Use Azure credentials to test real OCR.";
+  const selectedProviderName = selectedOcrProvider?.provider ?? "mock";
+  const ocrTestProviderName = selectedProviderName === "mock" ? "ocr_space" : selectedProviderName;
+  const ocrGuidance =
+    selectedProviderName === "azure"
+      ? azureOcrProvider?.configured
+        ? "Azure OCR ready. Uploaded PDFs will use Azure while OCR_PROVIDER=azure."
+        : "Azure OCR credentials are missing. Set OCR_PROVIDER=azure, AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT, and AZURE_DOCUMENT_INTELLIGENCE_KEY."
+      : selectedProviderName === "ocr_space"
+        ? ocrSpaceProvider?.configured
+          ? "OCR.space OCR is selected. Uploaded PDFs/images will use OCR.space while OCR_PROVIDER=ocr_space."
+          : "OCR.space API key missing. Set OCR_SPACE_API_KEY in .env.staging."
+        : "Mock OCR is active. Set OCR_PROVIDER=ocr_space and OCR_SPACE_API_KEY to test OCR.space, or use Azure credentials to test Azure.";
 
   return (
     <main className="min-h-screen">
@@ -705,6 +713,10 @@ export default function Dashboard() {
                 <strong>{azureOcrProvider?.configured ? "configured" : azureOcrProvider?.status ?? "unknown"}</strong>
               </div>
               <div className="flex items-center justify-between">
+                <span>OCR.space</span>
+                <strong>{ocrSpaceProvider?.configured ? "configured" : ocrSpaceProvider?.status ?? "unknown"}</strong>
+              </div>
+              <div className="flex items-center justify-between">
                 <span>Mock status</span>
                 <strong>{mockOcrStatus.status}</strong>
               </div>
@@ -725,10 +737,10 @@ export default function Dashboard() {
               <button
                 className="w-full rounded-md border border-border px-3 py-2 text-sm disabled:text-muted"
                 disabled={ocrTestRunning || !apiBaseUrl}
-                onClick={() => void testOcrProvider("azure")}
+                onClick={() => void testOcrProvider(ocrTestProviderName)}
                 type="button"
               >
-                {ocrTestRunning ? "Testing Azure OCR..." : "Test OCR Provider"}
+                {ocrTestRunning ? `Testing ${ocrTestProviderName} OCR...` : `Test ${ocrTestProviderName} Provider`}
               </button>
             </div>
           </div>

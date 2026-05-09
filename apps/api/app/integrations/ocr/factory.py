@@ -7,6 +7,7 @@ from app.integrations.ocr.cloud import (
     GoogleDocumentAIOCRAdapter,
 )
 from app.integrations.ocr.mock import MockOCRProvider
+from app.integrations.ocr.ocr_space import OCRSpaceOCRAdapter
 
 
 class OCRProviderFactory:
@@ -42,4 +43,6 @@ class OCRProviderFactory:
             return GoogleDocumentAIOCRAdapter(self.settings)
         if selected == OCRProviderName.AWS:
             return AWSTextractOCRAdapter(self.settings)
+        if selected == OCRProviderName.OCR_SPACE:
+            return OCRSpaceOCRAdapter(self.settings)
         raise ValueError(f"unsupported OCR provider: {selected}")

@@ -47,7 +47,8 @@ The response is shaped for the future dashboard and includes invoice, validation
 
 ERP integration is explicit through `/erp/*` endpoints. Mock adapters are available for Priority, Odoo, and Zoho Books; they do not call real ERP APIs.
 
-OCR defaults to the mock provider. Azure Document Intelligence, Google Document AI, and AWS Textract adapters are safe placeholders until credentials are configured.
+OCR defaults to the mock provider. OCR.space and Azure Document Intelligence can be enabled with credentials; Google Document AI and AWS Textract adapters remain safe placeholders until credentials are configured.
+OCR.space can be enabled with `OCR_PROVIDER=ocr_space` and `OCR_SPACE_API_KEY`. It sends uploaded PDF/image bytes to OCR.space and maps `ParsedText` into the shared field-confidence and human-review workflow with conservative parsing.
 Azure Document Intelligence can be enabled with `OCR_PROVIDER=azure`, `AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT`, and `AZURE_DOCUMENT_INTELLIGENCE_KEY`. The Azure adapter uses the prebuilt invoice model and maps field-level confidence into the existing human-review workflow.
 
 Real invoice documents can be uploaded through `POST /documents/invoices/upload`. The upload flow stores tenant-scoped document metadata and bytes, then can run OCR-only extraction or continue through the full AP pipeline. Tests and local demo mode use in-memory document storage by default. Docker Compose uses filesystem-backed storage mounted at `/app/.storage/documents`.
@@ -161,6 +162,22 @@ Invoke-WebRequest "http://127.0.0.1:8000/ocr/test-provider?provider_name=azure"
 ```
 
 Remove the Azure variables or set `OCR_PROVIDER=mock` to return to deterministic local OCR.
+
+OCR.space mode:
+
+```powershell
+$env:OCR_PROVIDER="ocr_space"
+$env:OCR_SPACE_API_KEY="<key>"
+Invoke-WebRequest "http://127.0.0.1:8000/ocr/test-provider?provider_name=ocr_space"
+```
+
+Live OCR.space local file test:
+
+```powershell
+python scripts/test_ocr_space.py samples/invoices/invoice.pdf --out samples/ocr-results/ocr-space.json
+```
+
+OCR.space health checks only report configured/missing credentials and do not consume OCR quota. Set `OCR_PROVIDER=mock` and restart to return to deterministic local OCR.
 
 Live Azure OCR test pack:
 

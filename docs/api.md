@@ -99,7 +99,9 @@ If OCR confidence requires review, the full pipeline returns `workflow_status=re
 
 Azure OCR can be checked with `GET /ocr/test-provider?provider_name=azure`. Missing endpoint/key returns `status=missing_credentials` without logging secrets or calling Azure.
 
-When `OCR_PROVIDER=azure` is selected but credentials are missing, `/ready` reports the OCR check as degraded/not ready. Mock mode remains ready when Azure is unconfigured.
+OCR.space can be checked with `GET /ocr/test-provider?provider_name=ocr_space`. Missing `OCR_SPACE_API_KEY` returns `status=missing_credentials`. The test-provider endpoint only checks configuration and does not submit documents to OCR.space.
+
+When `OCR_PROVIDER=azure` or `OCR_PROVIDER=ocr_space` is selected but credentials are missing, `/ready` reports the OCR check as degraded/not ready. Mock mode remains ready when cloud OCR providers are unconfigured.
 
 ## Invoice Document Uploads
 
