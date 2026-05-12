@@ -179,6 +179,7 @@ export default function Dashboard() {
   const [activeSection, setActiveSection] = useState<string>("overview");
   const [ocrTestMessage, setOcrTestMessage] = useState<string | null>(null);
   const [ocrTestRunning, setOcrTestRunning] = useState(false);
+  const [demoResetSignal, setDemoResetSignal] = useState(0);
 
   const tenantId = currentUser?.tenant.id ?? null;
   const permissions = useMemo(() => new Set(currentUser?.permissions ?? []), [currentUser]);
@@ -546,6 +547,7 @@ export default function Dashboard() {
               canCorrectReview={canReview}
               canExportErp={canExportErp}
               onDemoLogin={demoLogin}
+              resetSignal={demoResetSignal}
               selectedOcrProvider={selectedOcrProvider?.provider ?? "mock"}
               selectedOcrStatus={selectedOcrProvider?.status ?? "ok"}
               tenantId={tenantId}
@@ -817,6 +819,7 @@ export default function Dashboard() {
               apiBaseUrl={apiBaseUrl}
               canReset={canDemoReset}
               onResetComplete={() => {
+                setDemoResetSignal((current) => current + 1);
                 if (accessToken && currentUser) void loadProtectedData(accessToken, currentUser);
               }}
             />

@@ -56,19 +56,58 @@ def test_demo_reset_requires_admin_or_owner(auth_enabled, staging_demo_reset):
 def test_demo_reset_creates_demo_records_for_owner(auth_enabled, staging_demo_reset):
     client = TestClient(create_app())
     owner = _register(client, "demo-reset-owner@example.com")
+    _create_demo_operational_data(client, owner)
 
     response = client.post("/admin/demo/reset", headers=_auth_headers(owner["access_token"]))
 
     assert response.status_code == 200
     body = response.json()
     assert body["tenant_id"] == owner["tenant"]["id"]
-    assert body["invoice_number"].startswith("INV-DEMO-")
-    assert body["workflow_status"] == "approval_ready"
-    assert body["erp_export_ready"] is True
+    assert body["message"] == "Demo data reset successfully."
+    assert body["invoice_number"] is None
+    assert body["workflow_status"] == "clean"
+    assert body["seed_mode"] == "clean"
+    assert body["erp_export_ready"] is False
     assert body["vendor_count"] >= 1
     assert body["purchase_order_count"] >= 1
-    assert body["approval_task_count"] >= 1
-    assert body["notification_count"] >= 1
+    assert body["approval_task_count"] == 0
+    assert body["notification_count"] == 0
+
+
+def test_demo_reset_clears_operational_data_and_preserves_users(auth_enabled, staging_demo_reset):
+    client = TestClient(create_app())
+    owner = _register(client, "demo-reset-clear@example.com")
+    _create_demo_operational_data(client, owner)
+    tenant_id = owner["tenant"]["id"]
+    headers = _auth_headers(owner["access_token"])
+
+    response = client.post("/admin/demo/reset", headers=headers)
+
+    assert response.status_code == 200
+    assert client.get(f"/invoices?tenant_id={tenant_id}", headers=headers).json() == []
+    assert client.get(f"/invoices/approval-tasks?tenant_id={tenant_id}", headers=headers).json() == []
+    assert client.get(f"/invoices/notification-events?tenant_id={tenant_id}", headers=headers).json() == []
+    assert client.get(f"/invoices/workflows?tenant_id={tenant_id}", headers=headers).json() == []
+    assert client.get(f"/review/tasks?tenant_id={tenant_id}", headers=headers).json() == []
+    assert client.get(f"/documents/invoices?tenant_id={tenant_id}", headers=headers).json() == []
+    users = client.get("/admin/users", headers=headers).json()
+    assert [record["user"]["email"] for record in users] == ["demo-reset-clear@example.com"]
+
+
+def test_demo_reset_does_not_call_ocr_provider(auth_enabled, staging_demo_reset):
+    def fail_if_ocr_agent_requested():
+        raise AssertionError("demo reset should not request OCR/extraction dependencies")
+
+    dependencies.get_invoice_extraction_agent.cache_clear()
+    app = create_app()
+    app.dependency_overrides[dependencies.get_invoice_extraction_agent] = fail_if_ocr_agent_requested
+    client = TestClient(app)
+    owner = _register(client, "demo-reset-no-ocr@example.com")
+
+    response = client.post("/admin/demo/reset", headers=_auth_headers(owner["access_token"]))
+
+    assert response.status_code == 200
+    assert response.json()["workflow_status"] == "clean"
 
 
 def test_production_config_rejects_demo_reset():
@@ -119,6 +158,47 @@ def _create_member(client: TestClient, email: str, role: str) -> dict:
     login = client.post("/auth/login", json={"email": email, "password": "password-123"})
     assert login.status_code == 200
     return {"token": login.json()["access_token"], "tenant_id": owner["tenant"]["id"]}
+
+
+def _create_demo_operational_data(client: TestClient, owner: dict) -> None:
+    tenant_id = owner["tenant"]["id"]
+    headers = _auth_headers(owner["access_token"])
+    pipeline = client.post(
+        "/invoices/full-mock-pipeline",
+        headers=headers,
+        json={
+            "tenant_id": tenant_id,
+            "source": "upload",
+            "file_url": "mock://demo/reset-before.pdf",
+            "metadata": {
+                "sender_email": "demo-ap@apflow.local",
+                "original_filename": "reset-before.pdf",
+                "mime_type": "application/pdf",
+            },
+            "content": (
+                "invoice_number=INV-BEFORE-RESET supplier_name=Northstar Components "
+                "supplier_tax_id=TAX-12345 subtotal=1000 tax_total=170 grand_total=1170 "
+                "currency=USD invoice_date=2026-05-09 po_number=PO-100"
+            ),
+        },
+    )
+    assert pipeline.status_code == 200
+    assert pipeline.json()["invoice"] is not None
+    upload = client.post(
+        "/documents/invoices/upload",
+        headers=headers,
+        data={"tenant_id": tenant_id},
+        files={"file": ("review-before-reset.pdf", b"invoice_number=LOW confidence_invoice_number=0.4", "application/pdf")},
+    )
+    assert upload.status_code == 200
+    process = client.post(
+        f"/documents/invoices/{upload.json()['document']['document_id']}/process",
+        headers=headers,
+        json={"tenant_id": tenant_id},
+    )
+    assert process.status_code == 200
+    assert client.get(f"/invoices?tenant_id={tenant_id}", headers=headers).json()
+    assert client.get(f"/review/tasks?tenant_id={tenant_id}", headers=headers).json()
 
 
 def _auth_headers(token: str) -> dict[str, str]:

@@ -603,6 +603,66 @@ class InMemoryAPRepository:
         task.history.append({"action": str(status), "actor_id": actor_id})
         return task
 
+    def clear_demo_operational_data(self, tenant_id: UUID) -> None:
+        invoice_ids = {record.invoice_id for record in self.list_invoices(tenant_id)}
+        self.raw_invoices = {
+            raw_invoice_id: record
+            for raw_invoice_id, record in self.raw_invoices.items()
+            if record.output.tenant_id != tenant_id
+        }
+        self.extractions = {
+            extraction_id: record
+            for extraction_id, record in self.extractions.items()
+            if record.tenant_id != tenant_id
+        }
+        self.invoices = {
+            invoice_id: record
+            for invoice_id, record in self.invoices.items()
+            if record.tenant_id != tenant_id
+        }
+        self.approval_tasks = {
+            task_id: record
+            for task_id, record in self.approval_tasks.items()
+            if record.tenant_id != tenant_id
+        }
+        self.notification_events = {
+            notification_id: record
+            for notification_id, record in self.notification_events.items()
+            if record.tenant_id != tenant_id
+        }
+        self.workflow_states = {
+            workflow_id: record
+            for workflow_id, record in self.workflow_states.items()
+            if record.tenant_id != tenant_id
+        }
+        self.erp_sync_logs = {
+            sync_log_id: record
+            for sync_log_id, record in self.erp_sync_logs.items()
+            if record.tenant_id != tenant_id
+        }
+        self.review_tasks = {
+            task_id: task
+            for task_id, task in self.review_tasks.items()
+            if task.tenant_id != tenant_id
+        }
+        self.uploaded_documents = {
+            document_id: document
+            for document_id, document in self.uploaded_documents.items()
+            if document.tenant_id != tenant_id
+        }
+        self.vendor_portal_access = {
+            access_id: record
+            for access_id, record in self.vendor_portal_access.items()
+            if record.tenant_id != tenant_id
+        }
+        self.vendor_messages = {
+            message_id: message
+            for message_id, message in self.vendor_messages.items()
+            if message.tenant_id != tenant_id
+        }
+        for invoice_id in invoice_ids:
+            self.invoice_external_ids.pop(invoice_id, None)
+
     def ensure_phase3_fixtures(self, tenant_id: UUID) -> None:
         vendors = self.list_vendors(tenant_id)
         if vendors:

@@ -1,7 +1,7 @@
 from decimal import Decimal
 from uuid import UUID, uuid4
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.core.repositories import (
@@ -792,6 +792,36 @@ class SQLAlchemyAPRepository:
         row.history = [*row.history, {"action": str(status), "actor_id": actor_id}]
         self.session.commit()
         return self._review_task(row)
+
+    def clear_demo_operational_data(self, tenant_id: UUID) -> None:
+        self.raw_invoices = {
+            raw_invoice_id: record
+            for raw_invoice_id, record in self.raw_invoices.items()
+            if record.output.tenant_id != tenant_id
+        }
+        self.extractions = {
+            extraction_id: record
+            for extraction_id, record in self.extractions.items()
+            if record.tenant_id != tenant_id
+        }
+        for model in (
+            dbm.VendorMessage,
+            dbm.VendorPortalAccess,
+            dbm.HumanReviewTask,
+            dbm.ERPExternalReference,
+            dbm.ERPSyncLog,
+            dbm.WorkflowEvent,
+            dbm.WorkflowState,
+            dbm.NotificationEvent,
+            dbm.Notification,
+            dbm.ApprovalFlow,
+            dbm.ApprovalTask,
+            dbm.InvoiceLineItem,
+            dbm.Invoice,
+            dbm.UploadedInvoiceDocument,
+        ):
+            self.session.execute(delete(model).where(model.tenant_id == tenant_id))
+        self.session.commit()
 
     def link_external_vendor_id(self, tenant_id: UUID, vendor_id: UUID, external_id: str) -> None:
         vendor = self.session.get(dbm.Vendor, vendor_id)
