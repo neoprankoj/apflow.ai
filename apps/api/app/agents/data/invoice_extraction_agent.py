@@ -45,6 +45,7 @@ class InvoiceExtractionAgent(BaseAgent[InvoiceExtractionInput, InvoiceExtraction
                 {
                     "content": raw.content,
                     "mime_type": request.mime_type,
+                    "file_name": raw.output.original_file_name,
                     "storage_url": request.storage_url,
                     "raw_invoice_id": str(request.raw_invoice_id),
                 },

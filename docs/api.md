@@ -138,7 +138,7 @@ Upload returns tenant-scoped document metadata plus a storage reference:
 }
 ```
 
-`POST /documents/invoices/{document_id}/extract?tenant_id={uuid}` retrieves the stored document bytes, runs the selected OCR provider, and returns OCR extraction, confidence summary, and review status. OCR.space extraction results include safe diagnostics under `ocr_result.provider_metadata` and `ocr_result.raw_response`, including `parsed_result_count`, `parsed_text_length`, `ocr_exit_code`, `detected_content_type`, and a truncated `ocr_text_preview`. The response never includes provider credentials.
+`POST /documents/invoices/{document_id}/extract?tenant_id={uuid}` retrieves the stored document bytes, runs the selected OCR provider, and returns OCR extraction, confidence summary, and review status. OCR.space extraction results include safe diagnostics under `ocr_result.provider_metadata` and `ocr_result.raw_response`, including `parsed_result_count`, `parsed_text_length`, `ocr_exit_code`, `detected_content_type`, `sent_file_name`, `sent_filetype`, `sent_content_type`, `provider_error_message`, and a truncated `ocr_text_preview`. The response never includes provider credentials.
 
 `POST /documents/invoices/{document_id}/process` accepts:
 

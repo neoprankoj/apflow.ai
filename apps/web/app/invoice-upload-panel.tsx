@@ -52,6 +52,10 @@ type OcrResult = {
     parsed_text_length?: number | null;
     ocr_exit_code?: string | number | null;
     detected_content_type?: string | null;
+    sent_file_name?: string | null;
+    sent_filetype?: string | null;
+    sent_content_type?: string | null;
+    provider_error_message?: string | null;
   };
   raw_response?: {
     provider?: string;
@@ -60,6 +64,10 @@ type OcrResult = {
     ocr_text_preview?: string;
     ocr_exit_code?: string | number | null;
     detected_content_type?: string | null;
+    sent_file_name?: string | null;
+    sent_filetype?: string | null;
+    sent_content_type?: string | null;
+    provider_error_message?: string | null;
     is_errored_on_processing?: boolean;
   };
   error?: string | null;
@@ -190,6 +198,17 @@ export function InvoiceUploadPanel({
     ocrRawResponse?.parsed_text_length ?? ocrProviderMetadata?.parsed_text_length ?? 0;
   const parsedResultCount =
     ocrRawResponse?.parsed_result_count ?? ocrProviderMetadata?.parsed_result_count ?? 0;
+  const sentFileName = ocrRawResponse?.sent_file_name ?? ocrProviderMetadata?.sent_file_name ?? "n/a";
+  const sentFiletype = ocrRawResponse?.sent_filetype ?? ocrProviderMetadata?.sent_filetype ?? "n/a";
+  const sentContentType =
+    ocrRawResponse?.sent_content_type ?? ocrProviderMetadata?.sent_content_type ?? "n/a";
+  const providerErrorMessage =
+    ocrRawResponse?.provider_error_message ?? ocrProviderMetadata?.provider_error_message ?? ocrResult?.error;
+  const fileTypeAdvice =
+    providerErrorMessage &&
+    /file type|file extension|e216|unable to recognize/i.test(providerErrorMessage)
+      ? "OCR.space could not detect file type. Try a real exported PDF/image or check filetype configuration."
+      : null;
   const fields = ocrResult?.fields ?? [];
   const reviewRequiredFields = Array.from(
     new Set([
@@ -674,6 +693,9 @@ export function InvoiceUploadPanel({
               <Metric label="Parsed results" value={parsedResultCount.toString()} />
               <Metric label="OCR exit code" value={String(ocrRawResponse?.ocr_exit_code ?? ocrProviderMetadata?.ocr_exit_code ?? "n/a")} />
               <Metric label="Content type" value={ocrRawResponse?.detected_content_type ?? ocrProviderMetadata?.detected_content_type ?? "n/a"} />
+              <Metric label="Sent file" value={sentFileName} />
+              <Metric label="Sent filetype" value={sentFiletype} />
+              <Metric label="Sent content type" value={sentContentType} />
             </div>
           ) : null}
           {reviewRequiredFields.length ? (
@@ -684,6 +706,11 @@ export function InvoiceUploadPanel({
           {ocrResult?.error ? (
             <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
               OCR provider error: {ocrResult.error}
+            </div>
+          ) : null}
+          {fileTypeAdvice ? (
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              {fileTypeAdvice}
             </div>
           ) : null}
           {fields.length ? (

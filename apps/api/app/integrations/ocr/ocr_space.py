@@ -4,6 +4,7 @@ import json
 import re
 import urllib.error
 import urllib.request
+from pathlib import PurePath
 from uuid import UUID
 
 from app.core.config import Settings
@@ -21,6 +22,12 @@ from app.core.schemas import (
 REQUIRED_FIELDS = ["invoice_number", "supplier_name", "invoice_date", "currency", "grand_total"]
 DATE_VALUE = r"(\d{4}-\d{1,2}-\d{1,2}|\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4})"
 MONEY_VALUE = r"(-?[\d,]+(?:\.\d{2})?)"
+OCR_SPACE_FILETYPES = {
+    "application/pdf": ("PDF", ".pdf"),
+    "image/png": ("PNG", ".png"),
+    "image/jpeg": ("JPG", ".jpg"),
+    "image/jpg": ("JPG", ".jpg"),
+}
 
 
 class OCRSpaceOCRAdapter:
@@ -60,27 +67,61 @@ class OCRSpaceOCRAdapter:
             )
         body = content if isinstance(content, bytes) else str(content).encode("utf-8")
         content_type = str(document_reference.get("mime_type") or "application/octet-stream")
+        prepared = self._prepare_file_metadata(
+            file_name=str(document_reference.get("file_name") or ""),
+            content_type=content_type,
+        )
+        if prepared is None:
+            return self.normalize_provider_response(
+                {
+                    "error": f"OCR.space does not support content type {content_type}",
+                    "_apflow_content_type": content_type,
+                    "_apflow_sent_content_type": content_type,
+                },
+                tenant_id,
+                raw_provider_status="unsupported_content_type",
+            )
+        safe_file_name, file_type, normalized_content_type = prepared
         try:
             raw_response = self._post_to_ocr_space(
-                file_name=str(document_reference.get("file_name") or "invoice"),
+                file_name=safe_file_name,
                 content=body,
-                content_type=content_type,
+                content_type=normalized_content_type,
+                file_type=file_type,
             )
             raw_response["_apflow_content_type"] = content_type
+            raw_response["_apflow_sent_file_name"] = safe_file_name
+            raw_response["_apflow_sent_filetype"] = file_type
+            raw_response["_apflow_sent_content_type"] = normalized_content_type
             return self.normalize_provider_response(raw_response, tenant_id)
         except Exception as exc:
             return self.normalize_provider_response(
                 {
                     "error": f"OCR.space extraction failed: {exc.__class__.__name__}",
                     "_apflow_content_type": content_type,
+                    "_apflow_sent_file_name": safe_file_name,
+                    "_apflow_sent_filetype": file_type,
+                    "_apflow_sent_content_type": normalized_content_type,
                 },
                 tenant_id,
+                raw_provider_status="provider_error",
             )
 
-    def normalize_provider_response(self, raw_response: dict, tenant_id: UUID) -> OCRExtractionResult:
+    def normalize_provider_response(
+        self,
+        raw_response: dict,
+        tenant_id: UUID,
+        raw_provider_status: str | None = None,
+    ) -> OCRExtractionResult:
         parsed_text = self._parsed_text(raw_response)
         if raw_response.get("error"):
-            return self._error_result(str(raw_response["error"]), tenant_id, raw_response, parsed_text)
+            return self._error_result(
+                str(raw_response["error"]),
+                tenant_id,
+                raw_response,
+                parsed_text,
+                raw_provider_status=raw_provider_status or "missing_credentials",
+            )
         if raw_response.get("IsErroredOnProcessing"):
             message = self._provider_error_message(raw_response)
             return self._error_result(message, tenant_id, raw_response, parsed_text, raw_provider_status="provider_error")
@@ -101,6 +142,10 @@ class OCRSpaceOCRAdapter:
                 parsed_result_count=diagnostics["parsed_result_count"],
                 parsed_text_length=diagnostics["parsed_text_length"],
                 detected_content_type=diagnostics["detected_content_type"],
+                sent_file_name=diagnostics["sent_file_name"],
+                sent_filetype=diagnostics["sent_filetype"],
+                sent_content_type=diagnostics["sent_content_type"],
+                provider_error_message=diagnostics["provider_error_message"],
             ),
             fields=fields,
             line_items=line_items,
@@ -111,7 +156,13 @@ class OCRSpaceOCRAdapter:
             },
         )
 
-    def _post_to_ocr_space(self, file_name: str, content: bytes, content_type: str) -> dict:
+    def _post_to_ocr_space(
+        self,
+        file_name: str,
+        content: bytes,
+        content_type: str,
+        file_type: str,
+    ) -> dict:
         boundary = "----apflow-ocr-space-boundary"
         data_fields = {
             "language": self.settings.ocr_space_language or "eng",
@@ -119,6 +170,7 @@ class OCRSpaceOCRAdapter:
             "OCREngine": str(self.settings.ocr_space_engine or "2"),
             "scale": "true",
             "detectOrientation": "true",
+            "filetype": file_type,
         }
         chunks: list[bytes] = []
         for name, value in data_fields.items():
@@ -157,6 +209,27 @@ class OCRSpaceOCRAdapter:
                 return json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
             raise RuntimeError(f"OCR.space HTTP {exc.code}") from exc
+
+    def _prepare_file_metadata(
+        self,
+        file_name: str,
+        content_type: str,
+    ) -> tuple[str, str, str] | None:
+        normalized_content_type = content_type.lower().split(";", 1)[0].strip()
+        mapping = OCR_SPACE_FILETYPES.get(normalized_content_type)
+        if mapping is None:
+            return None
+        file_type, extension = mapping
+        safe_name = PurePath(file_name).name.strip() if file_name else ""
+        if not safe_name:
+            safe_name = f"invoice{extension}"
+        current_extension = PurePath(safe_name).suffix.lower()
+        valid_extensions = {extension}
+        if file_type == "JPG":
+            valid_extensions = {".jpg", ".jpeg"}
+        if current_extension not in valid_extensions:
+            safe_name = f"{safe_name}{extension}"
+        return safe_name, file_type, normalized_content_type
 
     def _fields_from_text(self, text: str) -> list[OCRExtractedField]:
         invoice_number = self._find(
@@ -369,6 +442,12 @@ class OCRSpaceOCRAdapter:
             "parsed_result_count": len(results) if isinstance(results, list) else 0,
             "parsed_text_length": len(parsed_text),
             "detected_content_type": raw_response.get("_apflow_content_type"),
+            "sent_file_name": raw_response.get("_apflow_sent_file_name"),
+            "sent_filetype": raw_response.get("_apflow_sent_filetype"),
+            "sent_content_type": raw_response.get("_apflow_sent_content_type"),
+            "provider_error_message": self._provider_error_message(raw_response)
+            if raw_response.get("IsErroredOnProcessing")
+            else raw_response.get("error"),
         }
 
     def _error_result(
@@ -392,6 +471,10 @@ class OCRSpaceOCRAdapter:
                 parsed_result_count=diagnostics["parsed_result_count"],
                 parsed_text_length=diagnostics["parsed_text_length"],
                 detected_content_type=diagnostics["detected_content_type"],
+                sent_file_name=diagnostics["sent_file_name"],
+                sent_filetype=diagnostics["sent_filetype"],
+                sent_content_type=diagnostics["sent_content_type"],
+                provider_error_message=diagnostics["provider_error_message"],
             ),
             fields=[],
             line_items=[],

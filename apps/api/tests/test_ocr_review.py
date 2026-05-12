@@ -1,3 +1,4 @@
+import json
 from uuid import uuid4
 
 from app.core.config import Settings
@@ -248,13 +249,41 @@ def test_ocr_space_provider_error_is_safe(tenant_id):
     assert result.confidence_summary.required_fields_missing
 
 
+def test_ocr_space_e216_response_includes_safe_diagnostics(tenant_id):
+    adapter = OCRSpaceOCRAdapter(Settings(ocr_space_api_key="test-key"))
+
+    result = adapter.normalize_provider_response(
+        {
+            "IsErroredOnProcessing": True,
+            "OCRExitCode": 99,
+            "ErrorMessage": [
+                "Unable to recognize the file type; E216: Unable to detect the file extension"
+            ],
+            "_apflow_content_type": "application/pdf",
+            "_apflow_sent_file_name": "invoice.pdf",
+            "_apflow_sent_filetype": "PDF",
+            "_apflow_sent_content_type": "application/pdf",
+        },
+        tenant_id,
+    )
+
+    assert result.error.startswith("Unable to recognize the file type")
+    assert result.provider_metadata.ocr_exit_code == 99
+    assert result.provider_metadata.sent_file_name == "invoice.pdf"
+    assert result.provider_metadata.sent_filetype == "PDF"
+    assert result.provider_metadata.sent_content_type == "application/pdf"
+    assert result.provider_metadata.provider_error_message.startswith("Unable to recognize")
+    assert result.raw_response["provider_error_message"].startswith("Unable to recognize")
+
+
 def test_ocr_space_extract_uses_multipart_without_logging_key(tenant_id, caplog, monkeypatch):
     adapter = OCRSpaceOCRAdapter(Settings(ocr_space_api_key="secret-test-key"))
 
-    def fake_post(file_name: str, content: bytes, content_type: str) -> dict:
+    def fake_post(file_name: str, content: bytes, content_type: str, file_type: str) -> dict:
         assert file_name == "invoice.pdf"
         assert content == b"pdf-bytes"
         assert content_type == "application/pdf"
+        assert file_type == "PDF"
         return {
             "IsErroredOnProcessing": False,
             "ParsedResults": [{"ParsedText": "Invoice Number: INV-SPACE-2\nTotal: 10.00"}],
@@ -268,7 +297,104 @@ def test_ocr_space_extract_uses_multipart_without_logging_key(tenant_id, caplog,
     )
 
     assert result.error is None
+    assert result.provider_metadata.sent_file_name == "invoice.pdf"
+    assert result.provider_metadata.sent_filetype == "PDF"
     assert "secret-test-key" not in caplog.text
+
+
+def test_ocr_space_extract_adds_safe_pdf_filename_when_missing(tenant_id, monkeypatch):
+    adapter = OCRSpaceOCRAdapter(Settings(ocr_space_api_key="test-key"))
+    seen = {}
+
+    def fake_post(file_name: str, content: bytes, content_type: str, file_type: str) -> dict:
+        seen.update(file_name=file_name, content_type=content_type, file_type=file_type)
+        return {"IsErroredOnProcessing": False, "ParsedResults": [{"ParsedText": "Invoice Number: INV-1"}]}
+
+    monkeypatch.setattr(adapter, "_post_to_ocr_space", fake_post)
+
+    result = adapter.extract_invoice({"mime_type": "application/pdf", "content": b"pdf"}, tenant_id)
+
+    assert result.error is None
+    assert seen == {"file_name": "invoice.pdf", "content_type": "application/pdf", "file_type": "PDF"}
+
+
+def test_ocr_space_extract_sends_png_filetype(tenant_id, monkeypatch):
+    adapter = OCRSpaceOCRAdapter(Settings(ocr_space_api_key="test-key"))
+    seen = {}
+
+    def fake_post(file_name: str, content: bytes, content_type: str, file_type: str) -> dict:
+        seen.update(file_name=file_name, content_type=content_type, file_type=file_type)
+        return {"IsErroredOnProcessing": False, "ParsedResults": [{"ParsedText": "Invoice Number: INV-PNG"}]}
+
+    monkeypatch.setattr(adapter, "_post_to_ocr_space", fake_post)
+
+    result = adapter.extract_invoice({"file_name": "scan", "mime_type": "image/png", "content": b"png"}, tenant_id)
+
+    assert result.error is None
+    assert seen == {"file_name": "scan.png", "content_type": "image/png", "file_type": "PNG"}
+
+
+def test_ocr_space_extract_sends_jpg_filetype(tenant_id, monkeypatch):
+    adapter = OCRSpaceOCRAdapter(Settings(ocr_space_api_key="test-key"))
+    seen = {}
+
+    def fake_post(file_name: str, content: bytes, content_type: str, file_type: str) -> dict:
+        seen.update(file_name=file_name, content_type=content_type, file_type=file_type)
+        return {"IsErroredOnProcessing": False, "ParsedResults": [{"ParsedText": "Invoice Number: INV-JPG"}]}
+
+    monkeypatch.setattr(adapter, "_post_to_ocr_space", fake_post)
+
+    result = adapter.extract_invoice(
+        {"file_name": "photo.jpeg", "mime_type": "image/jpeg", "content": b"jpg"},
+        tenant_id,
+    )
+
+    assert result.error is None
+    assert seen == {"file_name": "photo.jpeg", "content_type": "image/jpeg", "file_type": "JPG"}
+
+
+def test_ocr_space_extract_rejects_unsupported_content_type_without_calling_provider(tenant_id, monkeypatch):
+    adapter = OCRSpaceOCRAdapter(Settings(ocr_space_api_key="test-key"))
+
+    def fake_post(*args, **kwargs):
+        raise AssertionError("OCR.space should not be called for unsupported content types")
+
+    monkeypatch.setattr(adapter, "_post_to_ocr_space", fake_post)
+
+    result = adapter.extract_invoice({"file_name": "invoice.bin", "mime_type": "application/octet-stream", "content": b"x"}, tenant_id)
+
+    assert result.error == "OCR.space does not support content type application/octet-stream"
+    assert result.provider_metadata.raw_provider_status == "unsupported_content_type"
+    assert result.provider_metadata.sent_content_type == "application/octet-stream"
+
+
+def test_ocr_space_multipart_body_includes_filetype_and_filename(monkeypatch):
+    adapter = OCRSpaceOCRAdapter(Settings(ocr_space_api_key="secret-test-key"))
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
+
+        def read(self):
+            return json.dumps({"IsErroredOnProcessing": False, "ParsedResults": []}).encode()
+
+    def fake_urlopen(request, timeout):
+        body = request.data
+        assert b'name="filetype"' in body
+        assert b"\r\nPDF\r\n" in body
+        assert b'name="file"; filename="invoice.pdf"' in body
+        assert b"Content-Type: application/pdf" in body
+        assert "secret-test-key" not in body.decode("utf-8", errors="ignore")
+        return FakeResponse()
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+
+    result = adapter._post_to_ocr_space("invoice.pdf", b"%PDF", "application/pdf", "PDF")
+
+    assert result["IsErroredOnProcessing"] is False
 
 
 def test_azure_adapter_health_check_reports_missing_credentials():
