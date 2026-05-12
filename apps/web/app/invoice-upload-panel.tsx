@@ -155,6 +155,7 @@ type Props = {
   selectedOcrStatus?: string;
   canExportErp?: boolean;
   canCorrectReview?: boolean;
+  resetSignal?: number;
   onDemoLogin: () => void;
 };
 
@@ -169,6 +170,7 @@ export function InvoiceUploadPanel({
   selectedOcrStatus = "ok",
   canExportErp = true,
   canCorrectReview = false,
+  resetSignal = 0,
   onDemoLogin
 }: Props) {
   const [file, setFile] = useState<File | null>(null);
@@ -275,6 +277,23 @@ export function InvoiceUploadPanel({
       return changed ? next : current;
     });
   }, [correctionDefaults, correctionFields]);
+
+  useEffect(() => {
+    if (!resetSignal) return;
+    setFile(null);
+    setUploadResult(null);
+    setExtractResult(null);
+    setProcessResult(null);
+    setErpResult(null);
+    setErpLogs([]);
+    setVendorPreview(null);
+    setStatus("idle");
+    setActiveAction(null);
+    setError(null);
+    setCorrectionMessage(null);
+    setCorrections({});
+    setTimestamps({});
+  }, [resetSignal]);
 
   function walkthroughAction(label: string) {
     if (signInRequired) {
@@ -621,6 +640,7 @@ export function InvoiceUploadPanel({
               <input
                 accept="application/pdf,image/png,image/jpeg"
                 className="sr-only"
+                key={resetSignal}
                 type="file"
                 onChange={(event) => {
                   setFile(event.target.files?.[0] ?? null);

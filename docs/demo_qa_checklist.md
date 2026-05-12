@@ -48,7 +48,9 @@ Use this checklist before a private APFlow AI staging demo.
 
 - Confirm `APP_ENV=staging` and `ALLOW_DEMO_RESET=true` only on private staging when reset is needed.
 - As owner/admin, call `POST /admin/demo/reset`.
-- Confirm the response includes a safe demo invoice number, workflow status, vendor count, PO count, approval task count, and notification count.
+- Confirm the response message is `Demo data reset successfully.` and `workflow_status=clean`.
+- Confirm invoices, review tasks, workflow states, approval tasks, notifications, uploaded documents, ERP sync logs, vendor access, and vendor messages are cleared for the demo tenant.
+- Confirm tenant, users, memberships, vendor fixtures, purchase order fixtures, and approval policy remain available for the next demo.
 - Confirm the endpoint returns `403` when reset is disabled or the role is not owner/admin.
 - Confirm production never enables `ALLOW_DEMO_RESET`.
 

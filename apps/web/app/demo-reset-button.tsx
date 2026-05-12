@@ -20,13 +20,13 @@ export function DemoResetButton({ accessToken, apiBaseUrl, canReset, onResetComp
     setStatus("running");
     setMessage("Resetting demo data...");
     try {
-      const body = await apiFetch<{ invoice_number?: string; workflow_status: string }>(apiBaseUrl, "/admin/demo/reset", {
+      const body = await apiFetch<{ message?: string; invoice_number?: string | null; workflow_status: string }>(apiBaseUrl, "/admin/demo/reset", {
         method: "POST",
         token: accessToken,
         action: "Demo reset"
       });
       setStatus("done");
-      setMessage(`${body.invoice_number ?? "Demo invoice"} is ${body.workflow_status.replaceAll("_", " ")}.`);
+      setMessage(body.message ?? `${body.invoice_number ?? "Demo invoice"} is ${body.workflow_status.replaceAll("_", " ")}.`);
       onResetComplete?.();
     } catch (error) {
       if (

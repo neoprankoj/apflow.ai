@@ -43,6 +43,7 @@ from app.core.schemas import (
     HumanReviewStatus,
     HumanReviewTask,
     UploadedInvoiceDocument,
+    WorkflowStatus,
 )
 from app.db.models import Base
 from app.db.repositories import SQLAlchemyAPRepository
@@ -229,6 +230,94 @@ def test_sql_repository_persists_uploaded_documents(sql_repository):
     assert fetched.storage_key == f"{tenant_id}/invoice.pdf"
     assert len(sql_repository.list_uploaded_documents(tenant_id)) == 1
     assert sql_repository.list_uploaded_documents(uuid4()) == []
+
+
+def test_sql_repository_clears_demo_operational_data_without_removing_tenant_fixtures(sql_repository):
+    tenant_id = uuid4()
+    vendor = sql_repository.add_vendor(tenant_id=tenant_id, name="Northstar Components", tax_id="TAX-12345")
+    sql_repository.add_purchase_order(
+        tenant_id=tenant_id,
+        po_number="PO-CLEAR",
+        vendor_id=vendor.vendor_id,
+        total_amount=117,
+        lines=[PurchaseOrderLine(description="Line", quantity=1, unit_price=100, total=117)],
+    )
+    invoice = InvoiceNormalizationOutput(
+        tenant_id=tenant_id,
+        canonical_invoice=CanonicalInvoice(
+            invoice_number="INV-CLEAR",
+            supplier_name="Northstar Components",
+            invoice_date="2026-05-05",
+            currency="USD",
+            subtotal=100,
+            tax_total=17,
+            grand_total=117,
+            line_items=[InvoiceLineItem(description="Line", quantity=1, unit_price=100, tax_amount=17, total=117)],
+        ),
+        file_checksum="clear-checksum",
+    )
+    sql_repository.store_invoice(invoice)
+    sql_repository.create_approval_task(
+        tenant_id=tenant_id,
+        invoice_id=invoice.invoice_id,
+        route=ApprovalRoute.MANAGER_APPROVAL,
+        assigned_role="finance_manager",
+        status=ApprovalTaskStatus.PENDING,
+        reason="Demo task.",
+    )
+    sql_repository.store_notification_event(
+        tenant_id=tenant_id,
+        notification_id=uuid4(),
+        invoice_id=invoice.invoice_id,
+        notification_type=NotificationType.APPROVAL_REQUIRED,
+        recipient_role="finance_manager",
+        status="sent",
+        channel="mock",
+        payload={},
+    )
+    sql_repository.store_review_task(
+        HumanReviewTask(
+            tenant_id=tenant_id,
+            raw_invoice_id=uuid4(),
+            status=HumanReviewStatus.REVIEW_REQUIRED,
+            issues=[
+                HumanReviewFieldIssue(
+                    field_name="invoice_number",
+                    issue_type="missing_required_field",
+                    message="Missing.",
+                )
+            ],
+        )
+    )
+    sql_repository.store_uploaded_document(
+        UploadedInvoiceDocument(
+            tenant_id=tenant_id,
+            original_file_name="invoice.pdf",
+            content_type="application/pdf",
+            size_bytes=128,
+            storage_provider="filesystem",
+            storage_key=f"{tenant_id}/invoice.pdf",
+        )
+    )
+    sql_repository.store_workflow_state(
+        WorkflowState(
+            tenant_id=tenant_id,
+            workflow_id=uuid4(),
+            state="review_required",
+            status=WorkflowStatus.WAITING_FOR_HUMAN,
+        )
+    )
+
+    sql_repository.clear_demo_operational_data(tenant_id)
+
+    assert sql_repository.list_invoices(tenant_id) == []
+    assert sql_repository.list_approval_tasks(tenant_id) == []
+    assert sql_repository.list_notification_events(tenant_id) == []
+    assert sql_repository.list_review_tasks(tenant_id) == []
+    assert sql_repository.list_uploaded_documents(tenant_id) == []
+    assert sql_repository.list_workflow_states(tenant_id) == []
+    assert len(sql_repository.list_vendors(tenant_id)) == 1
+    assert len(sql_repository.list_purchase_orders(tenant_id)) == 1
 
 
 def test_sql_repository_full_pipeline_persists_runtime_outputs(sql_repository):
