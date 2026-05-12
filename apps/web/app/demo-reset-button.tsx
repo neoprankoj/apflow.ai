@@ -2,7 +2,7 @@
 
 import { RotateCcw } from "lucide-react";
 import { useState } from "react";
-import { apiFetch } from "./frontend-api";
+import { ApiRequestError, apiFetch } from "./frontend-api";
 
 type Props = {
   accessToken: string | null;
@@ -29,6 +29,15 @@ export function DemoResetButton({ accessToken, apiBaseUrl, canReset, onResetComp
       setMessage(`${body.invoice_number ?? "Demo invoice"} is ${body.workflow_status.replaceAll("_", " ")}.`);
       onResetComplete?.();
     } catch (error) {
+      if (
+        error instanceof ApiRequestError &&
+        error.status === 403 &&
+        /demo reset is disabled/i.test(error.detail ?? error.message)
+      ) {
+        setStatus("idle");
+        setMessage("Demo reset is disabled on this staging environment. Set ALLOW_DEMO_RESET=true to enable.");
+        return;
+      }
       setStatus("failed");
       setMessage(error instanceof Error ? error.message : "Demo reset failed because the API is unavailable.");
     }

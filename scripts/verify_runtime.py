@@ -54,10 +54,15 @@ def main() -> int:
         reset = post(context, "/admin/demo/reset", None)
         assert reset["workflow_status"] in VALID_UPLOAD_WORKFLOW_STATUSES
 
-    verify_mock_pipeline_flow(context)
+    ocr_provider = selected_ocr_provider(ready)
+    verify_mock_pipeline_flow(context, ocr_provider=ocr_provider)
     uploaded = None
     if not args.skip_upload:
-        uploaded = verify_upload_process_export_vendor_flow(context, skip_vendor=args.skip_vendor)
+        uploaded = verify_upload_process_export_vendor_flow(
+            context,
+            skip_vendor=args.skip_vendor,
+            ocr_provider=ocr_provider,
+        )
 
     if uploaded is not None:
         assert uploaded["workflow_status"] in VALID_UPLOAD_WORKFLOW_STATUSES
@@ -132,7 +137,13 @@ def resolve_token(context: RuntimeContext, args: argparse.Namespace) -> str:
     return registered["access_token"]
 
 
-def verify_mock_pipeline_flow(context: RuntimeContext) -> None:
+def selected_ocr_provider(ready: dict) -> str:
+    ocr_check = (ready.get("checks") or {}).get("ocr") or {}
+    provider = ocr_check.get("provider") or ready.get("ocr", {}).get("provider")
+    return str(provider or "mock")
+
+
+def verify_mock_pipeline_flow(context: RuntimeContext, ocr_provider: str = "mock") -> dict:
     invoice_number = f"INV-RUNTIME-{uuid4().hex[:8]}"
     post(context, "/erp/sync-vendors", {"tenant_id": context.tenant_id, "adapter_type": "priority"})
     post(context, "/erp/sync-purchase-orders", {"tenant_id": context.tenant_id, "adapter_type": "priority"})
@@ -155,6 +166,22 @@ def verify_mock_pipeline_flow(context: RuntimeContext) -> None:
             ),
         },
     )
+    assert_expected_keys(pipeline, {"workflow_status", "invoice", "ocr_result", "confidence_summary", "review_status"})
+    if pipeline["workflow_status"] in {"review_required", "needs_review"}:
+        summary = pipeline_summary(pipeline, ocr_provider=ocr_provider)
+        print(json.dumps({"mock_pipeline_summary": summary}, sort_keys=True))
+        if ocr_provider == "mock":
+            raise AssertionError("mock pipeline unexpectedly stopped at review_required")
+        return {
+            "workflow_status": pipeline["workflow_status"],
+            "review_status": pipeline.get("review_status"),
+            "erp_status": "skipped",
+            "vendor_status": "under_review",
+        }
+    if pipeline["workflow_status"] not in VALID_UPLOAD_WORKFLOW_STATUSES:
+        raise AssertionError(f"unexpected mock pipeline workflow_status: {pipeline['workflow_status']}")
+    if not pipeline.get("invoice"):
+        raise AssertionError("mock pipeline did not return an invoice")
     invoice_id = pipeline["invoice"]["invoice_id"]
     export = post(
         context,
@@ -199,9 +226,19 @@ def verify_mock_pipeline_flow(context: RuntimeContext) -> None:
     assert any(item["invoice_id"] == invoice_id for item in vendor_invoices)
     assert message["status"] == "submitted"
     assert chat["intent"] == "payment_status"
+    return {
+        "workflow_status": pipeline["workflow_status"],
+        "review_status": pipeline.get("review_status"),
+        "erp_status": export["status"],
+        "vendor_status": "under_review",
+    }
 
 
-def verify_upload_process_export_vendor_flow(context: RuntimeContext, skip_vendor: bool = False) -> dict:
+def verify_upload_process_export_vendor_flow(
+    context: RuntimeContext,
+    skip_vendor: bool = False,
+    ocr_provider: str = "mock",
+) -> dict:
     tenant_id = context.tenant_id if context.token else str(uuid4())
     invoice_number = f"INV-RUNTIME-UPLOAD-{uuid4().hex[:8]}"
     invoice_bytes = (
@@ -221,36 +258,22 @@ def verify_upload_process_export_vendor_flow(context: RuntimeContext, skip_vendo
     document_id = upload["document"]["document_id"]
     extract = post(context, f"/documents/invoices/{document_id}/extract?tenant_id={tenant_id}", None)
     process = post(context, f"/documents/invoices/{document_id}/process", {"tenant_id": tenant_id})
-    ocr_result = extract.get("ocr_result") or {}
-    confidence = extract.get("confidence_summary") or {}
-    provider_metadata = ocr_result.get("provider_metadata") or {}
-    raw_response = ocr_result.get("raw_response") or {}
-    review_required_fields = sorted(
-        set((confidence.get("required_fields_missing") or []) + (confidence.get("required_fields_low_confidence") or []))
-    )
-    print(
-        json.dumps(
-            {
-                "upload_process_summary": {
-                    "workflow_status": process["workflow_status"],
-                    "provider": provider_metadata.get("provider_name"),
-                    "extracted_field_count": len(ocr_result.get("fields") or []),
-                    "parsed_text_length": raw_response.get("parsed_text_length")
-                    or provider_metadata.get("parsed_text_length"),
-                    "review_required_fields": review_required_fields,
-                }
-            },
-            sort_keys=True,
-        )
-    )
+    assert_expected_keys(extract, {"ocr_result", "confidence_summary", "review_status"})
+    assert_expected_keys(process, {"workflow_status", "pipeline_result", "review_status"})
+    print(json.dumps({"upload_process_summary": extraction_summary(extract, process)}, sort_keys=True))
     if process["workflow_status"] in {"review_required", "needs_review"}:
+        if ocr_provider == "mock":
+            raise AssertionError("mock upload process unexpectedly stopped at review_required")
         return {
             "review_status": extract["review_status"],
             "workflow_status": process["workflow_status"],
             "erp_status": "skipped",
             "vendor_status": "under_review",
         }
-    invoice_id = process["pipeline_result"]["invoice"]["invoice_id"]
+    pipeline_result = process.get("pipeline_result") or {}
+    if not pipeline_result.get("invoice"):
+        raise AssertionError("upload process did not return an invoice for approval-ready workflow")
+    invoice_id = pipeline_result["invoice"]["invoice_id"]
     export = post(
         context,
         "/erp/export-invoice",
@@ -274,6 +297,59 @@ def verify_upload_process_export_vendor_flow(context: RuntimeContext, skip_vendo
         "erp_status": export["status"],
         "vendor_status": vendor["status"],
     }
+
+
+def assert_expected_keys(body: dict, keys: set[str]) -> None:
+    missing = sorted(key for key in keys if key not in body)
+    if missing:
+        raise AssertionError(f"response missing expected keys: {', '.join(missing)}")
+
+
+def pipeline_summary(pipeline: dict, ocr_provider: str) -> dict:
+    ocr_result = pipeline.get("ocr_result") or {}
+    confidence = pipeline.get("confidence_summary") or {}
+    return {
+        "workflow_status": pipeline.get("workflow_status"),
+        "review_status": pipeline.get("review_status"),
+        "provider": ((ocr_result.get("provider_metadata") or {}).get("provider_name")) or ocr_provider,
+        "extracted_field_count": len(ocr_result.get("fields") or []),
+        "parsed_text_length": parsed_text_length(ocr_result),
+        "review_required_fields": review_required_fields(confidence),
+        "provider_error_message": provider_error_message(ocr_result),
+    }
+
+
+def extraction_summary(extract: dict, process: dict) -> dict:
+    ocr_result = extract.get("ocr_result") or {}
+    confidence = extract.get("confidence_summary") or {}
+    provider_metadata = ocr_result.get("provider_metadata") or {}
+    return {
+        "workflow_status": process.get("workflow_status"),
+        "review_status": process.get("review_status") or extract.get("review_status"),
+        "provider": provider_metadata.get("provider_name"),
+        "extracted_field_count": len(ocr_result.get("fields") or []),
+        "parsed_text_length": parsed_text_length(ocr_result),
+        "review_required_fields": review_required_fields(confidence),
+        "provider_error_message": provider_error_message(ocr_result),
+    }
+
+
+def parsed_text_length(ocr_result: dict) -> int | None:
+    provider_metadata = ocr_result.get("provider_metadata") or {}
+    raw_response = ocr_result.get("raw_response") or {}
+    return raw_response.get("parsed_text_length") or provider_metadata.get("parsed_text_length")
+
+
+def review_required_fields(confidence: dict) -> list[str]:
+    return sorted(
+        set((confidence.get("required_fields_missing") or []) + (confidence.get("required_fields_low_confidence") or []))
+    )
+
+
+def provider_error_message(ocr_result: dict) -> str | None:
+    provider_metadata = ocr_result.get("provider_metadata") or {}
+    raw_response = ocr_result.get("raw_response") or {}
+    return raw_response.get("provider_error_message") or provider_metadata.get("provider_error_message") or ocr_result.get("error")
 
 
 def get(context: RuntimeContext, path: str):

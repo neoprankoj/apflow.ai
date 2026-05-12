@@ -10,7 +10,7 @@ import {
   Send,
   UploadCloud
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AuthStatus, apiFetch } from "./frontend-api";
 import { TimelineStage, WorkflowTimeline } from "./workflow-timeline";
 
@@ -158,6 +158,8 @@ type Props = {
   onDemoLogin: () => void;
 };
 
+const REQUIRED_CORRECTION_FIELDS = ["invoice_number", "supplier_name", "invoice_date", "currency", "grand_total"];
+
 export function InvoiceUploadPanel({
   accessToken,
   apiBaseUrl,
@@ -228,11 +230,16 @@ export function InvoiceUploadPanel({
   const correctionFields = Array.from(
     new Set(
       [
+        ...(reviewTasks.length ? REQUIRED_CORRECTION_FIELDS : []),
         ...reviewIssues.map((issue) => issue.field_name),
         ...(confidence?.required_fields_missing ?? []),
         ...(confidence?.required_fields_low_confidence ?? [])
       ].filter((fieldName) => fieldName !== "document")
     )
+  );
+  const correctionDefaults = useMemo(
+    () => buildCorrectionDefaults(correctionFields, fields, reviewIssues, reviewTasks),
+    [correctionFields.join("|"), fields, reviewIssues, reviewTasks]
   );
   const demoSteps = buildDemoSteps({
     signedIn: isSignedIn,
@@ -253,6 +260,21 @@ export function InvoiceUploadPanel({
     erpResult,
     timestamps
   });
+
+  useEffect(() => {
+    if (!correctionFields.length) return;
+    setCorrections((current) => {
+      const next = { ...current };
+      let changed = false;
+      for (const fieldName of correctionFields) {
+        if (next[fieldName] === undefined && correctionDefaults[fieldName] !== undefined) {
+          next[fieldName] = correctionDefaults[fieldName];
+          changed = true;
+        }
+      }
+      return changed ? next : current;
+    });
+  }, [correctionDefaults, correctionFields]);
 
   function walkthroughAction(label: string) {
     if (signInRequired) {
@@ -327,6 +349,8 @@ export function InvoiceUploadPanel({
         { method: "POST", token: requestContext.accessToken, action: "Extract invoice" }
       );
       setExtractResult(result);
+      setCorrections({});
+      setCorrectionMessage(null);
       mark("extracted");
       setStatus(result.review_status === "review_required" ? "review_required" : "extracted");
     } catch (error) {
@@ -401,6 +425,8 @@ export function InvoiceUploadPanel({
           action: "Submit review corrections"
         }
       );
+      const correctedStrings = stringifyCorrections(result.corrected_fields);
+      setCorrections((current) => ({ ...current, ...correctedStrings }));
       setExtractResult((current) =>
         current
           ? {
@@ -417,6 +443,28 @@ export function InvoiceUploadPanel({
                     fields: mergeCorrectedFields(current.ocr_result.fields ?? [], result.corrected_fields)
                   }
                 : current.ocr_result
+            }
+          : current
+      );
+      setProcessResult((current) =>
+        current?.pipeline_result
+          ? {
+              ...current,
+              review_status: result.status,
+              pipeline_result: {
+                ...current.pipeline_result,
+                review_tasks: (current.pipeline_result.review_tasks ?? []).map((item) =>
+                  item.task_id === result.task_id
+                    ? { ...item, status: result.status, corrected_fields: result.corrected_fields }
+                    : item
+                ),
+                ocr_result: current.pipeline_result.ocr_result
+                  ? {
+                      ...current.pipeline_result.ocr_result,
+                      fields: mergeCorrectedFields(current.pipeline_result.ocr_result.fields ?? [], result.corrected_fields)
+                    }
+                  : current.pipeline_result.ocr_result
+              }
             }
           : current
       );
@@ -650,8 +698,9 @@ export function InvoiceUploadPanel({
           {processResult ? (
             <>
               {processResult.workflow_status === "review_required" ? (
-                <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                  Invoice requires human review before approval. This is a valid safe workflow outcome.
+                <div className="space-y-1 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                  <p>Invoice requires human review before approval. Review required is a safe workflow outcome.</p>
+                  <p>ERP export is disabled until review is corrected and invoice is approval-ready.</p>
                 </div>
               ) : null}
               <div className="grid gap-3 text-sm sm:grid-cols-3 xl:grid-cols-4">
@@ -1116,6 +1165,45 @@ function mergeCorrectedFields(fields: ExtractedField[], correctedFields: Record<
     });
   }
   return Array.from(merged.values());
+}
+
+function buildCorrectionDefaults(
+  correctionFields: string[],
+  fields: ExtractedField[],
+  issues: ReviewIssue[],
+  tasks: ReviewTask[]
+) {
+  const defaults: Record<string, string> = {};
+  const fieldMap = new Map(fields.map((field) => [field.field_name, field]));
+  const issueMap = new Map(issues.map((issue) => [issue.field_name, issue]));
+  const correctedFields = Object.assign({}, ...tasks.map((task) => task.corrected_fields ?? {})) as Record<
+    string,
+    string | number
+  >;
+
+  for (const fieldName of correctionFields) {
+    const correctedValue = correctedFields[fieldName];
+    const fieldValue = fieldMap.get(fieldName)?.value;
+    const issueValue = issueMap.get(fieldName)?.current_value;
+    const value = correctedValue ?? fieldValue ?? issueValue;
+    if (value !== undefined && value !== null && value !== "") {
+      defaults[fieldName] = formatCorrectionValue(fieldName, value);
+    }
+  }
+  return defaults;
+}
+
+function stringifyCorrections(correctedFields: Record<string, string | number>) {
+  return Object.fromEntries(
+    Object.entries(correctedFields).map(([fieldName, value]) => [fieldName, formatCorrectionValue(fieldName, value)])
+  );
+}
+
+function formatCorrectionValue(fieldName: string, value: string | number) {
+  if (typeof value === "number" && ["subtotal", "tax_total", "grand_total"].includes(fieldName)) {
+    return value.toFixed(2);
+  }
+  return String(value);
 }
 
 function money(value: number, currency: string) {

@@ -102,6 +102,18 @@ Required for staging and production:
 
 Production additionally requires `AUTH_ENABLED=true` and rejects `DEMO_MODE=true` unless `ALLOW_DEMO_MODE_IN_PRODUCTION=true` is deliberately set.
 
+## Staging Demo Reset
+
+`POST /admin/demo/reset` is intentionally disabled unless `APP_ENV=staging` and `ALLOW_DEMO_RESET=true`. To use it for a private demo cleanup:
+
+1. Set `ALLOW_DEMO_RESET=true` in the staging environment file.
+2. Restart the API container.
+3. Sign in as an owner/admin and use the dashboard Demo Reset button, or call `POST /admin/demo/reset`.
+4. Set `ALLOW_DEMO_RESET=false` again after the reset.
+5. Restart the API container again.
+
+Never enable demo reset in production. Production settings reject `ALLOW_DEMO_RESET=true` during startup.
+
 ## Safe Stop, Start, And Backups
 
 Start or update:
