@@ -54,7 +54,7 @@ from app.core.schemas import (
 
 router = APIRouter()
 
-ALLOWED_UPLOAD_CONTENT_TYPES = {"application/pdf", "image/png", "image/jpeg"}
+ALLOWED_UPLOAD_CONTENT_TYPES = {"application/pdf", "image/png", "image/jpeg", "image/jpg"}
 
 
 @router.post("/invoices/upload", response_model=InvoiceUploadResult)
@@ -228,6 +228,7 @@ def _prepare_raw_invoice_from_document(
         mime_type=document.content_type,
         source=InvoiceSource.UPLOAD,
         file_checksum=sha256(content).hexdigest(),
+        original_file_name=document.original_file_name,
     )
     repository.store_raw_invoice(raw, content=content)
     return document, raw

@@ -177,7 +177,7 @@ Live OCR.space local file test:
 python scripts/test_ocr_space.py samples/invoices/invoice.pdf --out samples/ocr-results/ocr-space.json
 ```
 
-OCR.space health checks only report configured/missing credentials and do not consume OCR quota. Extraction responses include safe diagnostics such as parsed result count, parsed text length, OCR exit code, and a truncated OCR text preview for staging/debug review. They never include the OCR.space API key. Set `OCR_PROVIDER=mock` and restart to return to deterministic local OCR.
+OCR.space health checks only report configured/missing credentials and do not consume OCR quota. Extraction responses include safe diagnostics such as parsed result count, parsed text length, OCR exit code, sent filename/filetype, and a truncated OCR text preview for staging/debug review. They never include the OCR.space API key. Some synthetic PDFs may still be rejected by OCR.space; test real exported PDFs or scanned invoice images when validating live OCR. Set `OCR_PROVIDER=mock` and restart to return to deterministic local OCR.
 
 Live Azure OCR test pack:
 

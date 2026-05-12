@@ -352,6 +352,7 @@ class InvoiceIngestionOutput(APFlowModel):
     source: InvoiceSource
     file_checksum: str
     status: str = "stored"
+    original_file_name: str | None = None
 
 
 class DocumentReference(APFlowModel):
@@ -650,6 +651,10 @@ class OCRProviderMetadata(APFlowModel):
     parsed_result_count: int | None = None
     parsed_text_length: int | None = None
     detected_content_type: str | None = None
+    sent_file_name: str | None = None
+    sent_filetype: str | None = None
+    sent_content_type: str | None = None
+    provider_error_message: str | None = None
 
 
 class OCRExtractedField(APFlowModel):
