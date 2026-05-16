@@ -2,7 +2,6 @@
 
 import {
   AlertTriangle,
-  ArrowRight,
   Bell,
   Bot,
   CheckCircle2,
@@ -12,11 +11,14 @@ import {
   LogIn,
   MessageSquare,
   ScanText,
-  Search,
   ShieldCheck,
   UserRound
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { AppLayout } from "../components/layout/app-layout";
+import { Button } from "../components/ui/button";
+import { Card, CardContent, CardHeader } from "../components/ui/card";
+import { EmptyState } from "../components/ui/empty-state";
 import { DemoResetButton } from "./demo-reset-button";
 import {
   ApiRequestError,
@@ -441,14 +443,14 @@ export default function Dashboard() {
   const isSignedIn = authStatus === "authenticated" && Boolean(accessToken && currentUser);
   const unauthorized = ready?.auth_enabled && !isSignedIn;
   const navItems = [
-    ["overview", "Overview"],
-    ["upload-invoice", "Upload Invoice"],
-    ["ocr-review", "OCR Review"],
-    ["approval-inbox", "Approval Inbox"],
-    ["approvals", "Approvals"],
-    ["erp-export", "ERP Export"],
-    ["vendor-portal-preview", "Vendor Portal Preview"],
-    ["admin", "Admin"]
+    { id: "overview", label: "Overview" },
+    { id: "upload-invoice", label: "Upload Invoice" },
+    { id: "ocr-review", label: "OCR Review" },
+    { id: "approval-inbox", label: "Approval Inbox" },
+    { id: "approvals", label: "Approvals" },
+    { id: "erp-export", label: "ERP Export" },
+    { id: "vendor-portal-preview", label: "Vendor Portal Preview" },
+    { id: "admin", label: "Admin" }
   ];
   const selectedProviderName = selectedOcrProvider?.provider ?? "mock";
   const ocrTestProviderName = selectedProviderName === "mock" ? "ocr_space" : selectedProviderName;
@@ -464,59 +466,239 @@ export default function Dashboard() {
         : "Mock OCR is active. Set OCR_PROVIDER=ocr_space and OCR_SPACE_API_KEY to test OCR.space, or use Azure credentials to test Azure.";
 
   return (
-    <main className="min-h-screen">
-      <div className="border-b border-border bg-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4">
-          <div>
-            <h1 className="text-xl font-semibold tracking-normal">APFlow AI</h1>
-            <p className="text-sm text-muted">Accounts payable operations</p>
-          </div>
-          <div className="flex items-center gap-3">
-            {isSignedIn ? (
-              <button className="rounded-md border border-border px-3 py-2 text-sm" onClick={signOut} type="button">
-                Sign out
-              </button>
-            ) : (
-              <button
-                className="inline-flex items-center rounded-md border border-border px-3 py-2 text-sm disabled:text-muted"
-                disabled={!apiBaseUrl || authStatus === "authenticating"}
-                onClick={demoLogin}
-                type="button"
-              >
-                {authStatus === "authenticating" ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+    <AppLayout
+      actions={
+        isSignedIn ? (
+          <Button onClick={signOut} variant="secondary">
+            Sign out
+          </Button>
+        ) : (
+          <Button disabled={!apiBaseUrl || authStatus === "authenticating"} onClick={demoLogin} variant="primary">
+            {authStatus === "authenticating" ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
+            Demo login
+          </Button>
+        )
+      }
+      activeSection={activeSection}
+      aside={
+        <>
+          <Card>
+            <CardContent className="space-y-3">
+              <div className="flex items-center gap-2">
+                <UserRound className="h-4 w-4 text-primary" />
+                <h2 className="text-base font-semibold">Tenant Session</h2>
+              </div>
+              <div className="space-y-2 text-sm">
+                <div>
+                  <p className="font-medium">
+                    {isSignedIn ? currentUser?.user.full_name : authStatus === "authenticating" ? "Signing in" : "Not signed in"}
+                  </p>
+                  <p className="text-xs text-muted">
+                    {isSignedIn
+                      ? currentUser?.user.email
+                      : sessionMessage ?? "Sign in required for upload/process actions."}
+                  </p>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Status</span>
+                  <strong>{isSignedIn ? "Signed in" : authStatus.replaceAll("_", " ")}</strong>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Tenant</span>
+                  <strong>{currentUser?.tenant.name ?? currentUser?.tenant.id ?? "None"}</strong>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Role</span>
+                  <strong>{currentUser?.membership.role ?? "none"}</strong>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>API</span>
+                  <strong>{ready?.status ?? "unavailable"}</strong>
+                </div>
+                {!isSignedIn ? (
+                  <Button
+                    className="mt-2 w-full"
+                    disabled={!apiBaseUrl || authStatus === "authenticating"}
+                    onClick={demoLogin}
+                    variant="primary"
+                  >
+                    Demo login
+                  </Button>
+                ) : null}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent>
+              <div className="mb-3 flex items-center gap-2">
+                <Clock3 className="h-4 w-4 text-primary" />
+                <h2 className="text-base font-semibold">Agent Runtime</h2>
+              </div>
+              <div className="space-y-3">
+                {agents.map((agent) => {
+                  const Icon = agent.icon;
+                  return (
+                    <div className="flex items-center gap-3" key={agent.name}>
+                      <Icon className="h-4 w-4 text-muted" />
+                      <div>
+                        <p className="text-sm font-medium">{agent.name}</p>
+                        <p className="text-xs text-muted">{agent.status}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent>
+              <div className="mb-3 flex items-center gap-2">
+                <ScanText className="h-4 w-4 text-primary" />
+                <h2 className="text-base font-semibold">OCR Status</h2>
+              </div>
+              <div className="space-y-3 text-sm">
+                <div className="flex items-center justify-between">
+                  <span>Selected</span>
+                  <strong>{selectedOcrProvider?.provider ?? "mock"}</strong>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Mode</span>
+                  <strong>{selectedOcrProvider?.configured ? "configured" : "unconfigured/safe"}</strong>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Selected status</span>
+                  <strong>{selectedOcrProvider?.status ?? "unknown"}</strong>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Azure</span>
+                  <strong>{azureOcrProvider?.configured ? "configured" : azureOcrProvider?.status ?? "unknown"}</strong>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>OCR.space</span>
+                  <strong>{ocrSpaceProvider?.configured ? "configured" : ocrSpaceProvider?.status ?? "unknown"}</strong>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Mock status</span>
+                  <strong>{mockOcrStatus.status}</strong>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Review queue</span>
+                  <strong>{openReviewTasks.length}</strong>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Correction permission</span>
+                  <strong>{canReview ? "enabled" : "read only"}</strong>
+                </div>
+                <div className="rounded-md border border-border bg-background px-3 py-2 text-xs text-muted">
+                  {ocrGuidance}
+                </div>
+                {ocrTestMessage ? (
+                  <div className="rounded-md border border-border px-3 py-2 text-xs text-muted">{ocrTestMessage}</div>
+                ) : null}
+                <Button
+                  className="w-full"
+                  disabled={ocrTestRunning || !apiBaseUrl}
+                  onClick={() => void testOcrProvider(ocrTestProviderName)}
+                  variant="secondary"
+                >
+                  {ocrTestRunning ? `Testing ${ocrTestProviderName} OCR...` : `Test ${ocrTestProviderName} Provider`}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent>
+              <div className="mb-3 flex items-center gap-2">
+                <Bell className="h-4 w-4 text-primary" />
+                <h2 className="text-base font-semibold">Recent Notifications</h2>
+              </div>
+              <div className="space-y-3 text-sm">
+                {recentNotifications.length ? (
+                  recentNotifications.map((event) => (
+                    <div className="border-b border-border pb-3 last:border-0 last:pb-0" key={event.notification_id}>
+                      <p className="font-medium">{event.notification_type.replaceAll("_", " ")}</p>
+                      <p className="text-xs text-muted">
+                        {event.recipient_role} - {event.status} via {event.channel}
+                      </p>
+                    </div>
+                  ))
                 ) : (
-                  <LogIn className="mr-2 h-4 w-4" />
+                  <p className="text-sm text-muted">
+                    {isSignedIn ? "No notification events recorded yet." : "Sign in to load notifications."}
+                  </p>
                 )}
-                Demo login
-              </button>
-            )}
-            <div className="hidden items-center gap-2 rounded-md border border-border px-3 py-2 text-sm text-muted sm:flex">
-              <Search className="h-4 w-4" />
-              <span>Search invoices, vendors, POs</span>
-            </div>
-          </div>
-        </div>
-      </div>
+              </div>
+            </CardContent>
+          </Card>
 
-      <div className="mx-auto grid max-w-7xl gap-5 px-5 py-5 lg:grid-cols-[220px_1fr_320px]">
-        <nav className="sticky top-4 h-fit space-y-1 text-sm">
-          {navItems.map(([id, label]) => (
-            <a
-              className={`flex w-full items-center justify-between rounded-md px-3 py-2 text-left hover:bg-white ${
-                activeSection === id ? "bg-white font-medium" : ""
-              }`}
-              href={`#${id}`}
-              key={id}
-              onClick={() => setActiveSection(id)}
-            >
-              {label}
-              {activeSection === id ? <ArrowRight className="h-4 w-4" /> : null}
-            </a>
-          ))}
-        </nav>
+          <Card>
+            <CardContent>
+              <h2 className="text-base font-semibold">Risk Watch</h2>
+              <div className="mt-3 space-y-3 text-sm">
+                <div className="flex items-center justify-between">
+                  <span>Likely duplicates</span>
+                  <strong>{duplicateWarnings.length}</strong>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Blocked invoices</span>
+                  <strong>{highRiskInvoices.length}</strong>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Pending reviews</span>
+                  <strong>{pendingApprovals.length}</strong>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Audit access</span>
+                  <strong>{canAudit ? "enabled" : "hidden"}</strong>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
-        <section className="space-y-5">
+          {canAdmin ? (
+            <Card className="scroll-mt-6" id="admin">
+              <CardContent>
+                <h2 className="text-base font-semibold">Tenant Users</h2>
+                <div className="mt-3 space-y-3 text-sm">
+                  {adminUsers.length ? (
+                    adminUsers.map((item) => (
+                      <div className="border-b border-border pb-3 last:border-0 last:pb-0" key={item.user.id}>
+                        <p className="font-medium">{item.user.full_name}</p>
+                        <p className="text-xs text-muted">
+                          {item.role} - {item.is_active ? "active" : "inactive"}
+                        </p>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-muted">No tenant users returned.</p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {canAdmin && apiBaseUrl ? (
+            <DemoResetButton
+              accessToken={accessToken}
+              apiBaseUrl={apiBaseUrl}
+              canReset={canDemoReset}
+              onResetComplete={() => {
+                setDemoResetSignal((current) => current + 1);
+                if (accessToken && currentUser) void loadProtectedData(accessToken, currentUser);
+              }}
+            />
+          ) : null}
+        </>
+      }
+      breadcrumbs={["Operations"]}
+      navItems={navItems}
+      onSectionChange={setActiveSection}
+      subtitle="Private demo health and workload summary"
+      title="Dashboard"
+    >
           {apiError ? (
             <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
               {apiError}
@@ -525,14 +707,15 @@ export default function Dashboard() {
           {unauthorized ? (
             <div className="flex items-center justify-between gap-3 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
               <span>Sign in required for upload, processing, ERP export, review, and admin actions.</span>
-              <button
-                className="rounded-md border border-amber-300 bg-white px-3 py-2 text-sm disabled:text-muted"
+              <Button
+                className="border-amber-300"
                 disabled={!apiBaseUrl || authStatus === "authenticating"}
                 onClick={demoLogin}
-                type="button"
+                size="sm"
+                variant="secondary"
               >
                 Demo login
-              </button>
+              </Button>
             </div>
           ) : null}
           {ready && ready.status !== "ready" ? (
@@ -550,10 +733,12 @@ export default function Dashboard() {
                 ["Review required", openReviewTasks.length.toString()],
                 ["Low confidence", lowConfidenceTasks.length.toString()]
               ].map(([label, value]) => (
-                <div className="rounded-md border border-border bg-white p-4" key={label}>
-                  <p className="text-sm text-muted">{label}</p>
-                  <p className="mt-2 text-2xl font-semibold">{value}</p>
-                </div>
+                <Card key={label}>
+                  <CardContent>
+                    <p className="text-sm text-muted">{label}</p>
+                    <p className="mt-2 text-2xl font-semibold">{value}</p>
+                  </CardContent>
+                </Card>
               ))}
             </div>
           </section>
@@ -597,11 +782,11 @@ export default function Dashboard() {
 
           <section className="scroll-mt-6 space-y-3" id="approvals">
             <SectionHeading title="Approvals" subtitle="Recent invoices, review work, and workflow states" />
-            <div className="rounded-md border border-border bg-white">
-              <div className="flex items-center justify-between border-b border-border px-4 py-3">
+            <Card>
+              <CardHeader className="flex items-center justify-between">
                 <h2 className="text-base font-semibold">Invoice Queue</h2>
                 <span className="text-xs text-muted">{tenantId ? "Tenant scoped" : "Sign in required"}</span>
-              </div>
+              </CardHeader>
               <div className="divide-y divide-border">
                 {recentInvoices.length ? (
                   recentInvoices.map((item) => (
@@ -616,17 +801,20 @@ export default function Dashboard() {
                     </div>
                   ))
                 ) : (
-                  <div className="px-4 py-6 text-sm text-muted">
-                    {isSignedIn ? "No invoices for this tenant." : "Sign in to load tenant invoices."}
-                  </div>
+                  <CardContent>
+                    <EmptyState
+                      description={isSignedIn ? "No invoices have been captured for this tenant yet." : "Sign in to load tenant invoices."}
+                      title="No invoices to review"
+                    />
+                  </CardContent>
                 )}
               </div>
-            </div>
+            </Card>
 
-            <div className="rounded-md border border-border bg-white">
-              <div className="border-b border-border px-4 py-3">
+            <Card>
+              <CardHeader>
                 <h2 className="text-base font-semibold">Recent Review Tasks</h2>
-              </div>
+              </CardHeader>
               <div className="divide-y divide-border">
                 {recentReviewTasks.length ? (
                   recentReviewTasks.map((task) => (
@@ -637,17 +825,20 @@ export default function Dashboard() {
                     </div>
                   ))
                 ) : (
-                  <div className="px-4 py-6 text-sm text-muted">
-                    {isSignedIn ? "No review tasks for this tenant." : "Sign in to load review tasks."}
-                  </div>
+                  <CardContent>
+                    <EmptyState
+                      description={isSignedIn ? "There are no human review tasks waiting right now." : "Sign in to load review tasks."}
+                      title="No review tasks"
+                    />
+                  </CardContent>
                 )}
               </div>
-            </div>
+            </Card>
 
-            <div className="rounded-md border border-border bg-white">
-              <div className="border-b border-border px-4 py-3">
+            <Card>
+              <CardHeader>
                 <h2 className="text-base font-semibold">Recent Workflow Statuses</h2>
-              </div>
+              </CardHeader>
               <div className="divide-y divide-border">
                 {recentWorkflows.length ? (
                   recentWorkflows.map((workflow) => (
@@ -658,226 +849,27 @@ export default function Dashboard() {
                     </div>
                   ))
                 ) : (
-                  <div className="px-4 py-6 text-sm text-muted">
-                    {isSignedIn ? "No workflow states recorded yet." : "Sign in to load workflow states."}
-                  </div>
+                  <CardContent>
+                    <EmptyState
+                      description={isSignedIn ? "Workflow activity will appear after invoices are processed." : "Sign in to load workflow states."}
+                      title="No workflow states"
+                    />
+                  </CardContent>
                 )}
               </div>
-            </div>
+            </Card>
           </section>
-        </section>
 
-        <aside className="space-y-5">
-          <div className="rounded-md border border-border bg-white p-4">
-            <div className="mb-3 flex items-center gap-2">
-              <UserRound className="h-4 w-4 text-[hsl(var(--accent))]" />
-              <h2 className="text-base font-semibold">Tenant Session</h2>
-            </div>
-            <div className="space-y-2 text-sm">
-              <div>
-                <p className="font-medium">
-                  {isSignedIn ? currentUser?.user.full_name : authStatus === "authenticating" ? "Signing in" : "Not signed in"}
-                </p>
-                <p className="text-xs text-muted">
-                  {isSignedIn
-                    ? currentUser?.user.email
-                    : sessionMessage ?? "Sign in required for upload/process actions."}
-                </p>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Status</span>
-                <strong>{isSignedIn ? "Signed in" : authStatus.replaceAll("_", " ")}</strong>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Tenant</span>
-                <strong>{currentUser?.tenant.name ?? currentUser?.tenant.id ?? "None"}</strong>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Role</span>
-                <strong>{currentUser?.membership.role ?? "none"}</strong>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>API</span>
-                <strong>{ready?.status ?? "unavailable"}</strong>
-              </div>
-              {!isSignedIn ? (
-                <button
-                  className="mt-2 w-full rounded-md bg-black px-3 py-2 text-sm text-white disabled:bg-neutral-300"
-                  disabled={!apiBaseUrl || authStatus === "authenticating"}
-                  onClick={demoLogin}
-                  type="button"
-                >
-                  Demo login
-                </button>
-              ) : null}
-            </div>
-          </div>
-
-          <div className="rounded-md border border-border bg-white p-4">
-            <div className="mb-3 flex items-center gap-2">
-              <Clock3 className="h-4 w-4 text-[hsl(var(--accent))]" />
-              <h2 className="text-base font-semibold">Agent Runtime</h2>
-            </div>
-            <div className="space-y-3">
-              {agents.map((agent) => {
-                const Icon = agent.icon;
-                return (
-                  <div className="flex items-center gap-3" key={agent.name}>
-                    <Icon className="h-4 w-4 text-muted" />
-                    <div>
-                      <p className="text-sm font-medium">{agent.name}</p>
-                      <p className="text-xs text-muted">{agent.status}</p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="rounded-md border border-border bg-white p-4">
-            <div className="mb-3 flex items-center gap-2">
-              <ScanText className="h-4 w-4 text-[hsl(var(--accent))]" />
-              <h2 className="text-base font-semibold">OCR Status</h2>
-            </div>
-            <div className="space-y-3 text-sm">
-              <div className="flex items-center justify-between">
-                <span>Selected</span>
-                <strong>{selectedOcrProvider?.provider ?? "mock"}</strong>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Mode</span>
-                <strong>{selectedOcrProvider?.configured ? "configured" : "unconfigured/safe"}</strong>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Selected status</span>
-                <strong>{selectedOcrProvider?.status ?? "unknown"}</strong>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Azure</span>
-                <strong>{azureOcrProvider?.configured ? "configured" : azureOcrProvider?.status ?? "unknown"}</strong>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>OCR.space</span>
-                <strong>{ocrSpaceProvider?.configured ? "configured" : ocrSpaceProvider?.status ?? "unknown"}</strong>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Mock status</span>
-                <strong>{mockOcrStatus.status}</strong>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Review queue</span>
-                <strong>{openReviewTasks.length}</strong>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Correction permission</span>
-                <strong>{canReview ? "enabled" : "read only"}</strong>
-              </div>
-              <div className="rounded-md border border-border bg-[hsl(var(--background))] px-3 py-2 text-xs text-muted">
-                {ocrGuidance}
-              </div>
-              {ocrTestMessage ? (
-                <div className="rounded-md border border-border px-3 py-2 text-xs text-muted">{ocrTestMessage}</div>
-              ) : null}
-              <button
-                className="w-full rounded-md border border-border px-3 py-2 text-sm disabled:text-muted"
-                disabled={ocrTestRunning || !apiBaseUrl}
-                onClick={() => void testOcrProvider(ocrTestProviderName)}
-                type="button"
-              >
-                {ocrTestRunning ? `Testing ${ocrTestProviderName} OCR...` : `Test ${ocrTestProviderName} Provider`}
-              </button>
-            </div>
-          </div>
-
-          <div className="rounded-md border border-border bg-white p-4">
-            <div className="mb-3 flex items-center gap-2">
-              <Bell className="h-4 w-4 text-[hsl(var(--accent))]" />
-              <h2 className="text-base font-semibold">Recent Notifications</h2>
-            </div>
-            <div className="space-y-3 text-sm">
-              {recentNotifications.length ? (
-                recentNotifications.map((event) => (
-                  <div className="border-b border-border pb-3 last:border-0 last:pb-0" key={event.notification_id}>
-                    <p className="font-medium">{event.notification_type.replaceAll("_", " ")}</p>
-                    <p className="text-xs text-muted">
-                      {event.recipient_role} - {event.status} via {event.channel}
-                    </p>
-                  </div>
-                ))
-              ) : (
-                <p className="text-sm text-muted">
-                  {isSignedIn ? "No notification events recorded yet." : "Sign in to load notifications."}
-                </p>
-              )}
-            </div>
-          </div>
-
-          <div className="rounded-md border border-border bg-white p-4">
-            <h2 className="text-base font-semibold">Risk Watch</h2>
-            <div className="mt-3 space-y-3 text-sm">
-              <div className="flex items-center justify-between">
-                <span>Likely duplicates</span>
-                <strong>{duplicateWarnings.length}</strong>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Blocked invoices</span>
-                <strong>{highRiskInvoices.length}</strong>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Pending reviews</span>
-                <strong>{pendingApprovals.length}</strong>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Audit access</span>
-                <strong>{canAudit ? "enabled" : "hidden"}</strong>
-              </div>
-            </div>
-          </div>
-
-          {canAdmin ? (
-            <div className="scroll-mt-6 rounded-md border border-border bg-white p-4" id="admin">
-              <h2 className="text-base font-semibold">Tenant Users</h2>
-              <div className="mt-3 space-y-3 text-sm">
-                {adminUsers.length ? (
-                  adminUsers.map((item) => (
-                    <div className="border-b border-border pb-3 last:border-0 last:pb-0" key={item.user.id}>
-                      <p className="font-medium">{item.user.full_name}</p>
-                      <p className="text-xs text-muted">
-                        {item.role} - {item.is_active ? "active" : "inactive"}
-                      </p>
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-sm text-muted">No tenant users returned.</p>
-                )}
-              </div>
-            </div>
-          ) : null}
-
-          {canAdmin && apiBaseUrl ? (
-            <DemoResetButton
-              accessToken={accessToken}
-              apiBaseUrl={apiBaseUrl}
-              canReset={canDemoReset}
-              onResetComplete={() => {
-                setDemoResetSignal((current) => current + 1);
-                if (accessToken && currentUser) void loadProtectedData(accessToken, currentUser);
-              }}
-            />
-          ) : null}
-        </aside>
-      </div>
-
-      <section className="border-t border-border bg-white">
-        <div className="mx-auto grid max-w-7xl gap-5 px-5 py-5 lg:grid-cols-[280px_1fr_320px]">
+      <Card>
+        <CardContent className="grid gap-5 lg:grid-cols-[280px_1fr_320px]">
           <div>
             <div className="mb-3 flex items-center gap-2">
-              <ShieldCheck className="h-4 w-4 text-[hsl(var(--accent))]" />
+              <ShieldCheck className="h-4 w-4 text-primary" />
               <h2 className="text-base font-semibold">Vendor Portal</h2>
             </div>
-            <button className="rounded-md border border-border px-3 py-2 text-sm" disabled={!vendorAccess} type="button">
+            <Button disabled={!vendorAccess} variant="secondary">
               Demo vendor session
-            </button>
+            </Button>
             <p className="mt-3 text-xs text-muted">
               {vendorAccess?.email ?? (isSignedIn ? "Vendor access is not ready." : "Sign in to prepare vendor preview.")}
             </p>
@@ -911,16 +903,16 @@ export default function Dashboard() {
           <div className="space-y-5">
             <div className="rounded-md border border-border p-4">
               <div className="mb-3 flex items-center gap-2">
-                <MessageSquare className="h-4 w-4 text-[hsl(var(--accent))]" />
+                <MessageSquare className="h-4 w-4 text-primary" />
                 <h3 className="text-base font-semibold">Vendor Message</h3>
               </div>
               <textarea
                 className="min-h-24 w-full resize-none rounded-md border border-border p-3 text-sm"
                 defaultValue="Please confirm the expected payment date."
               />
-              <button className="mt-3 rounded-md bg-black px-3 py-2 text-sm text-white disabled:bg-neutral-300" disabled={!vendorAccess} type="button">
+              <Button className="mt-3" disabled={!vendorAccess} variant="primary">
                 Submit
-              </button>
+              </Button>
             </div>
             <div className="rounded-md border border-border p-4">
               <h3 className="text-base font-semibold">Status Chat</h3>
@@ -929,9 +921,9 @@ export default function Dashboard() {
               </div>
             </div>
           </div>
-        </div>
-      </section>
-    </main>
+        </CardContent>
+      </Card>
+    </AppLayout>
   );
 }
 

@@ -2,6 +2,8 @@
 
 import { RotateCcw } from "lucide-react";
 import { useState } from "react";
+import { Button } from "../components/ui/button";
+import { Card, CardContent } from "../components/ui/card";
 import { ApiRequestError, apiFetch } from "./frontend-api";
 
 type Props = {
@@ -44,22 +46,23 @@ export function DemoResetButton({ accessToken, apiBaseUrl, canReset, onResetComp
   }
 
   return (
-    <div className="rounded-md border border-border bg-white p-4">
+    <Card>
+      <CardContent>
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold">Demo Reset</h2>
           <p className="mt-1 text-sm text-muted">{message}</p>
         </div>
-        <button
-          className="rounded-md border border-border px-3 py-2 text-sm disabled:text-muted"
+        <Button
           disabled={!canReset || !accessToken || status === "running"}
           onClick={resetDemo}
-          type="button"
+          variant="secondary"
         >
-          <RotateCcw className="mr-2 inline h-4 w-4" />
+          <RotateCcw className="h-4 w-4" />
           {status === "running" ? "Resetting" : "Reset"}
-        </button>
+        </Button>
       </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 }
