@@ -16,6 +16,7 @@ from app.core.schemas import (
     OCRExtractionResult,
     WorkflowErrorInput,
 )
+from app.core.totals import reconcile_total
 
 
 REQUIRED_REVIEW_FIELDS = ["invoice_number", "supplier_name", "invoice_date", "currency", "grand_total"]
@@ -171,18 +172,46 @@ class HumanReviewAgent(BaseAgent[OCRExtractionResult, HumanReviewTask]):
             )
 
         subtotal = fields.get("subtotal")
-        tax_total = fields.get("tax_total")
         grand_total = fields.get("grand_total")
-        if subtotal and tax_total and grand_total:
-            expected = round(float(subtotal.value or 0) + float(tax_total.value or 0), 2)
-            actual = round(float(grand_total.value or 0), 2)
-            if abs(expected - actual) > 0.02:
+        if subtotal and grand_total and subtotal.value not in (None, "") and grand_total.value not in (None, ""):
+            tax_total = fields.get("tax_total")
+            shipping_amount = fields.get("shipping_amount")
+            fee_total = fields.get("fee_total")
+            discount_total = fields.get("discount_total")
+            optional_values = [tax_total, shipping_amount, fee_total, discount_total]
+            components_complete = any(
+                field is not None and field.value not in (None, "")
+                for field in optional_values
+            ) or round(float(subtotal.value or 0), 2) == round(float(grand_total.value or 0), 2)
+            reconciliation = reconcile_total(
+                subtotal=float(subtotal.value or 0),
+                tax_total=float(tax_total.value or 0) if tax_total else 0,
+                shipping_amount=float(shipping_amount.value or 0) if shipping_amount else 0,
+                fee_total=float(fee_total.value or 0) if fee_total else 0,
+                discount_total=float(discount_total.value or 0) if discount_total else 0,
+                grand_total=float(grand_total.value or 0),
+                components_complete=components_complete,
+            )
+            if not reconciliation.matches and reconciliation.components_complete:
                 issues.append(
                     HumanReviewFieldIssue(
                         field_name="grand_total",
                         issue_type="suspicious_totals",
-                        message=f"subtotal plus tax is {expected}, but grand total is {actual}.",
-                        current_value=actual,
+                        message=(
+                            f"visible invoice components total {reconciliation.expected_total}, "
+                            f"but grand total is {reconciliation.actual_total}."
+                        ),
+                        current_value=reconciliation.actual_total,
+                        confidence=grand_total.confidence,
+                    )
+                )
+            elif not reconciliation.matches:
+                issues.append(
+                    HumanReviewFieldIssue(
+                        field_name="grand_total",
+                        issue_type="suspicious_totals",
+                        message="Total could not be fully reconciled from visible components.",
+                        current_value=reconciliation.actual_total,
                         confidence=grand_total.confidence,
                     )
                 )

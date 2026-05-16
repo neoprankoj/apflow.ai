@@ -20,7 +20,13 @@ from app.core.schemas import (
 
 
 REQUIRED_FIELDS = ["invoice_number", "supplier_name", "invoice_date", "currency", "grand_total"]
-DATE_VALUE = r"(\d{4}-\d{1,2}-\d{1,2}|\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4})"
+DATE_VALUE = (
+    r"("
+    r"\d{4}-\d{1,2}-\d{1,2}"
+    r"|\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}"
+    r"|[A-Za-z]{3,9}\s+\d{1,2},?\s+\d{4}"
+    r")"
+)
 MONEY_VALUE = r"(-?[\d,]+(?:\.\d{2})?)"
 OCR_SPACE_FILETYPES = {
     "application/pdf": ("PDF", ".pdf"),
@@ -236,8 +242,10 @@ class OCRSpaceOCRAdapter:
             text,
             [
                 r"\b(?:invoice[ \t]*(?:number|no\.?|#)|inv[ \t]*(?:no\.?|#)|tax[ \t]*invoice[ \t]*(?:number|no\.?|#)?)[ \t]*[:#-]?[ \t]*([A-Z0-9][A-Z0-9\-\/]{1,})",
+                r"(?ims)^\s*(?:invoice|tax invoice)\s*$\s*^\s*#\s*([A-Z0-9][A-Z0-9\-\/]{1,})\s*$",
                 r"(?im)^\s*(?:invoice|tax invoice)\s+([A-Z0-9][A-Z0-9\-\/]{2,})\s*$",
             ],
+            confidence=0.9,
         )
         supplier_name = self._find(
             text,
@@ -258,7 +266,7 @@ class OCRSpaceOCRAdapter:
                 self._find(
                     text,
                     [
-                        rf"\b(?:invoice\s*)?date\s*[:#-]?\s*{DATE_VALUE}",
+                        rf"(?im)^\s*invoice\s*date\s*[:#-]?\s*{DATE_VALUE}\s*$",
                         rf"(?im)^\s*date\s*[:#-]?\s*{DATE_VALUE}\s*$",
                     ],
                 ),
@@ -289,6 +297,33 @@ class OCRSpaceOCRAdapter:
                     text,
                     [
                         rf"\b(?:sales\s*tax|tax\s*amount|tax|vat)\s*[:#-]?\s*(?:[^\d\r\n-]{{0,20}}){MONEY_VALUE}",
+                    ],
+                ),
+            ),
+            self._field(
+                "shipping_amount",
+                self._money(
+                    text,
+                    [
+                        rf"\b(?:shipping|freight|delivery)\s*[:#-]?\s*(?:[^\d\r\n-]{{0,20}}){MONEY_VALUE}",
+                    ],
+                ),
+            ),
+            self._field(
+                "fee_total",
+                self._money(
+                    text,
+                    [
+                        rf"\b(?:handling|service\s*fee)\s*[:#-]?\s*(?:[^\d\r\n-]{{0,20}}){MONEY_VALUE}",
+                    ],
+                ),
+            ),
+            self._field(
+                "discount_total",
+                self._money(
+                    text,
+                    [
+                        rf"\bdiscount\s*[:#-]?\s*(?:[^\d\r\n-]{{0,20}}){MONEY_VALUE}",
                     ],
                 ),
             ),

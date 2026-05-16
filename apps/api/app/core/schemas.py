@@ -411,6 +411,9 @@ class ExtractedInvoiceFields(APFlowModel):
     currency: str | None = None
     subtotal: float | None = None
     tax_total: float | None = None
+    shipping_amount: float | None = None
+    fee_total: float | None = None
+    discount_total: float | None = None
     grand_total: float | None = None
     po_number: str | None = None
 
@@ -456,7 +459,11 @@ class CanonicalInvoice(APFlowModel):
     currency: str = "USD"
     subtotal: float
     tax_total: float
+    shipping_amount: float = 0
+    fee_total: float = 0
+    discount_total: float = 0
     grand_total: float
+    total_components_complete: bool = True
     po_number: str | None = None
     line_items: list[InvoiceLineItem] = Field(default_factory=list)
 

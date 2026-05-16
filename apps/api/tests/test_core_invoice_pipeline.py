@@ -213,6 +213,76 @@ def test_validation_fails_bad_math(tenant_id, invoice_validation_agent):
     assert "does not equal" in output.errors[0]
 
 
+@pytest.mark.parametrize(
+    ("tax_total", "shipping_amount", "fee_total", "discount_total", "grand_total"),
+    [
+        (20, 0, 0, 0, 120),
+        (0, 4.29, 0, 0, 104.29),
+        (20, 4.29, 0, 0, 124.29),
+        (0, 0, 0, 10, 90),
+    ],
+)
+def test_validation_reconciles_visible_total_components(
+    tenant_id,
+    invoice_validation_agent,
+    tax_total,
+    shipping_amount,
+    fee_total,
+    discount_total,
+    grand_total,
+):
+    from app.core.schemas import CanonicalInvoice
+
+    output = invoice_validation_agent.validate(
+        InvoiceValidationInput(
+            tenant_id=tenant_id,
+            invoice_id=uuid4(),
+            canonical_invoice=CanonicalInvoice(
+                invoice_number="INV-COMPONENTS",
+                supplier_name="Vendor",
+                invoice_date="2026-05-05",
+                currency="USD",
+                subtotal=100,
+                tax_total=tax_total,
+                shipping_amount=shipping_amount,
+                fee_total=fee_total,
+                discount_total=discount_total,
+                grand_total=grand_total,
+            ),
+            vendor_id=uuid4(),
+        )
+    )
+
+    assert output.validation_status == InvoiceValidationStatus.PASSED
+    assert output.errors == []
+
+
+def test_validation_uses_soft_warning_when_total_components_are_incomplete(tenant_id, invoice_validation_agent):
+    from app.core.schemas import CanonicalInvoice
+
+    output = invoice_validation_agent.validate(
+        InvoiceValidationInput(
+            tenant_id=tenant_id,
+            invoice_id=uuid4(),
+            canonical_invoice=CanonicalInvoice(
+                invoice_number="INV-INCOMPLETE",
+                supplier_name="Vendor",
+                invoice_date="2026-05-05",
+                currency="USD",
+                subtotal=100,
+                tax_total=0,
+                grand_total=110,
+                total_components_complete=False,
+            ),
+            vendor_id=uuid4(),
+        )
+    )
+
+    assert output.validation_status == InvoiceValidationStatus.NEEDS_REVIEW
+    assert output.errors == []
+    assert output.warnings == ["Total could not be fully reconciled from visible components."]
+
+
 def test_full_core_pipeline_scores_second_identical_invoice_as_duplicate(
     tenant_id,
     repository,

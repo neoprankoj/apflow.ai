@@ -229,6 +229,10 @@ export function InvoiceUploadPanel({
   const reviewStatus = processResult?.review_status ?? extractResult?.review_status;
   const reviewTasks = extractResult?.review_tasks ?? pipeline?.review_tasks ?? [];
   const reviewIssues = reviewTasks.flatMap((task) => task.issues ?? []);
+  const correctedIssueFields = new Set(
+    reviewTasks.flatMap((task) => Object.keys(task.corrected_fields ?? {}))
+  );
+  const visibleReviewIssues = reviewIssues.filter((issue) => !correctedIssueFields.has(issue.field_name));
   const correctionFields = Array.from(
     new Set(
       [
@@ -487,7 +491,7 @@ export function InvoiceUploadPanel({
             }
           : current
       );
-      setCorrectionMessage("Corrections saved. Click Process to continue with corrected fields.");
+      setCorrectionMessage("Corrections saved. Click Process to continue.");
     } catch (error) {
       setCorrectionMessage(error instanceof Error ? error.message : "Correction submission failed.");
     } finally {
@@ -831,14 +835,19 @@ export function InvoiceUploadPanel({
                   Save corrected fields, then click Process to continue with the corrected extraction.
                 </p>
               </div>
-              {reviewIssues.length ? (
+              {visibleReviewIssues.length ? (
                 <div className="space-y-1 text-sm text-amber-800">
-                  {reviewIssues.map((issue) => (
+                  {visibleReviewIssues.map((issue) => (
                     <p key={`${issue.field_name}-${issue.message}`}>
                       {issue.field_name.replaceAll("_", " ")}: {issue.message}
                     </p>
                   ))}
                 </div>
+              ) : null}
+              {correctedIssueFields.size ? (
+                <p className="text-sm text-muted">
+                  Saved corrections are pending re-check on the next Process run.
+                </p>
               ) : null}
               {correctionFields.length ? (
                 <div className="grid gap-3 sm:grid-cols-2">

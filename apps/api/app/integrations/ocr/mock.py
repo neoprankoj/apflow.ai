@@ -73,12 +73,21 @@ class MockOCRProvider:
             "currency": float(self._read_token(text, "confidence_currency") or default_confidence),
             "subtotal": float(self._read_token(text, "confidence_subtotal") or default_confidence),
             "tax_total": float(self._read_token(text, "confidence_tax_total") or default_confidence),
+            "shipping_amount": float(self._read_token(text, "confidence_shipping_amount") or default_confidence),
+            "fee_total": float(self._read_token(text, "confidence_fee_total") or default_confidence),
+            "discount_total": float(self._read_token(text, "confidence_discount_total") or default_confidence),
             "grand_total": float(self._read_token(text, "confidence_grand_total") or default_confidence),
             "po_number": float(self._read_token(text, "confidence_po_number") or default_confidence),
         }
         subtotal = float(self._read_token(text, "subtotal") or 1000)
         tax_total = float(self._read_token(text, "tax_total") or 170)
-        grand_total = float(self._read_token(text, "grand_total") or subtotal + tax_total)
+        shipping_amount = float(self._read_token(text, "shipping_amount") or 0)
+        fee_total = float(self._read_token(text, "fee_total") or 0)
+        discount_total = float(self._read_token(text, "discount_total") or 0)
+        grand_total = float(
+            self._read_token(text, "grand_total")
+            or subtotal + tax_total + shipping_amount + fee_total - discount_total
+        )
         invoice_date = self._read_token(text, "invoice_date") or date.today().isoformat()
         due_date = self._read_token(text, "due_date") or (date.today() + timedelta(days=30)).isoformat()
 
@@ -91,6 +100,9 @@ class MockOCRProvider:
             "currency": self._read_token(text, "currency") or "USD",
             "subtotal": subtotal,
             "tax_total": tax_total,
+            "shipping_amount": shipping_amount,
+            "fee_total": fee_total,
+            "discount_total": discount_total,
             "grand_total": grand_total,
             "po_number": self._read_token(text, "po_number") or "PO-100",
         }
@@ -152,6 +164,9 @@ class MockOCRProvider:
                 currency=self._string(field_map.get("currency")),
                 subtotal=self._float(field_map.get("subtotal")),
                 tax_total=self._float(field_map.get("tax_total")),
+                shipping_amount=self._float(field_map.get("shipping_amount")),
+                fee_total=self._float(field_map.get("fee_total")),
+                discount_total=self._float(field_map.get("discount_total")),
                 grand_total=self._float(field_map.get("grand_total")),
                 po_number=self._string(field_map.get("po_number")),
             ),

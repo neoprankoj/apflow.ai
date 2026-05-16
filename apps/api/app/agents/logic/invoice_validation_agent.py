@@ -12,6 +12,7 @@ from app.core.schemas import (
     MetricEventInput,
     WorkflowErrorInput,
 )
+from app.core.totals import reconcile_total
 
 
 class InvoiceValidationAgent(BaseAgent[InvoiceValidationInput, InvoiceValidationOutput]):
@@ -47,12 +48,23 @@ class InvoiceValidationAgent(BaseAgent[InvoiceValidationInput, InvoiceValidation
             if request.vendor_id is None:
                 warnings.append("vendor is not confidently matched")
 
-            expected_total = round(invoice.subtotal + invoice.tax_total, 2)
-            if abs(expected_total - invoice.grand_total) > self.total_tolerance:
+            reconciliation = reconcile_total(
+                subtotal=invoice.subtotal,
+                tax_total=invoice.tax_total,
+                shipping_amount=invoice.shipping_amount,
+                fee_total=invoice.fee_total,
+                discount_total=invoice.discount_total,
+                grand_total=invoice.grand_total,
+                components_complete=invoice.total_components_complete,
+                tolerance=self.total_tolerance,
+            )
+            if not reconciliation.matches and reconciliation.components_complete:
                 errors.append(
-                    f"grand_total {invoice.grand_total:.2f} does not equal subtotal plus tax "
-                    f"{expected_total:.2f}"
+                    f"grand_total {invoice.grand_total:.2f} does not equal visible invoice components "
+                    f"{reconciliation.expected_total:.2f}"
                 )
+            elif not reconciliation.matches:
+                warnings.append("Total could not be fully reconciled from visible components.")
 
             if errors:
                 status = InvoiceValidationStatus.FAILED
