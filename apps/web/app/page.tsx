@@ -184,6 +184,7 @@ export default function Dashboard() {
   const tenantId = currentUser?.tenant.id ?? null;
   const permissions = useMemo(() => new Set(currentUser?.permissions ?? []), [currentUser]);
   const canExportErp = permissions.has("invoice:export_erp");
+  const canApproveInvoice = permissions.has("invoice:approve");
   const canAdmin = permissions.has("tenant:admin");
   const canReview = permissions.has("review:correct");
   const canAudit = permissions.has("audit:read");
@@ -544,6 +545,7 @@ export default function Dashboard() {
               accessToken={accessToken}
               apiBaseUrl={apiBaseUrl}
               authStatus={authStatus}
+              canApproveInvoice={canApproveInvoice}
               canCorrectReview={canReview}
               canExportErp={canExportErp}
               onDemoLogin={demoLogin}

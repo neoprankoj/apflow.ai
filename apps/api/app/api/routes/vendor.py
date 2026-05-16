@@ -125,6 +125,20 @@ def get_vendor_invoice(
     return vendor_invoice_status(repository, tenant_id, invoice)
 
 
+@router.get("/preview/invoices/{invoice_id}", response_model=VendorInvoiceStatus)
+def preview_vendor_invoice_for_internal_user(
+    invoice_id: UUID,
+    tenant_id: UUID = Depends(resolve_tenant_id),
+    repository: InMemoryAPRepository = Depends(get_repository),
+    _context: CurrentUserContext = Depends(require_permission(Permission.INVOICE_READ)),
+) -> VendorInvoiceStatus:
+    try:
+        invoice = repository.get_invoice(tenant_id, invoice_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Invoice not found") from exc
+    return vendor_invoice_status(repository, tenant_id, invoice)
+
+
 @router.post("/messages", response_model=VendorMessageResult)
 def submit_vendor_message(
     payload: VendorMessageCreate,

@@ -109,7 +109,7 @@ type PipelineResult = {
   duplicate_result?: { status: string } | null;
   po_match_result?: { match_status: string } | null;
   fraud_risk_result?: { risk_level: string } | null;
-  approval_result?: { route: string; assigned_role?: string } | null;
+  approval_result?: { route: string; assigned_role?: string; approval_status?: string; reason?: string } | null;
   erp_export_ready?: boolean;
   confidence_summary?: ConfidenceSummary;
   ocr_result?: OcrResult;
@@ -154,6 +154,18 @@ type VendorInvoiceStatus = {
   currency: string;
 };
 
+type ApprovalDecisionResult = {
+  invoice_id: string;
+  approval_task_id: string;
+  action: "approve" | "reject" | "hold";
+  route: string;
+  approval_status: string;
+  reason: string;
+  workflow_status: string;
+  erp_export_ready: boolean;
+  blocker_reason?: string | null;
+};
+
 type StepStatus = "pending" | "active" | "completed" | "failed";
 
 type Props = {
@@ -164,6 +176,7 @@ type Props = {
   selectedOcrProvider?: string;
   selectedOcrStatus?: string;
   canExportErp?: boolean;
+  canApproveInvoice?: boolean;
   canCorrectReview?: boolean;
   resetSignal?: number;
   onDemoLogin: () => void;
@@ -179,6 +192,7 @@ export function InvoiceUploadPanel({
   selectedOcrProvider = "mock",
   selectedOcrStatus = "ok",
   canExportErp = true,
+  canApproveInvoice = false,
   canCorrectReview = false,
   resetSignal = 0,
   onDemoLogin
@@ -190,6 +204,7 @@ export function InvoiceUploadPanel({
   const [erpResult, setErpResult] = useState<ERPSyncResult | null>(null);
   const [erpLogs, setErpLogs] = useState<ERPSyncResult[]>([]);
   const [vendorPreview, setVendorPreview] = useState<VendorInvoiceStatus | null>(null);
+  const [approvalDecision, setApprovalDecision] = useState<ApprovalDecisionResult | null>(null);
   const [status, setStatus] = useState<string>("idle");
   const [activeAction, setActiveAction] = useState<
     "upload" | "extract" | "process" | "export" | "vendor-preview" | null
@@ -232,6 +247,10 @@ export function InvoiceUploadPanel({
     ])
   );
   const erpExportReady = Boolean(pipeline?.erp_export_ready);
+  const approvalNeedsAction =
+    pipeline?.approval_result?.route === "blocked" &&
+    !erpExportReady &&
+    !["approved", "rejected"].includes(pipeline?.approval_result?.approval_status ?? "");
   const invoiceCreated = processResult?.invoice_created ?? pipeline?.invoice_created ?? Boolean(invoiceId);
   const blockerReason = processResult?.blocker_reason ?? pipeline?.blocker_reason;
   const selectedFileName = useMemo(() => file?.name ?? "No file selected", [file]);
@@ -306,6 +325,7 @@ export function InvoiceUploadPanel({
     setErpResult(null);
     setErpLogs([]);
     setVendorPreview(null);
+    setApprovalDecision(null);
     setStatus("idle");
     setActiveAction(null);
     setError(null);
@@ -362,6 +382,7 @@ export function InvoiceUploadPanel({
       setProcessResult(null);
       setErpResult(null);
       setVendorPreview(null);
+      setApprovalDecision(null);
       mark("uploaded");
       setStatus("uploaded");
     } catch (error) {
@@ -416,6 +437,7 @@ export function InvoiceUploadPanel({
         action: "Process invoice"
       });
       setProcessResult(result);
+      setApprovalDecision(null);
       mark("processed");
       setStatus(result.workflow_status);
     } catch (error) {
@@ -559,20 +581,13 @@ export function InvoiceUploadPanel({
     setStatus("loading vendor preview");
     setActiveAction("vendor-preview");
     try {
-      const access = await apiFetch<{ access_token: string }>(requestContext.apiBaseUrl, "/vendor/access", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          tenant_id: requestContext.tenantId,
-          email: "vendor-demo@example.com"
-        }),
-        token: requestContext.accessToken,
-        action: "Create vendor preview access"
-      });
       const preview = await apiFetch<VendorInvoiceStatus>(
         requestContext.apiBaseUrl,
-        `/vendor/invoices/${invoiceId}?tenant_id=${requestContext.tenantId}&access_token=${encodeURIComponent(access.access_token)}`,
-        { action: "Load vendor-safe status" }
+        `/vendor/preview/invoices/${invoiceId}?tenant_id=${requestContext.tenantId}`,
+        {
+          token: requestContext.accessToken,
+          action: "Load vendor-safe status"
+        }
       );
       setVendorPreview(preview);
       mark("vendor_preview");
@@ -580,6 +595,59 @@ export function InvoiceUploadPanel({
     } catch (error) {
       setStatus("failed");
       setError(error instanceof Error ? error.message : "Vendor preview failed because the API is unavailable.");
+    } finally {
+      setActiveAction(null);
+    }
+  }
+
+  async function decideApproval(action: ApprovalDecisionResult["action"]) {
+    if (!ensureSignedIn()) return;
+    const requestContext = getSignedInRequestContext();
+    if (!requestContext || !invoiceId || !canApproveInvoice) return;
+    setError(null);
+    setStatus(`approval ${action}`);
+    setActiveAction("process");
+    try {
+      const result = await apiFetch<ApprovalDecisionResult>(
+        requestContext.apiBaseUrl,
+        `/invoices/${invoiceId}/approval-decision`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            tenant_id: requestContext.tenantId,
+            action
+          }),
+          token: requestContext.accessToken,
+          action: `${action} invoice`
+        }
+      );
+      setApprovalDecision(result);
+      setProcessResult((current) =>
+        current?.pipeline_result
+          ? {
+              ...current,
+              workflow_status: result.workflow_status,
+              blocker_reason: result.blocker_reason,
+              pipeline_result: {
+                ...current.pipeline_result,
+                approval_result: {
+                  ...(current.pipeline_result.approval_result ?? { route: result.route }),
+                  route: result.route,
+                  approval_status: result.approval_status,
+                  reason: result.reason
+                },
+                erp_export_ready: result.erp_export_ready,
+                blocker_reason: result.blocker_reason
+              }
+            }
+          : current
+      );
+      setVendorPreview(null);
+      setStatus(result.workflow_status);
+    } catch (error) {
+      setStatus("failed");
+      setError(error instanceof Error ? error.message : "Approval action failed because the API is unavailable.");
     } finally {
       setActiveAction(null);
     }
@@ -759,6 +827,49 @@ export function InvoiceUploadPanel({
                 <Metric label="Review fields" value={reviewRequiredFields.length ? reviewRequiredFields.join(", ") : "none"} />
                 <Metric label="Invoice created" value={invoiceCreated ? "yes" : "no"} />
               </div>
+              {approvalNeedsAction ? (
+                <div className="rounded-md border border-border px-4 py-4 text-sm">
+                  <p className="font-medium">AP review action required</p>
+                  <p className="mt-1 text-muted">
+                    {pipeline?.approval_result?.reason ?? blockerReason ?? "Approval policy blocked this invoice."}
+                  </p>
+                  {canApproveInvoice ? (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        className="rounded-md border border-border px-3 py-2 text-sm disabled:text-muted"
+                        disabled={isBusy}
+                        onClick={() => decideApproval("approve")}
+                        type="button"
+                      >
+                        Approve
+                      </button>
+                      <button
+                        className="rounded-md border border-border px-3 py-2 text-sm disabled:text-muted"
+                        disabled={isBusy}
+                        onClick={() => decideApproval("reject")}
+                        type="button"
+                      >
+                        Reject
+                      </button>
+                      <button
+                        className="rounded-md border border-border px-3 py-2 text-sm disabled:text-muted"
+                        disabled={isBusy}
+                        onClick={() => decideApproval("hold")}
+                        type="button"
+                      >
+                        Keep on Hold
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-xs text-muted">Your current role cannot resolve blocked invoices.</p>
+                  )}
+                  {approvalDecision ? (
+                    <p className="mt-3 text-xs text-muted">
+                      Latest decision: {approvalDecision.approval_status.replaceAll("_", " ")}. {approvalDecision.reason}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
             </>
           ) : (
             <div className="rounded-md border border-border px-4 py-5 text-sm text-muted">
@@ -924,6 +1035,9 @@ export function InvoiceUploadPanel({
             </button>
           </div>
           <div className="space-y-4 p-4 text-sm">
+            {invoiceId ? (
+              <p className="text-xs text-muted">Using current processed invoice {invoice?.invoice_number ?? invoiceId}.</p>
+            ) : null}
             {erpResult ? (
               <div className="grid gap-3 sm:grid-cols-3">
                 <Metric label="Sync" value={erpResult.status} />
@@ -969,6 +1083,11 @@ export function InvoiceUploadPanel({
             </button>
           </div>
           <div className="p-4 text-sm">
+            {invoiceId ? (
+              <p className="mb-3 text-xs text-muted">
+                Previewing the current processed invoice {invoice?.invoice_number ?? invoiceId}.
+              </p>
+            ) : null}
             {vendorPreview ? (
               <div className="grid gap-3 sm:grid-cols-2">
                 <Metric label="Invoice" value={vendorPreview.invoice_number} />
@@ -985,7 +1104,7 @@ export function InvoiceUploadPanel({
                 {signInRequired
                   ? "Sign in before preparing a vendor-safe preview."
                   : invoiceId
-                    ? "Vendor-safe preview is available after processing this invoice."
+                    ? "Vendor-safe preview is available for this processed invoice."
                     : blockerReason
                       ? blockerReason
                       : pipeline
@@ -1110,6 +1229,7 @@ function buildTimeline(input: {
   const validationStatus = pipeline?.validation_result?.validation_status;
   const duplicateStatus = pipeline?.duplicate_result?.status;
   const approvalRoute = pipeline?.approval_result?.route;
+  const approvalStatus = pipeline?.approval_result?.approval_status;
   const exportBlocker = exportReadinessBlocker(
     pipeline,
     reviewStatus,
@@ -1177,11 +1297,21 @@ function buildTimeline(input: {
     },
     {
       id: "approval_routed",
-      label: "Approval Routed",
-      status: approvalRoute ? (approvalRoute === "blocked" ? "warning" : "completed") : "pending",
+      label: approvalStatus && ["approved", "rejected", "on_hold"].includes(approvalStatus)
+        ? "Approval Resolved"
+        : "Approval Routed",
+      status: approvalStatus === "approved"
+        ? "completed"
+        : approvalStatus && ["rejected", "on_hold", "blocked"].includes(approvalStatus)
+          ? "warning"
+          : approvalRoute
+            ? "completed"
+            : "pending",
       timestamp: input.timestamps.processed,
-      summary: approvalRoute
-        ? `Approval route is ${approvalRoute.replaceAll("_", " ")}.`
+      summary: approvalStatus
+        ? `Approval status is ${approvalStatus.replaceAll("_", " ")}.`
+        : approvalRoute
+          ? `Approval route is ${approvalRoute.replaceAll("_", " ")}.`
         : "Approval route waits for processing."
     },
     {

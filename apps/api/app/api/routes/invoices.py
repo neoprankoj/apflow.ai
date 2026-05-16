@@ -14,6 +14,7 @@ from app.agents.logic.invoice_validation_agent import InvoiceValidationAgent
 from app.agents.logic.purchase_order_matching_agent import PurchaseOrderMatchingAgent
 from app.agents.logic.supplier_identity_agent import SupplierIdentityAgent
 from app.api.dependencies import (
+    get_audit_agent,
     get_approval_routing_agent,
     get_duplicate_detection_agent,
     get_fraud_risk_scoring_agent,
@@ -23,17 +24,26 @@ from app.api.dependencies import (
     get_invoice_normalization_agent,
     get_invoice_validation_agent,
     get_notification_agent,
+    get_monitoring_agent,
     get_purchase_order_matching_agent,
     get_repository,
     get_supplier_identity_agent,
     require_permission,
     resolve_tenant_id,
 )
+from app.agents.observability.audit_logging_agent import AuditLoggingAgent
+from app.agents.observability.monitoring_agent import MonitoringAgent
 from app.core.config import settings
 from app.core.repositories import InMemoryAPRepository
 from app.core.schemas import (
+    ActorType,
+    ApprovalDecisionAction,
+    ApprovalDecisionRequest,
+    ApprovalDecisionResult,
     ApprovalRoute,
     ApprovalRoutingInput,
+    ApprovalTaskStatus,
+    AuditEventInput,
     CurrentUserContext,
     DuplicateDetectionInput,
     DuplicateStatus,
@@ -43,6 +53,7 @@ from app.core.schemas import (
     InvoiceNormalizationInput,
     InvoiceValidationInput,
     InvoiceValidationStatus,
+    MetricEventInput,
     NotificationInput,
     NotificationType,
     POMatchStatus,
@@ -379,6 +390,90 @@ def get_invoice(
     raise HTTPException(status_code=404, detail="invoice not found for tenant")
 
 
+@router.post("/{invoice_id}/approval-decision", response_model=ApprovalDecisionResult)
+def decide_invoice_approval(
+    invoice_id: UUID,
+    payload: ApprovalDecisionRequest,
+    repository: InMemoryAPRepository = Depends(get_repository),
+    audit_agent: AuditLoggingAgent = Depends(get_audit_agent),
+    monitoring_agent: MonitoringAgent = Depends(get_monitoring_agent),
+    notification_agent: NotificationAgent = Depends(get_notification_agent),
+    context: CurrentUserContext = Depends(require_permission(Permission.INVOICE_APPROVE)),
+) -> ApprovalDecisionResult:
+    _enforce_body_tenant(payload.tenant_id, context)
+    try:
+        repository.get_invoice(payload.tenant_id, invoice_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="invoice not found for tenant") from exc
+
+    task = repository.get_latest_approval_task(payload.tenant_id, invoice_id)
+    if task is None:
+        raise HTTPException(status_code=409, detail="invoice has no approval task to resolve")
+
+    status, workflow_status, export_ready, default_reason = _approval_decision_state(payload.action)
+    reason = payload.reason or default_reason
+    updated_task = repository.update_approval_task(
+        payload.tenant_id,
+        task.approval_task_id,
+        status=status,
+        reason=reason,
+    )
+    audit_agent.record(
+        AuditEventInput(
+            tenant_id=payload.tenant_id,
+            actor_type=ActorType.USER,
+            actor_id=str(context.user.id),
+            action=f"invoice.approval_{payload.action}",
+            entity_type="invoice",
+            entity_id=invoice_id,
+            metadata={
+                "approval_task_id": str(updated_task.approval_task_id),
+                "route": updated_task.route,
+                "approval_status": updated_task.status,
+                "reason": reason,
+            },
+            correlation_id=payload.correlation_id,
+        )
+    )
+    monitoring_agent.record_metric(
+        MetricEventInput(
+            tenant_id=payload.tenant_id,
+            metric_event="invoice.approval_decision",
+            value=1,
+            metadata={
+                "action": payload.action,
+                "route": updated_task.route,
+                "approval_status": updated_task.status,
+            },
+        )
+    )
+    notification_agent.send(
+        NotificationInput(
+            tenant_id=payload.tenant_id,
+            invoice_id=invoice_id,
+            notification_type=NotificationType.APPROVAL_DECISION_RECORDED,
+            recipient_role="ap_admin",
+            payload={
+                "action": payload.action,
+                "approval_status": updated_task.status,
+                "reason": reason,
+            },
+            correlation_id=payload.correlation_id,
+        )
+    )
+    return ApprovalDecisionResult(
+        invoice_id=invoice_id,
+        approval_task_id=updated_task.approval_task_id,
+        action=payload.action,
+        route=updated_task.route,
+        approval_status=updated_task.status,
+        reason=reason,
+        workflow_status=workflow_status,
+        erp_export_ready=export_ready,
+        blocker_reason=None if export_ready else reason,
+    )
+
+
 def _enforce_body_tenant(tenant_id: UUID, context: CurrentUserContext) -> None:
     if settings.auth_enabled and tenant_id != context.tenant.id:
         raise HTTPException(status_code=403, detail="Tenant access denied")
@@ -706,3 +801,28 @@ def _review_blocker_reason(unresolved_review_fields: list[str]) -> str:
         return "Human review remains required before invoice creation."
     fields = ", ".join(unresolved_review_fields)
     return f"Human review remains required for fields: {fields}."
+
+
+def _approval_decision_state(
+    action: ApprovalDecisionAction,
+) -> tuple[ApprovalTaskStatus, str, bool, str]:
+    if action == ApprovalDecisionAction.APPROVE:
+        return (
+            ApprovalTaskStatus.APPROVED,
+            "approval_ready",
+            True,
+            "Invoice approved by authorized reviewer.",
+        )
+    if action == ApprovalDecisionAction.REJECT:
+        return (
+            ApprovalTaskStatus.REJECTED,
+            "rejected",
+            False,
+            "Invoice rejected by authorized reviewer.",
+        )
+    return (
+        ApprovalTaskStatus.ON_HOLD,
+        "blocked",
+        False,
+        "Invoice kept on hold by authorized reviewer.",
+    )
