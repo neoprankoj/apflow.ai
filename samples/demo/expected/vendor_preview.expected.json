@@ -1,0 +1,6 @@
+{
+  "scenario": "vendor_preview",
+  "expected_public_statuses": ["received", "under_review", "needs_information", "approved", "scheduled_for_payment", "paid", "rejected"],
+  "hidden_fields": ["fraud_risk_result", "audit_events", "erp_sync_logs", "approval_policy", "internal_comments"],
+  "notes": "Vendor-facing views must stay retrieval-limited and tenant/vendor scoped."
+}

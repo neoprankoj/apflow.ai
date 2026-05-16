@@ -1,8 +1,8 @@
-"""Seed a demo APFlow tenant through the running API.
+"""Seed predictable APFlow demo states through the running API.
 
-The script does not print tokens or secrets. It creates or updates a demo
-tenant owner, syncs mock ERP vendors/POs, and processes one deterministic
-sample invoice.
+The script does not print tokens or secrets. Live OCR providers are never
+invoked during explicit seed modes; staging reset seed modes create deterministic
+records directly on the backend.
 """
 
 from __future__ import annotations
@@ -19,23 +19,18 @@ def main() -> int:
     parser.add_argument("--api-base-url", default="http://127.0.0.1:8000")
     parser.add_argument("--tenant-name", default="APFlow Demo Tenant")
     parser.add_argument("--tenant-slug", default="apflow-demo")
+    parser.add_argument("--tenant-id")
     parser.add_argument("--email", default="demo-owner@apflow.local")
     parser.add_argument("--password", default="demo-password-123")
     parser.add_argument("--adapter", default="priority")
-    parser.add_argument("--skip-invoice", action="store_true")
+    parser.add_argument(
+        "--mode",
+        choices=("clean", "approval-ready", "review-required", "vendor-preview", "all"),
+        default="approval-ready",
+    )
     args = parser.parse_args()
 
-    registered = post(
-        args.api_base_url,
-        "/auth/register-demo-tenant",
-        {
-            "tenant_name": args.tenant_name,
-            "tenant_slug": args.tenant_slug,
-            "email": args.email,
-            "full_name": "Demo Owner",
-            "password": args.password,
-        },
-    )
+    registered = authenticate(args)
     token = registered["access_token"]
     tenant_id = registered["tenant"]["id"]
     headers = {"Authorization": f"Bearer {token}"}
@@ -43,31 +38,26 @@ def main() -> int:
     post(args.api_base_url, "/erp/sync-vendors", {"tenant_id": tenant_id, "adapter_type": args.adapter}, headers)
     post(args.api_base_url, "/erp/sync-purchase-orders", {"tenant_id": tenant_id, "adapter_type": args.adapter}, headers)
 
-    invoice_id = None
-    workflow_status = "not_processed"
-    if not args.skip_invoice:
-        pipeline = post(
+    reset_mode = backend_seed_mode(args.mode)
+    reset = post(args.api_base_url, f"/admin/demo/reset?seed_mode={reset_mode}", None, headers)
+    vendor_access_created = False
+    if args.mode == "vendor-preview":
+        seeded_invoices = get(args.api_base_url, f"/invoices?tenant_id={tenant_id}", headers)
+        seeded_vendor_id = next(
+            (record["vendor_id"] for record in seeded_invoices if record["invoice_id"] == reset.get("invoice_id")),
+            None,
+        )
+        post(
             args.api_base_url,
-            "/invoices/full-mock-pipeline",
+            "/vendor/access",
             {
                 "tenant_id": tenant_id,
-                "source": "upload",
-                "file_url": "mock://incoming/seed-demo-invoice.pdf",
-                "metadata": {
-                    "sender_email": "ap@example.com",
-                    "original_filename": "seed-demo-invoice.pdf",
-                    "mime_type": "application/pdf",
-                },
-                "content": (
-                    "invoice_number=INV-SEED-DEMO supplier_tax_id=TAX-12345 "
-                    "subtotal=1000 tax_total=170 grand_total=1170 currency=USD "
-                    "invoice_date=2026-05-07 po_number=PO-100"
-                ),
+                "email": "demo-vendor@apflow.local",
+                "vendor_id": seeded_vendor_id,
             },
             headers,
         )
-        invoice_id = pipeline["invoice"]["invoice_id"] if pipeline.get("invoice") else None
-        workflow_status = pipeline["workflow_status"]
+        vendor_access_created = True
 
     print(
         json.dumps(
@@ -78,8 +68,10 @@ def main() -> int:
                 "tenant_slug": registered["tenant"]["slug"],
                 "owner_email": args.email,
                 "demo_password": args.password,
-                "invoice_id": invoice_id,
-                "workflow_status": workflow_status,
+                "mode": args.mode,
+                "invoice_id": reset.get("invoice_id"),
+                "workflow_status": reset["workflow_status"],
+                "vendor_access_created": vendor_access_created,
                 "note": "Access token was not printed. Rotate demo credentials before shared use.",
             },
             indent=2,
@@ -88,8 +80,45 @@ def main() -> int:
     return 0
 
 
+def backend_seed_mode(mode: str) -> str:
+    if mode == "vendor-preview":
+        return "approval_ready"
+    return mode.replace("-", "_")
+
+
+def authenticate(args: argparse.Namespace) -> dict:
+    if args.tenant_id:
+        try:
+            return post(
+                args.api_base_url,
+                "/auth/login",
+                {
+                    "email": args.email,
+                    "password": args.password,
+                    "tenant_id": args.tenant_id,
+                },
+            )
+        except RuntimeError:
+            pass
+    return post(
+        args.api_base_url,
+        "/auth/register-demo-tenant",
+        {
+            "tenant_name": args.tenant_name,
+            "tenant_slug": args.tenant_slug,
+            "email": args.email,
+            "full_name": "Demo Owner",
+            "password": args.password,
+        },
+    )
+
+
 def post(base_url: str, path: str, payload: dict, headers: dict[str, str] | None = None) -> dict:
     return request(base_url, "POST", path, payload, headers)
+
+
+def get(base_url: str, path: str, headers: dict[str, str] | None = None) -> dict:
+    return request(base_url, "GET", path, None, headers)
 
 
 def request(

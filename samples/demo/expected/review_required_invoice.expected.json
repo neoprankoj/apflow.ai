@@ -1,0 +1,7 @@
+{
+  "scenario": "review_required_invoice",
+  "expected_workflow_status": "review_required",
+  "required_fields": ["invoice_number", "invoice_date", "supplier_name", "grand_total", "currency"],
+  "allowed_ocr_providers": ["mock", "ocr_space", "azure"],
+  "notes": "OCR.space may require manual correction. Review-required is a valid safe outcome."
+}

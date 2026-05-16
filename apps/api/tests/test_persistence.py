@@ -43,6 +43,7 @@ from app.core.schemas import (
     HumanReviewStatus,
     HumanReviewTask,
     UploadedInvoiceDocument,
+    WorkflowState,
     WorkflowStatus,
 )
 from app.db.models import Base

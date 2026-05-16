@@ -201,6 +201,14 @@ The dashboard reads `NEXT_PUBLIC_API_BASE_URL`, defaulting to `http://127.0.0.1:
 
 The dashboard also includes a guided demo walkthrough for PDF/image upload, extract-only OCR checks, full-pipeline processing, workflow timeline, result summary, mock ERP export, and vendor-safe status preview. It renders a separated vendor portal demo section with vendor-visible invoices, a message box, and status chat shell.
 
+Demo materials:
+
+- `docs/demo_script.md` for the live presenter flow.
+- `docs/demo_qa_checklist.md` for pre-demo validation.
+- `samples/demo` for synthetic scenario notes and expected outcomes.
+
+Do not commit real invoices, secrets, or environment files into the demo pack.
+
 Use `.env.example` as the starting point for local configuration. Do not commit real provider credentials.
 
 Use `.env.staging.example` as the starting point for private VPS deployments. Staging and production reject wildcard CORS, default MinIO credentials, weak auth secrets, and missing database/public URL settings.
