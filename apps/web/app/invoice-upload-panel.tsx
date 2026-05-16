@@ -180,6 +180,7 @@ type Props = {
   canCorrectReview?: boolean;
   resetSignal?: number;
   onDemoLogin: () => void;
+  onWorkflowUpdated?: () => Promise<void> | void;
 };
 
 const REQUIRED_CORRECTION_FIELDS = ["invoice_number", "supplier_name", "invoice_date", "currency", "grand_total"];
@@ -195,7 +196,8 @@ export function InvoiceUploadPanel({
   canApproveInvoice = false,
   canCorrectReview = false,
   resetSignal = 0,
-  onDemoLogin
+  onDemoLogin,
+  onWorkflowUpdated
 }: Props) {
   const [file, setFile] = useState<File | null>(null);
   const [uploadResult, setUploadResult] = useState<UploadResult | null>(null);
@@ -246,12 +248,22 @@ export function InvoiceUploadPanel({
       ...(confidence?.required_fields_low_confidence ?? [])
     ])
   );
-  const erpExportReady = Boolean(pipeline?.erp_export_ready);
-  const approvalNeedsAction =
-    pipeline?.approval_result?.route === "blocked" &&
-    !erpExportReady &&
-    !["approved", "rejected"].includes(pipeline?.approval_result?.approval_status ?? "");
   const invoiceCreated = processResult?.invoice_created ?? pipeline?.invoice_created ?? Boolean(invoiceId);
+  const approvalDisplayStatus = pipeline?.approval_result?.approval_status ?? pipeline?.approval_result?.route;
+  const erpExportReady = Boolean(pipeline?.erp_export_ready);
+  const approvalNeedsAction = shouldShowApprovalDecisionActions({
+    invoiceCreated,
+    invoiceId,
+    workflowStatus: processResult?.workflow_status,
+    approvalRoute: pipeline?.approval_result?.route,
+    approvalStatus: pipeline?.approval_result?.approval_status
+  });
+  const blockedWithoutCurrentInvoice =
+    isBlockedApprovalState({
+      workflowStatus: processResult?.workflow_status,
+      approvalRoute: pipeline?.approval_result?.route,
+      approvalStatus: pipeline?.approval_result?.approval_status
+    }) && (!invoiceCreated || !invoiceId);
   const blockerReason = processResult?.blocker_reason ?? pipeline?.blocker_reason;
   const selectedFileName = useMemo(() => file?.name ?? "No file selected", [file]);
   const isSignedIn = authStatus === "authenticated" && Boolean(accessToken && tenantId);
@@ -645,6 +657,7 @@ export function InvoiceUploadPanel({
       );
       setVendorPreview(null);
       setStatus(result.workflow_status);
+      await onWorkflowUpdated?.();
     } catch (error) {
       setStatus("failed");
       setError(error instanceof Error ? error.message : "Approval action failed because the API is unavailable.");
@@ -822,7 +835,7 @@ export function InvoiceUploadPanel({
                 <Metric label="Workflow" value={processResult.workflow_status.replaceAll("_", " ")} />
                 <Metric label="PO match" value={pipeline?.po_match_result?.match_status.replaceAll("_", " ") ?? "n/a"} />
                 <Metric label="Risk" value={pipeline?.fraud_risk_result?.risk_level ?? "n/a"} />
-                <Metric label="Approval" value={pipeline?.approval_result?.route.replaceAll("_", " ") ?? "n/a"} />
+                <Metric label="Approval" value={approvalDisplayStatus?.replaceAll("_", " ") ?? "n/a"} />
                 <Metric label="ERP ready" value={erpExportReady ? "yes" : "no"} />
                 <Metric label="Review fields" value={reviewRequiredFields.length ? reviewRequiredFields.join(", ") : "none"} />
                 <Metric label="Invoice created" value={invoiceCreated ? "yes" : "no"} />
@@ -830,6 +843,7 @@ export function InvoiceUploadPanel({
               {approvalNeedsAction ? (
                 <div className="rounded-md border border-border px-4 py-4 text-sm">
                   <p className="font-medium">AP review action required</p>
+                  <p className="mt-1 text-xs text-muted">Approval actions apply to the current processed invoice.</p>
                   <p className="mt-1 text-muted">
                     {pipeline?.approval_result?.reason ?? blockerReason ?? "Approval policy blocked this invoice."}
                   </p>
@@ -868,6 +882,11 @@ export function InvoiceUploadPanel({
                       Latest decision: {approvalDecision.approval_status.replaceAll("_", " ")}. {approvalDecision.reason}
                     </p>
                   ) : null}
+                </div>
+              ) : null}
+              {blockedWithoutCurrentInvoice ? (
+                <div className="rounded-md border border-border px-4 py-4 text-sm text-muted">
+                  Approval actions require a current processed invoice record.
                 </div>
               ) : null}
             </>
@@ -1402,6 +1421,33 @@ function buildCorrectionDefaults(
     }
   }
   return defaults;
+}
+
+function shouldShowApprovalDecisionActions(input: {
+  invoiceCreated: boolean;
+  invoiceId: string | undefined;
+  workflowStatus: string | undefined;
+  approvalRoute: string | undefined;
+  approvalStatus: string | undefined;
+}) {
+  return Boolean(
+    input.invoiceCreated &&
+      input.invoiceId &&
+      isBlockedApprovalState(input) &&
+      !["approved", "rejected", "on_hold"].includes(input.approvalStatus ?? "")
+  );
+}
+
+function isBlockedApprovalState(input: {
+  workflowStatus: string | undefined;
+  approvalRoute: string | undefined;
+  approvalStatus: string | undefined;
+}) {
+  return (
+    input.workflowStatus === "blocked" ||
+    input.approvalRoute === "blocked" ||
+    input.approvalStatus === "blocked"
+  );
 }
 
 function stringifyCorrections(correctedFields: Record<string, string | number>) {

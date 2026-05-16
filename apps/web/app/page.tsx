@@ -549,6 +549,11 @@ export default function Dashboard() {
               canCorrectReview={canReview}
               canExportErp={canExportErp}
               onDemoLogin={demoLogin}
+              onWorkflowUpdated={() => {
+                if (accessToken && currentUser) {
+                  return loadProtectedData(accessToken, currentUser);
+                }
+              }}
               resetSignal={demoResetSignal}
               selectedOcrProvider={selectedOcrProvider?.provider ?? "mock"}
               selectedOcrStatus={selectedOcrProvider?.status ?? "ok"}
