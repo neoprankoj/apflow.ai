@@ -72,9 +72,9 @@ class ApprovalTaskRecord:
     tenant_id: UUID
     approval_task_id: UUID
     invoice_id: UUID
-    route: ApprovalRoute
+    route: str
     assigned_role: str
-    status: ApprovalTaskStatus
+    status: str
     reason: str
 
 

@@ -242,9 +242,14 @@ export default function Dashboard() {
             : Promise.resolve([])
         ]);
 
-      const refreshErrors = [invoices, approvals, notifications, workflows, reviewTasks, adminUsers]
-        .filter((result): result is PromiseRejectedResult => result.status === "rejected")
-        .map((result) => (result.reason instanceof Error ? result.reason.message : "Dashboard data failed to load."));
+      const refreshErrors = [
+        refreshErrorMessage(invoices, "Invoice list failed; other dashboard data remains available."),
+        refreshErrorMessage(approvals, "Approval task list failed; other dashboard data remains available."),
+        refreshErrorMessage(notifications, "Notification list failed; other dashboard data remains available."),
+        refreshErrorMessage(workflows, "Workflow state list failed; current invoice state remains available."),
+        refreshErrorMessage(reviewTasks, "Review task list failed; other dashboard data remains available."),
+        refreshErrorMessage(adminUsers, "Tenant user list failed; other dashboard data remains available.")
+      ].filter((message): message is string => Boolean(message));
 
       let vendorAccess: VendorAccess | null = null;
       let vendorInvoices: VendorInvoice[] = [];
@@ -925,4 +930,10 @@ function money(value: number, currency: string) {
     currency: currency || "USD",
     maximumFractionDigits: 2
   }).format(value || 0);
+}
+
+function refreshErrorMessage<T>(result: PromiseSettledResult<T>, prefix: string) {
+  if (result.status === "fulfilled") return null;
+  const detail = result.reason instanceof Error ? result.reason.message : "Dashboard data failed to load.";
+  return `${prefix} ${detail}`;
 }
