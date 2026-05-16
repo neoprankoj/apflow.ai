@@ -50,6 +50,7 @@ def test_register_demo_tenant_login_and_me(auth_enabled):
     assert login.json()["access_token"]
     assert me.status_code == 200
     assert me.json()["user"]["email"] == "owner1@example.com"
+    assert "invoice:approve" in me.json()["permissions"]
 
 
 def test_login_failure_returns_401(auth_enabled):
