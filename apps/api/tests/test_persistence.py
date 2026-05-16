@@ -46,7 +46,7 @@ from app.core.schemas import (
     WorkflowStatus,
 )
 from app.db.models import Base
-from app.db.repositories import SQLAlchemyAPRepository
+from app.db.repositories import DEMO_OPERATIONAL_CLEANUP_MODELS, SQLAlchemyAPRepository
 
 
 @pytest.fixture
@@ -308,7 +308,7 @@ def test_sql_repository_clears_demo_operational_data_without_removing_tenant_fix
         )
     )
 
-    sql_repository.clear_demo_operational_data(tenant_id)
+    cleared = sql_repository.clear_demo_operational_data(tenant_id)
 
     assert sql_repository.list_invoices(tenant_id) == []
     assert sql_repository.list_approval_tasks(tenant_id) == []
@@ -318,6 +318,51 @@ def test_sql_repository_clears_demo_operational_data_without_removing_tenant_fix
     assert sql_repository.list_workflow_states(tenant_id) == []
     assert len(sql_repository.list_vendors(tenant_id)) == 1
     assert len(sql_repository.list_purchase_orders(tenant_id)) == 1
+    assert cleared["notification_events"] == 1
+    assert cleared["invoices"] == 1
+
+
+def test_sql_repository_demo_cleanup_targets_only_migrated_tables():
+    cleanup_tables = {model.__tablename__ for model in DEMO_OPERATIONAL_CLEANUP_MODELS}
+
+    assert "notification_events" in cleanup_tables
+    assert "notifications" not in cleanup_tables
+    assert "approval_flows" not in cleanup_tables
+
+
+def test_sql_repository_demo_cleanup_rolls_back_on_failure(sql_repository, monkeypatch):
+    tenant_id = uuid4()
+    sql_repository.add_vendor(tenant_id=tenant_id, name="Northstar Components", tax_id="TAX-ROLLBACK")
+    user = sql_repository.create_user(
+        email="rollback-owner@example.com",
+        full_name="Rollback Owner",
+        hashed_password="hashed-password",
+    )
+    sql_repository.create_membership(tenant_id=tenant_id, user_id=user.id, role="owner")
+    original_execute = sql_repository.session.execute
+    original_rollback = sql_repository.session.rollback
+    calls = {"execute": 0, "rollback": 0}
+
+    def failing_execute(*args, **kwargs):
+        calls["execute"] += 1
+        if calls["execute"] == 1:
+            raise RuntimeError("cleanup failed")
+        return original_execute(*args, **kwargs)
+
+    def tracked_rollback():
+        calls["rollback"] += 1
+        return original_rollback()
+
+    monkeypatch.setattr(sql_repository.session, "execute", failing_execute)
+    monkeypatch.setattr(sql_repository.session, "rollback", tracked_rollback)
+
+    with pytest.raises(RuntimeError, match="cleanup failed"):
+        sql_repository.clear_demo_operational_data(tenant_id)
+
+    assert calls["rollback"] == 1
+    monkeypatch.setattr(sql_repository.session, "execute", original_execute)
+    assert len(sql_repository.list_vendors(tenant_id)) == 1
+    assert sql_repository.get_user_by_email("rollback-owner@example.com") is not None
 
 
 def test_sql_repository_full_pipeline_persists_runtime_outputs(sql_repository):

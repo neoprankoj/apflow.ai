@@ -31,7 +31,7 @@ def reset_demo_data(
         raise HTTPException(status_code=403, detail="Demo reset is disabled")
 
     tenant_id = context.tenant.id
-    repository.clear_demo_operational_data(tenant_id)
+    cleared = repository.clear_demo_operational_data(tenant_id)
     repository.ensure_phase3_fixtures(tenant_id)
 
     audit_agent.record(
@@ -49,7 +49,9 @@ def reset_demo_data(
         )
     )
     return {
+        "status": "reset",
         "message": "Demo data reset successfully.",
+        "cleared": cleared,
         "tenant_id": tenant_id,
         "tenant_name": context.tenant.name,
         "user_email": context.user.email,

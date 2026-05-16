@@ -46,6 +46,22 @@ from app.core.schemas import (
 from app.db import models as dbm
 
 
+DEMO_OPERATIONAL_CLEANUP_MODELS = (
+    dbm.VendorMessage,
+    dbm.VendorPortalAccess,
+    dbm.HumanReviewTask,
+    dbm.ERPExternalReference,
+    dbm.ERPSyncLog,
+    dbm.WorkflowEvent,
+    dbm.WorkflowState,
+    dbm.NotificationEvent,
+    dbm.ApprovalTask,
+    dbm.InvoiceLineItem,
+    dbm.UploadedInvoiceDocument,
+    dbm.Invoice,
+)
+
+
 class SQLAlchemyAPRepository:
     def __init__(self, session: Session) -> None:
         self.session = session
@@ -793,7 +809,7 @@ class SQLAlchemyAPRepository:
         self.session.commit()
         return self._review_task(row)
 
-    def clear_demo_operational_data(self, tenant_id: UUID) -> None:
+    def clear_demo_operational_data(self, tenant_id: UUID) -> dict[str, int]:
         self.raw_invoices = {
             raw_invoice_id: record
             for raw_invoice_id, record in self.raw_invoices.items()
@@ -804,24 +820,16 @@ class SQLAlchemyAPRepository:
             for extraction_id, record in self.extractions.items()
             if record.tenant_id != tenant_id
         }
-        for model in (
-            dbm.VendorMessage,
-            dbm.VendorPortalAccess,
-            dbm.HumanReviewTask,
-            dbm.ERPExternalReference,
-            dbm.ERPSyncLog,
-            dbm.WorkflowEvent,
-            dbm.WorkflowState,
-            dbm.NotificationEvent,
-            dbm.Notification,
-            dbm.ApprovalFlow,
-            dbm.ApprovalTask,
-            dbm.InvoiceLineItem,
-            dbm.Invoice,
-            dbm.UploadedInvoiceDocument,
-        ):
-            self.session.execute(delete(model).where(model.tenant_id == tenant_id))
-        self.session.commit()
+        cleared: dict[str, int] = {}
+        try:
+            for model in DEMO_OPERATIONAL_CLEANUP_MODELS:
+                result = self.session.execute(delete(model).where(model.tenant_id == tenant_id))
+                cleared[model.__tablename__] = result.rowcount or 0
+            self.session.commit()
+        except Exception:
+            self.session.rollback()
+            raise
+        return cleared
 
     def link_external_vendor_id(self, tenant_id: UUID, vendor_id: UUID, external_id: str) -> None:
         vendor = self.session.get(dbm.Vendor, vendor_id)
