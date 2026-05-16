@@ -538,12 +538,16 @@ class SQLAlchemyAPRepository:
         return self._approval_task_record(row)
 
     def list_approval_tasks(self, tenant_id: UUID) -> list[ApprovalTaskRecord]:
-        rows = self.session.scalars(
-            select(dbm.ApprovalTask)
-            .where(dbm.ApprovalTask.tenant_id == tenant_id)
-            .order_by(dbm.ApprovalTask.created_at, dbm.ApprovalTask.updated_at)
-        ).all()
-        return [self._approval_task_record(row) for row in rows]
+        try:
+            rows = self.session.scalars(
+                select(dbm.ApprovalTask)
+                .where(dbm.ApprovalTask.tenant_id == tenant_id)
+                .order_by(dbm.ApprovalTask.created_at, dbm.ApprovalTask.updated_at)
+            ).all()
+            return [self._approval_task_record(row) for row in rows]
+        except Exception:
+            self.session.rollback()
+            raise
 
     def get_latest_approval_task(self, tenant_id: UUID, invoice_id: UUID) -> ApprovalTaskRecord | None:
         row = self.session.scalar(
@@ -662,8 +666,8 @@ class SQLAlchemyAPRepository:
                 WorkflowState(
                     workflow_id=row.workflow_id,
                     tenant_id=row.tenant_id,
-                    state=row.state,
-                    status=row.status,
+                    state=str(row.state or "unknown"),
+                    status=str(row.status or "unknown"),
                     current_agent=row.current_agent,
                     retry_count=row.retry_count,
                 )
@@ -981,10 +985,10 @@ class SQLAlchemyAPRepository:
             tenant_id=row.tenant_id,
             approval_task_id=row.id,
             invoice_id=row.invoice_id,
-            route=ApprovalRoute(row.route),
-            assigned_role=row.assigned_role,
-            status=ApprovalTaskStatus(row.status),
-            reason=row.reason,
+            route=_safe_enum_value(ApprovalRoute, row.route),
+            assigned_role=row.assigned_role or "unassigned",
+            status=_safe_enum_value(ApprovalTaskStatus, row.status),
+            reason=row.reason or "",
         )
 
     def _notification_record(self, row: dbm.NotificationEvent) -> NotificationEventRecord:
@@ -1079,3 +1083,12 @@ class SQLAlchemyAPRepository:
             uploaded_by=row.uploaded_by,
             created_at=row.created_at,
         )
+
+
+def _safe_enum_value(enum_type, value: str | None) -> str:
+    if value is None:
+        return "unknown"
+    try:
+        return str(enum_type(value))
+    except ValueError:
+        return str(value)

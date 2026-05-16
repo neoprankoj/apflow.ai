@@ -1,8 +1,10 @@
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
+from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, inspect
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from app.agents.data.invoice_extraction_agent import InvoiceExtractionAgent
 from app.agents.data.invoice_ingestion_agent import InvoiceIngestionAgent
@@ -17,6 +19,8 @@ from app.agents.logic.supplier_identity_agent import SupplierIdentityAgent
 from app.agents.observability.error_handler_agent import ErrorHandlerAgent
 from app.agents.observability.monitoring_agent import MonitoringAgent
 from app.agents.observability.audit_logging_agent import AuditLoggingAgent
+from app.api import dependencies
+from app.core.config import settings
 from app.core.schemas import (
     ActorType,
     ApprovalRoute,
@@ -47,13 +51,20 @@ from app.core.schemas import (
     WorkflowState,
     WorkflowStatus,
 )
+from app.db import models as dbm
 from app.db.models import Base
 from app.db.repositories import DEMO_OPERATIONAL_CLEANUP_MODELS, SQLAlchemyAPRepository
+from main import create_app
 
 
 @pytest.fixture
 def sql_repository():
-    engine = create_engine("sqlite+pysqlite:///:memory:", future=True)
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        future=True,
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
     Base.metadata.create_all(engine)
     session = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)()
     return SQLAlchemyAPRepository(session)
@@ -148,6 +159,29 @@ def test_sql_repository_persists_approval_tasks(sql_repository):
 
     assert sql_repository.list_approval_tasks(tenant_id)[0] == task
     assert sql_repository.list_approval_tasks(uuid4()) == []
+
+
+def test_sql_repository_approval_tasks_round_trip_mixed_historical_statuses(sql_repository):
+    tenant = sql_repository.create_tenant("Approval Tenant", "approval-tenant")
+    invoice = _store_test_invoice(sql_repository, tenant.id, "INV-APPROVAL-HISTORY")
+    statuses = ["approved", "rejected", "on_hold", "completed", "blocked", "unknown_legacy_status"]
+    for index, status in enumerate(statuses):
+        sql_repository.session.add(
+            dbm.ApprovalTask(
+                tenant_id=tenant.id,
+                invoice_id=invoice.invoice_id,
+                route="unknown_legacy_route" if index == len(statuses) - 1 else "blocked",
+                assigned_role="ap_admin",
+                status=status,
+                reason=f"historical status {status}",
+            )
+        )
+    sql_repository.session.commit()
+
+    tasks = sql_repository.list_approval_tasks(tenant.id)
+
+    assert [task.status for task in tasks] == statuses
+    assert tasks[-1].route == "unknown_legacy_route"
 
 
 def test_sql_repository_persists_notification_events(sql_repository):
@@ -349,6 +383,44 @@ def test_sql_repository_workflow_states_round_trip_business_statuses(sql_reposit
     assert states[-1].status == status
 
 
+def test_sql_repository_workflow_states_round_trip_mixed_historical_statuses(sql_repository):
+    tenant = sql_repository.create_tenant("Mixed Workflow Tenant", "mixed-workflow-tenant")
+    statuses = [
+        "approval_ready",
+        "review_required",
+        "blocked",
+        "approved",
+        "rejected",
+        "on_hold",
+        "exported",
+        "completed",
+        "pending",
+        "failed",
+        "needs_review",
+        "missing_po",
+        "likely_duplicate",
+        "critical",
+        "high",
+        "low",
+        "clear",
+        "unknown_legacy_status",
+    ]
+    for status in statuses:
+        sql_repository.session.add(
+            dbm.WorkflowState(
+                tenant_id=tenant.id,
+                workflow_id=uuid4(),
+                state=status,
+                status=status,
+            )
+        )
+    sql_repository.session.commit()
+
+    states = sql_repository.list_workflow_states(tenant.id)
+
+    assert [state.status for state in states] == statuses
+
+
 def test_sql_repository_rolls_back_after_failed_workflow_read(sql_repository, monkeypatch):
     tenant = sql_repository.create_tenant("Rollback Tenant", "rollback-tenant")
     user = sql_repository.create_user("rollback@example.com", "Rollback User", "hash")
@@ -376,6 +448,96 @@ def test_sql_repository_rolls_back_after_failed_workflow_read(sql_repository, mo
 
     assert rollback_calls == 1
     assert sql_repository.list_users_for_tenant(tenant.id)[0][0].email == "rollback@example.com"
+
+
+def test_sql_repository_rolls_back_after_failed_approval_task_read(sql_repository, monkeypatch):
+    tenant = sql_repository.create_tenant("Approval Rollback Tenant", "approval-rollback-tenant")
+    user = sql_repository.create_user("approval-rollback@example.com", "Approval Rollback User", "hash")
+    sql_repository.create_membership(tenant.id, user.id, UserRole.OWNER)
+    original_scalars = sql_repository.session.scalars
+    rollback_calls = 0
+
+    def failing_scalars(*args, **kwargs):
+        raise RuntimeError("simulated approval task read failure")
+
+    original_rollback = sql_repository.session.rollback
+
+    def tracking_rollback():
+        nonlocal rollback_calls
+        rollback_calls += 1
+        return original_rollback()
+
+    monkeypatch.setattr(sql_repository.session, "scalars", failing_scalars)
+    monkeypatch.setattr(sql_repository.session, "rollback", tracking_rollback)
+
+    with pytest.raises(RuntimeError, match="simulated approval task read failure"):
+        sql_repository.list_approval_tasks(tenant.id)
+
+    monkeypatch.setattr(sql_repository.session, "scalars", original_scalars)
+
+    assert rollback_calls == 1
+    assert sql_repository.list_users_for_tenant(tenant.id)[0][0].email == "approval-rollback@example.com"
+
+
+def test_sql_backed_list_endpoints_handle_mixed_historical_rows(sql_repository):
+    previous_auth_enabled = settings.auth_enabled
+    previous_demo_mode = settings.demo_mode
+    tenant_id = UUID(settings.demo_tenant_id)
+    settings.auth_enabled = False
+    settings.demo_mode = True
+    dependencies.get_auth_service.cache_clear()
+    try:
+        sql_repository.create_tenant("Demo Tenant", "demo", tenant_id=tenant_id)
+        user = sql_repository.create_user("demo-list@example.com", "Demo List User", "hash")
+        sql_repository.create_membership(tenant_id, user.id, UserRole.OWNER)
+        invoice = _store_test_invoice(sql_repository, tenant_id, "INV-LIST-HISTORY")
+        sql_repository.session.add_all(
+            [
+                dbm.ApprovalTask(
+                    tenant_id=tenant_id,
+                    invoice_id=invoice.invoice_id,
+                    route="blocked",
+                    assigned_role="ap_admin",
+                    status="on_hold",
+                    reason="review hold",
+                ),
+                dbm.ApprovalTask(
+                    tenant_id=tenant_id,
+                    invoice_id=invoice.invoice_id,
+                    route="unknown_legacy_route",
+                    assigned_role="ap_admin",
+                    status="unknown_legacy_status",
+                    reason="legacy row",
+                ),
+                dbm.WorkflowState(
+                    tenant_id=tenant_id,
+                    workflow_id=uuid4(),
+                    state="likely_duplicate",
+                    status="critical",
+                ),
+                dbm.WorkflowState(
+                    tenant_id=tenant_id,
+                    workflow_id=uuid4(),
+                    state="unknown_legacy_state",
+                    status="unknown_legacy_status",
+                ),
+            ]
+        )
+        sql_repository.session.commit()
+        app = create_app()
+        app.dependency_overrides[dependencies.get_repository] = lambda: sql_repository
+        with TestClient(app) as client:
+            query = f"?tenant_id={tenant_id}"
+            assert client.get(f"/invoices{query}").status_code == 200
+            assert client.get(f"/invoices/approval-tasks{query}").status_code == 200
+            assert client.get(f"/invoices/workflows{query}").status_code == 200
+            assert client.get(f"/invoices/notification-events{query}").status_code == 200
+            assert client.get(f"/review/tasks{query}").status_code == 200
+            assert client.get("/admin/users").status_code == 200
+    finally:
+        settings.auth_enabled = previous_auth_enabled
+        settings.demo_mode = previous_demo_mode
+        dependencies.get_auth_service.cache_clear()
 
 
 def test_sql_repository_demo_cleanup_rolls_back_on_failure(sql_repository, monkeypatch):
@@ -550,3 +712,20 @@ def test_sql_repository_full_pipeline_persists_runtime_outputs(sql_repository):
     assert len(sql_repository.list_approval_tasks(tenant_id)) == 1
     assert len(sql_repository.list_notification_events(tenant_id)) == 1
     assert len(sql_repository.list_audit_events(tenant_id)) >= 8
+
+
+def _store_test_invoice(sql_repository, tenant_id, invoice_number):
+    output = InvoiceNormalizationOutput(
+        tenant_id=tenant_id,
+        canonical_invoice=CanonicalInvoice(
+            invoice_number=invoice_number,
+            supplier_name="Historic Vendor",
+            invoice_date="2026-05-16",
+            currency="USD",
+            subtotal=100,
+            tax_total=17,
+            grand_total=117,
+        ),
+    )
+    sql_repository.store_invoice(output)
+    return output
