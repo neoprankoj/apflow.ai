@@ -181,7 +181,59 @@ def test_corrected_review_task_allows_uploaded_document_processing():
     assert correction.status_code == 200
     assert correction.json()["status"] == "corrected"
     assert second_process.status_code == 200
-    assert second_process.json()["workflow_status"] == "approval_ready"
+    body = second_process.json()
+    pipeline = body["pipeline_result"]
+    assert body["workflow_status"] == "approval_ready"
+    assert body["review_status"] == "not_required"
+    assert pipeline["review_tasks"] == []
+    assert pipeline["validation_result"]["validation_status"] == "passed"
+    assert pipeline["duplicate_result"]["status"] == "clear"
+    assert pipeline["po_match_result"]["match_status"] == "matched"
+    assert pipeline["fraud_risk_result"]["risk_level"] == "low"
+    assert pipeline["approval_result"]["route"] == "manager_approval"
+    assert pipeline["erp_export_ready"] is True
+    assert pipeline["ocr_result"]["raw_response"]["corrected_fields_applied"] is True
+    assert pipeline["ocr_result"]["raw_response"]["corrected_field_count"] == 1
+
+
+def test_corrected_review_task_with_missing_po_continues_full_pipeline():
+    client = TestClient(create_app())
+    tenant_id = str(uuid4())
+    content = (
+        "invoice_number=INV-UPLOAD-NO-PO supplier_name=Northstar supplier_tax_id=TAX-12345 "
+        "subtotal=1000 tax_total=170 grand_total=1170 currency=USD "
+        "invoice_date=2026-05-05 confidence_supplier_name=0.4"
+    ).encode()
+    uploaded = _upload(client, tenant_id, content).json()
+    first_process = client.post(
+        f"/documents/invoices/{uploaded['document']['document_id']}/process",
+        json={"tenant_id": tenant_id},
+    ).json()
+    task_id = first_process["pipeline_result"]["review_tasks"][0]["task_id"]
+
+    correction = client.post(
+        f"/review/tasks/{task_id}/corrections",
+        json={
+            "tenant_id": tenant_id,
+            "corrections": {"supplier_name": "Northstar"},
+            "reviewer_id": "test-reviewer",
+        },
+    )
+    second_process = client.post(
+        f"/documents/invoices/{uploaded['document']['document_id']}/process",
+        json={"tenant_id": tenant_id},
+    )
+
+    assert correction.status_code == 200
+    assert second_process.status_code == 200
+    body = second_process.json()
+    pipeline = body["pipeline_result"]
+    assert body["workflow_status"] == "approval_ready"
+    assert body["review_status"] == "not_required"
+    assert pipeline["po_match_result"]["match_status"] == "missing_po"
+    assert pipeline["fraud_risk_result"] is not None
+    assert pipeline["approval_result"]["route"] == "ap_review"
+    assert pipeline["erp_export_ready"] is True
 
 
 def test_tenant_cannot_process_another_tenant_uploaded_document():
