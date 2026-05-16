@@ -2,9 +2,10 @@ from functools import lru_cache
 from uuid import UUID
 
 import jwt
-from fastapi import Header, HTTPException, Query
+from fastapi import Depends, Header, HTTPException, Query
+from fastapi.params import Depends as DependsMarker
+from sqlalchemy.orm import Session
 
-from app.core.auth import AuthService
 from app.agents.data.erp_connector_agent import ERPConnectorAgent
 from app.agents.data.invoice_extraction_agent import InvoiceExtractionAgent
 from app.agents.data.invoice_ingestion_agent import InvoiceIngestionAgent
@@ -24,20 +25,14 @@ from app.agents.observability.audit_logging_agent import AuditLoggingAgent
 from app.agents.observability.error_handler_agent import ErrorHandlerAgent
 from app.agents.observability.monitoring_agent import MonitoringAgent
 from app.agents.orchestration.ap_workflow_orchestrator_agent import APWorkflowOrchestratorAgent
+from app.core.auth import AuthService
 from app.core.config import settings
 from app.core.repositories import InMemoryAPRepository
 from app.core.schemas import CurrentUserContext, MetricEventInput, Permission
 from app.db.repositories import SQLAlchemyAPRepository
-from app.db.session import SessionLocal
+from app.db.session import SessionLocal, get_db_session
 from app.integrations.ocr.factory import OCRProviderFactory
 from app.integrations.storage.mock import FileSystemStorageAdapter, InMemoryStorageAdapter
-
-
-@lru_cache
-def get_repository():
-    if settings.use_in_memory_repositories:
-        return InMemoryAPRepository()
-    return SQLAlchemyAPRepository(SessionLocal())
 
 
 @lru_cache
@@ -45,9 +40,16 @@ def get_in_memory_repository() -> InMemoryAPRepository:
     return InMemoryAPRepository()
 
 
-@lru_cache
-def get_audit_agent() -> AuditLoggingAgent:
-    return AuditLoggingAgent(repository=get_repository())
+def get_repository(session: Session = Depends(get_db_session)):
+    if settings.use_in_memory_repositories:
+        return get_in_memory_repository()
+    if isinstance(session, DependsMarker):
+        return SQLAlchemyAPRepository(SessionLocal())
+    return SQLAlchemyAPRepository(session)
+
+
+def get_audit_agent(repository=Depends(get_repository)) -> AuditLoggingAgent:
+    return AuditLoggingAgent(repository=repository)
 
 
 @lru_cache
@@ -55,53 +57,72 @@ def get_monitoring_agent() -> MonitoringAgent:
     return MonitoringAgent()
 
 
-@lru_cache
-def get_error_handler_agent() -> ErrorHandlerAgent:
-    return ErrorHandlerAgent(audit_agent=get_audit_agent(), monitoring_agent=get_monitoring_agent())
+def get_error_handler_agent(
+    audit_agent: AuditLoggingAgent = Depends(get_audit_agent),
+    monitoring_agent: MonitoringAgent = Depends(get_monitoring_agent),
+) -> ErrorHandlerAgent:
+    return ErrorHandlerAgent(audit_agent=audit_agent, monitoring_agent=monitoring_agent)
 
 
-@lru_cache
-def get_tenant_security_agent() -> TenantSecurityAgent:
-    return TenantSecurityAgent(audit_agent=get_audit_agent())
+def get_tenant_security_agent(
+    audit_agent: AuditLoggingAgent = Depends(get_audit_agent),
+) -> TenantSecurityAgent:
+    return TenantSecurityAgent(audit_agent=audit_agent)
 
 
-@lru_cache
-def get_orchestrator_agent() -> APWorkflowOrchestratorAgent:
+def get_orchestrator_agent(
+    repository=Depends(get_repository),
+    audit_agent: AuditLoggingAgent = Depends(get_audit_agent),
+    monitoring_agent: MonitoringAgent = Depends(get_monitoring_agent),
+    error_handler_agent: ErrorHandlerAgent = Depends(get_error_handler_agent),
+) -> APWorkflowOrchestratorAgent:
     return APWorkflowOrchestratorAgent(
-        audit_agent=get_audit_agent(),
-        monitoring_agent=get_monitoring_agent(),
-        error_handler_agent=get_error_handler_agent(),
-        repository=get_repository(),
+        audit_agent=audit_agent,
+        monitoring_agent=monitoring_agent,
+        error_handler_agent=error_handler_agent,
+        repository=repository,
     )
 
 
-@lru_cache
-def get_invoice_ingestion_agent() -> InvoiceIngestionAgent:
+def get_invoice_ingestion_agent(
+    repository=Depends(get_repository),
+    audit_agent: AuditLoggingAgent = Depends(get_audit_agent),
+    monitoring_agent: MonitoringAgent = Depends(get_monitoring_agent),
+    error_handler_agent: ErrorHandlerAgent = Depends(get_error_handler_agent),
+) -> InvoiceIngestionAgent:
     return InvoiceIngestionAgent(
-        repository=get_repository(),
-        audit_agent=get_audit_agent(),
-        monitoring_agent=get_monitoring_agent(),
-        error_handler_agent=get_error_handler_agent(),
+        repository=repository,
+        audit_agent=audit_agent,
+        monitoring_agent=monitoring_agent,
+        error_handler_agent=error_handler_agent,
     )
 
 
-@lru_cache
-def get_invoice_extraction_agent() -> InvoiceExtractionAgent:
+def get_invoice_extraction_agent(
+    repository=Depends(get_repository),
+    audit_agent: AuditLoggingAgent = Depends(get_audit_agent),
+    monitoring_agent: MonitoringAgent = Depends(get_monitoring_agent),
+    error_handler_agent: ErrorHandlerAgent = Depends(get_error_handler_agent),
+) -> InvoiceExtractionAgent:
     return InvoiceExtractionAgent(
-        repository=get_repository(),
-        audit_agent=get_audit_agent(),
-        monitoring_agent=get_monitoring_agent(),
-        error_handler_agent=get_error_handler_agent(),
+        repository=repository,
+        audit_agent=audit_agent,
+        monitoring_agent=monitoring_agent,
+        error_handler_agent=error_handler_agent,
     )
 
 
-@lru_cache
-def get_human_review_agent() -> HumanReviewAgent:
+def get_human_review_agent(
+    repository=Depends(get_repository),
+    audit_agent: AuditLoggingAgent = Depends(get_audit_agent),
+    monitoring_agent: MonitoringAgent = Depends(get_monitoring_agent),
+    error_handler_agent: ErrorHandlerAgent = Depends(get_error_handler_agent),
+) -> HumanReviewAgent:
     return HumanReviewAgent(
-        repository=get_repository(),
-        audit_agent=get_audit_agent(),
-        monitoring_agent=get_monitoring_agent(),
-        error_handler_agent=get_error_handler_agent(),
+        repository=repository,
+        audit_agent=audit_agent,
+        monitoring_agent=monitoring_agent,
+        error_handler_agent=error_handler_agent,
     )
 
 
@@ -117,124 +138,166 @@ def get_storage_adapter():
     return InMemoryStorageAdapter()
 
 
-@lru_cache
-def get_invoice_normalization_agent() -> InvoiceNormalizationAgent:
+def get_invoice_normalization_agent(
+    repository=Depends(get_repository),
+    audit_agent: AuditLoggingAgent = Depends(get_audit_agent),
+    monitoring_agent: MonitoringAgent = Depends(get_monitoring_agent),
+    error_handler_agent: ErrorHandlerAgent = Depends(get_error_handler_agent),
+) -> InvoiceNormalizationAgent:
     return InvoiceNormalizationAgent(
-        repository=get_repository(),
-        audit_agent=get_audit_agent(),
-        monitoring_agent=get_monitoring_agent(),
-        error_handler_agent=get_error_handler_agent(),
+        repository=repository,
+        audit_agent=audit_agent,
+        monitoring_agent=monitoring_agent,
+        error_handler_agent=error_handler_agent,
     )
 
 
-@lru_cache
-def get_supplier_identity_agent() -> SupplierIdentityAgent:
+def get_supplier_identity_agent(
+    repository=Depends(get_repository),
+    audit_agent: AuditLoggingAgent = Depends(get_audit_agent),
+    monitoring_agent: MonitoringAgent = Depends(get_monitoring_agent),
+    error_handler_agent: ErrorHandlerAgent = Depends(get_error_handler_agent),
+) -> SupplierIdentityAgent:
     return SupplierIdentityAgent(
-        repository=get_repository(),
-        audit_agent=get_audit_agent(),
-        monitoring_agent=get_monitoring_agent(),
-        error_handler_agent=get_error_handler_agent(),
+        repository=repository,
+        audit_agent=audit_agent,
+        monitoring_agent=monitoring_agent,
+        error_handler_agent=error_handler_agent,
     )
 
 
-@lru_cache
-def get_invoice_validation_agent() -> InvoiceValidationAgent:
+def get_invoice_validation_agent(
+    audit_agent: AuditLoggingAgent = Depends(get_audit_agent),
+    monitoring_agent: MonitoringAgent = Depends(get_monitoring_agent),
+    error_handler_agent: ErrorHandlerAgent = Depends(get_error_handler_agent),
+) -> InvoiceValidationAgent:
     return InvoiceValidationAgent(
-        audit_agent=get_audit_agent(),
-        monitoring_agent=get_monitoring_agent(),
-        error_handler_agent=get_error_handler_agent(),
+        audit_agent=audit_agent,
+        monitoring_agent=monitoring_agent,
+        error_handler_agent=error_handler_agent,
     )
 
 
-@lru_cache
-def get_duplicate_detection_agent() -> DuplicateDetectionAgent:
+def get_duplicate_detection_agent(
+    repository=Depends(get_repository),
+    audit_agent: AuditLoggingAgent = Depends(get_audit_agent),
+    monitoring_agent: MonitoringAgent = Depends(get_monitoring_agent),
+    error_handler_agent: ErrorHandlerAgent = Depends(get_error_handler_agent),
+) -> DuplicateDetectionAgent:
     return DuplicateDetectionAgent(
-        repository=get_repository(),
-        audit_agent=get_audit_agent(),
-        monitoring_agent=get_monitoring_agent(),
-        error_handler_agent=get_error_handler_agent(),
+        repository=repository,
+        audit_agent=audit_agent,
+        monitoring_agent=monitoring_agent,
+        error_handler_agent=error_handler_agent,
     )
 
 
-@lru_cache
-def get_purchase_order_matching_agent() -> PurchaseOrderMatchingAgent:
+def get_purchase_order_matching_agent(
+    repository=Depends(get_repository),
+    audit_agent: AuditLoggingAgent = Depends(get_audit_agent),
+    monitoring_agent: MonitoringAgent = Depends(get_monitoring_agent),
+    error_handler_agent: ErrorHandlerAgent = Depends(get_error_handler_agent),
+) -> PurchaseOrderMatchingAgent:
     return PurchaseOrderMatchingAgent(
-        repository=get_repository(),
-        audit_agent=get_audit_agent(),
-        monitoring_agent=get_monitoring_agent(),
-        error_handler_agent=get_error_handler_agent(),
+        repository=repository,
+        audit_agent=audit_agent,
+        monitoring_agent=monitoring_agent,
+        error_handler_agent=error_handler_agent,
     )
 
 
-@lru_cache
-def get_fraud_risk_scoring_agent() -> FraudRiskScoringAgent:
+def get_fraud_risk_scoring_agent(
+    audit_agent: AuditLoggingAgent = Depends(get_audit_agent),
+    monitoring_agent: MonitoringAgent = Depends(get_monitoring_agent),
+    error_handler_agent: ErrorHandlerAgent = Depends(get_error_handler_agent),
+) -> FraudRiskScoringAgent:
     return FraudRiskScoringAgent(
-        audit_agent=get_audit_agent(),
-        monitoring_agent=get_monitoring_agent(),
-        error_handler_agent=get_error_handler_agent(),
+        audit_agent=audit_agent,
+        monitoring_agent=monitoring_agent,
+        error_handler_agent=error_handler_agent,
     )
 
 
-@lru_cache
-def get_approval_routing_agent() -> ApprovalRoutingAgent:
+def get_approval_routing_agent(
+    repository=Depends(get_repository),
+    audit_agent: AuditLoggingAgent = Depends(get_audit_agent),
+    monitoring_agent: MonitoringAgent = Depends(get_monitoring_agent),
+    error_handler_agent: ErrorHandlerAgent = Depends(get_error_handler_agent),
+) -> ApprovalRoutingAgent:
     return ApprovalRoutingAgent(
-        repository=get_repository(),
-        audit_agent=get_audit_agent(),
-        monitoring_agent=get_monitoring_agent(),
-        error_handler_agent=get_error_handler_agent(),
+        repository=repository,
+        audit_agent=audit_agent,
+        monitoring_agent=monitoring_agent,
+        error_handler_agent=error_handler_agent,
     )
 
 
-@lru_cache
-def get_notification_agent() -> NotificationAgent:
+def get_notification_agent(
+    repository=Depends(get_repository),
+    audit_agent: AuditLoggingAgent = Depends(get_audit_agent),
+    monitoring_agent: MonitoringAgent = Depends(get_monitoring_agent),
+    error_handler_agent: ErrorHandlerAgent = Depends(get_error_handler_agent),
+) -> NotificationAgent:
     return NotificationAgent(
-        repository=get_repository(),
-        audit_agent=get_audit_agent(),
-        monitoring_agent=get_monitoring_agent(),
-        error_handler_agent=get_error_handler_agent(),
+        repository=repository,
+        audit_agent=audit_agent,
+        monitoring_agent=monitoring_agent,
+        error_handler_agent=error_handler_agent,
     )
 
 
-@lru_cache
-def get_vendor_communication_agent() -> VendorCommunicationAgent:
+def get_vendor_communication_agent(
+    repository=Depends(get_repository),
+    audit_agent: AuditLoggingAgent = Depends(get_audit_agent),
+    monitoring_agent: MonitoringAgent = Depends(get_monitoring_agent),
+    error_handler_agent: ErrorHandlerAgent = Depends(get_error_handler_agent),
+) -> VendorCommunicationAgent:
     return VendorCommunicationAgent(
-        repository=get_repository(),
-        audit_agent=get_audit_agent(),
-        monitoring_agent=get_monitoring_agent(),
-        error_handler_agent=get_error_handler_agent(),
+        repository=repository,
+        audit_agent=audit_agent,
+        monitoring_agent=monitoring_agent,
+        error_handler_agent=error_handler_agent,
     )
 
 
-@lru_cache
-def get_payment_status_chatbot_agent() -> PaymentStatusChatbotAgent:
+def get_payment_status_chatbot_agent(
+    repository=Depends(get_repository),
+    audit_agent: AuditLoggingAgent = Depends(get_audit_agent),
+    monitoring_agent: MonitoringAgent = Depends(get_monitoring_agent),
+    error_handler_agent: ErrorHandlerAgent = Depends(get_error_handler_agent),
+    vendor_communication_agent: VendorCommunicationAgent = Depends(get_vendor_communication_agent),
+) -> PaymentStatusChatbotAgent:
     return PaymentStatusChatbotAgent(
-        repository=get_repository(),
-        audit_agent=get_audit_agent(),
-        monitoring_agent=get_monitoring_agent(),
-        error_handler_agent=get_error_handler_agent(),
-        vendor_communication_agent=get_vendor_communication_agent(),
+        repository=repository,
+        audit_agent=audit_agent,
+        monitoring_agent=monitoring_agent,
+        error_handler_agent=error_handler_agent,
+        vendor_communication_agent=vendor_communication_agent,
     )
 
 
-@lru_cache
-def get_erp_connector_agent() -> ERPConnectorAgent:
+def get_erp_connector_agent(
+    repository=Depends(get_repository),
+    audit_agent: AuditLoggingAgent = Depends(get_audit_agent),
+    monitoring_agent: MonitoringAgent = Depends(get_monitoring_agent),
+    error_handler_agent: ErrorHandlerAgent = Depends(get_error_handler_agent),
+) -> ERPConnectorAgent:
     return ERPConnectorAgent(
-        repository=get_repository(),
-        audit_agent=get_audit_agent(),
-        monitoring_agent=get_monitoring_agent(),
-        error_handler_agent=get_error_handler_agent(),
+        repository=repository,
+        audit_agent=audit_agent,
+        monitoring_agent=monitoring_agent,
+        error_handler_agent=error_handler_agent,
     )
 
 
-@lru_cache
-def get_auth_service() -> AuthService:
-    return AuthService(repository=get_repository())
+def get_auth_service(repository=Depends(get_repository)) -> AuthService:
+    return AuthService(repository=repository)
 
 
 def get_optional_current_user(
     authorization: str | None = Header(default=None),
+    auth_service: AuthService = Depends(get_auth_service),
 ) -> CurrentUserContext | None:
-    auth_service = get_auth_service()
     if not settings.auth_enabled:
         return auth_service.demo_context() if settings.demo_mode else None
     if authorization is None or not authorization.lower().startswith("bearer "):
@@ -250,9 +313,8 @@ def get_optional_current_user(
 
 
 def get_current_user(
-    authorization: str | None = Header(default=None),
+    context: CurrentUserContext | None = Depends(get_optional_current_user),
 ) -> CurrentUserContext:
-    context = get_optional_current_user(authorization=authorization)
     if context is None:
         raise HTTPException(status_code=401, detail="Missing or invalid authentication")
     return context
@@ -260,13 +322,14 @@ def get_current_user(
 
 def require_permission(permission: Permission):
     async def guarded(
-        authorization: str | None = Header(default=None),
+        context: CurrentUserContext = Depends(get_current_user),
+        auth_service: AuthService = Depends(get_auth_service),
+        monitoring_agent: MonitoringAgent = Depends(get_monitoring_agent),
     ) -> CurrentUserContext:
-        context = get_current_user(authorization=authorization)
         if not settings.auth_enabled:
             return context
-        if not get_auth_service().user_has_permission(context, permission):
-            get_monitoring_agent().record_metric(
+        if not auth_service.user_has_permission(context, permission):
+            monitoring_agent.record_metric(
                 MetricEventInput(
                     tenant_id=context.tenant.id,
                     metric_event="authorization.denied",
@@ -286,15 +349,17 @@ def require_permission(permission: Permission):
 
 def resolve_tenant_id(
     tenant_id: UUID | None = Query(default=None),
-    authorization: str | None = Header(default=None),
+    context: CurrentUserContext | None = Depends(get_optional_current_user),
+    monitoring_agent: MonitoringAgent = Depends(get_monitoring_agent),
 ) -> UUID:
     if not settings.auth_enabled:
         if tenant_id is not None:
             return tenant_id
         return UUID(settings.demo_tenant_id)
-    context = get_current_user(authorization=authorization)
+    if context is None:
+        raise HTTPException(status_code=401, detail="Missing or invalid authentication")
     if tenant_id is not None and tenant_id != context.tenant.id:
-        get_monitoring_agent().record_metric(
+        monitoring_agent.record_metric(
             MetricEventInput(
                 tenant_id=context.tenant.id,
                 metric_event="authorization.tenant_violation",
@@ -304,3 +369,44 @@ def resolve_tenant_id(
         )
         raise HTTPException(status_code=403, detail="Tenant access denied")
     return context.tenant.id
+
+
+def clear_dependency_caches() -> None:
+    for provider in (
+        get_in_memory_repository,
+        get_monitoring_agent,
+        get_ocr_provider_factory,
+        get_storage_adapter,
+    ):
+        provider.cache_clear()
+
+
+def _clear_request_scoped_dependencies() -> None:
+    clear_dependency_caches()
+
+
+# Several tests clear old cached providers between cases. Keep that surface while
+# request-scoped dependencies intentionally no longer hold shared instances.
+get_repository.cache_clear = get_in_memory_repository.cache_clear  # type: ignore[attr-defined]
+for _provider in (
+    get_audit_agent,
+    get_error_handler_agent,
+    get_tenant_security_agent,
+    get_orchestrator_agent,
+    get_invoice_ingestion_agent,
+    get_invoice_extraction_agent,
+    get_human_review_agent,
+    get_invoice_normalization_agent,
+    get_supplier_identity_agent,
+    get_invoice_validation_agent,
+    get_duplicate_detection_agent,
+    get_purchase_order_matching_agent,
+    get_fraud_risk_scoring_agent,
+    get_approval_routing_agent,
+    get_notification_agent,
+    get_vendor_communication_agent,
+    get_payment_status_chatbot_agent,
+    get_erp_connector_agent,
+    get_auth_service,
+):
+    _provider.cache_clear = _clear_request_scoped_dependencies  # type: ignore[attr-defined]
