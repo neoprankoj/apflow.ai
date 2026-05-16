@@ -200,6 +200,11 @@ def process_invoice_document(
         pipeline_result=pipeline,
         review_status=pipeline.get("review_status"),
         workflow_status=pipeline["workflow_status"],
+        corrected_fields_applied=pipeline["corrected_fields_applied"],
+        corrected_field_count=pipeline["corrected_field_count"],
+        unresolved_review_fields=pipeline["unresolved_review_fields"],
+        invoice_created=pipeline["invoice_created"],
+        blocker_reason=pipeline["blocker_reason"],
     )
 
 

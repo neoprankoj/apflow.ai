@@ -391,6 +391,11 @@ class InvoiceProcessFromUploadResult(APFlowModel):
     pipeline_result: dict[str, Any] | None = None
     review_status: HumanReviewStatus | None = None
     workflow_status: str
+    corrected_fields_applied: bool = False
+    corrected_field_count: int = 0
+    unresolved_review_fields: list[str] = Field(default_factory=list)
+    invoice_created: bool = False
+    blocker_reason: str | None = None
 
 
 class InvoiceLineItem(APFlowModel):

@@ -114,12 +114,22 @@ type PipelineResult = {
   confidence_summary?: ConfidenceSummary;
   ocr_result?: OcrResult;
   review_tasks?: ReviewTask[];
+  corrected_fields_applied?: boolean;
+  corrected_field_count?: number;
+  unresolved_review_fields?: string[];
+  invoice_created?: boolean;
+  blocker_reason?: string | null;
 };
 
 type ProcessResult = {
   workflow_status: string;
   review_status: string;
   pipeline_result?: PipelineResult;
+  corrected_fields_applied?: boolean;
+  corrected_field_count?: number;
+  unresolved_review_fields?: string[];
+  invoice_created?: boolean;
+  blocker_reason?: string | null;
 };
 
 type ERPSyncResult = {
@@ -222,6 +232,8 @@ export function InvoiceUploadPanel({
     ])
   );
   const erpExportReady = Boolean(pipeline?.erp_export_ready);
+  const invoiceCreated = processResult?.invoice_created ?? pipeline?.invoice_created ?? Boolean(invoiceId);
+  const blockerReason = processResult?.blocker_reason ?? pipeline?.blocker_reason;
   const selectedFileName = useMemo(() => file?.name ?? "No file selected", [file]);
   const isSignedIn = authStatus === "authenticated" && Boolean(accessToken && tenantId);
   const signInRequired = !isSignedIn;
@@ -728,6 +740,7 @@ export function InvoiceUploadPanel({
                 <div className="space-y-1 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
                   <p>Invoice requires human review before approval. Review required is a safe workflow outcome.</p>
                   <p>ERP export is disabled until review is corrected and invoice is approval-ready.</p>
+                  {blockerReason ? <p>{blockerReason}</p> : null}
                 </div>
               ) : null}
               <div className="grid gap-3 text-sm sm:grid-cols-3 xl:grid-cols-4">
@@ -744,6 +757,7 @@ export function InvoiceUploadPanel({
                 <Metric label="Approval" value={pipeline?.approval_result?.route.replaceAll("_", " ") ?? "n/a"} />
                 <Metric label="ERP ready" value={erpExportReady ? "yes" : "no"} />
                 <Metric label="Review fields" value={reviewRequiredFields.length ? reviewRequiredFields.join(", ") : "none"} />
+                <Metric label="Invoice created" value={invoiceCreated ? "yes" : "no"} />
               </div>
             </>
           ) : (
@@ -924,7 +938,7 @@ export function InvoiceUploadPanel({
                   ? "Your current role cannot export invoices to ERP."
                   : erpExportReady
                     ? "Invoice is ready for explicit mock ERP export."
-                    : exportReadinessBlocker(pipeline, reviewStatus)}
+                    : exportReadinessBlocker(pipeline, reviewStatus, blockerReason)}
               </div>
             )}
             {erpLogs.length ? (
@@ -972,8 +986,10 @@ export function InvoiceUploadPanel({
                   ? "Sign in before preparing a vendor-safe preview."
                   : invoiceId
                     ? "Vendor-safe preview is available after processing this invoice."
-                    : pipeline
-                      ? "This process result did not create an invoice record to preview."
+                    : blockerReason
+                      ? blockerReason
+                      : pipeline
+                        ? "This process result did not create an invoice record to preview."
                       : "Process an invoice, then preview the restricted vendor view."}
               </div>
             )}
@@ -1094,7 +1110,11 @@ function buildTimeline(input: {
   const validationStatus = pipeline?.validation_result?.validation_status;
   const duplicateStatus = pipeline?.duplicate_result?.status;
   const approvalRoute = pipeline?.approval_result?.route;
-  const exportBlocker = exportReadinessBlocker(pipeline, reviewStatus);
+  const exportBlocker = exportReadinessBlocker(
+    pipeline,
+    reviewStatus,
+    input.processResult?.blocker_reason ?? pipeline?.blocker_reason
+  );
 
   return [
     {
@@ -1185,8 +1205,10 @@ function buildTimeline(input: {
 
 function exportReadinessBlocker(
   pipeline: ProcessResult["pipeline_result"] | undefined,
-  reviewStatus: string | undefined
+  reviewStatus: string | undefined,
+  blockerReason?: string | null
 ) {
+  if (blockerReason) return blockerReason;
   if (reviewStatus === "review_required") return "Human review must be resolved before ERP export.";
   if (!pipeline) return "Process an invoice to determine export readiness.";
   if (pipeline.approval_result?.route === "blocked") return "Approval policy blocked this invoice.";
