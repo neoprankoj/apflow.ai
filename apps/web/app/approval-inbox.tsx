@@ -1,9 +1,13 @@
 "use client";
 
-import { ExternalLink, Send } from "lucide-react";
+import { CalendarDays, ExternalLink, Send } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { Button } from "../components/ui/button";
+import { Card, CardContent, CardHeader } from "../components/ui/card";
+import { EmptyState } from "../components/ui/empty-state";
+import { LoadingSkeleton } from "../components/ui/loading-skeleton";
 import { StatusBadge } from "../components/ui/status-badge";
+import { cn } from "../lib/utils";
 import { apiFetch } from "./frontend-api";
 
 type InvoiceRecord = {
@@ -14,6 +18,7 @@ type InvoiceRecord = {
     grand_total: number;
     currency: string;
     po_number?: string | null;
+    due_date?: string | null;
   };
 };
 
@@ -81,6 +86,7 @@ type Props = {
   notifications: NotificationEvent[];
   canApproveInvoice: boolean;
   canExportErp: boolean;
+  isLoading?: boolean;
   onRefresh: () => Promise<void> | void;
 };
 
@@ -93,6 +99,7 @@ export function ApprovalInbox({
   notifications,
   canApproveInvoice,
   canExportErp,
+  isLoading = false,
   onRefresh
 }: Props) {
   const [filter, setFilter] = useState<Filter>("all");
@@ -140,6 +147,7 @@ export function ApprovalInbox({
 
   async function decideApproval(action: "approve" | "reject" | "hold") {
     if (!selectedItem || !apiBaseUrl || !tenantId || !accessToken || !canApproveInvoice) return;
+    if (action === "reject" && !window.confirm("Reject this invoice? This keeps it out of ERP export.")) return;
     setActiveAction(action);
     setError(null);
     setApprovalMessage(null);
@@ -158,9 +166,7 @@ export function ApprovalInbox({
       await onRefresh();
       await loadVendorPreview(selectedItem.invoice.invoice_id);
       setApprovalMessage(
-        `Approval decision saved: ${result.approval_status.replaceAll("_", " ")}. ${
-          result.blocker_reason ?? ""
-        }`.trim()
+        `Approval decision saved: ${humanize(result.approval_status)}. ${result.blocker_reason ?? ""}`.trim()
       );
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Approval decision failed.");
@@ -214,230 +220,362 @@ export function ApprovalInbox({
   }
 
   return (
-    <section className="scroll-mt-6 space-y-3" id="approval-inbox">
+    <section className="scroll-mt-6 space-y-4" id="approval-inbox">
       <div>
         <h2 className="text-lg font-semibold">Approval Inbox</h2>
-        <p className="text-sm text-muted">Review tenant invoices that need AP attention without using the upload flow.</p>
+        <p className="text-sm text-muted">Review, decide, and export invoices that need AP attention.</p>
       </div>
 
-      <div className="rounded-md border border-border bg-white">
-        <div className="flex flex-wrap gap-2 border-b border-border px-4 py-3">
-          {[
-            ["all", "All"],
-            ["needs_action", "Needs action"],
-            ["blocked", "Blocked"],
-            ["on_hold", "On hold"],
-            ["rejected", "Rejected"],
-            ["approval_ready", "Approval ready"],
-            ["high_risk", "High risk"],
-            ["missing_po", "Missing PO"]
-          ].map(([value, label]) => (
-            <button
-              className={`rounded-md border px-3 py-1.5 text-sm ${
-                filter === value ? "border-black bg-black text-white" : "border-border"
-              }`}
-              key={value}
-              onClick={() => setFilter(value as Filter)}
-              type="button"
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+      <Card>
+        <CardHeader className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+          <div>
+            <p className="text-sm font-medium">Invoice review queue</p>
+            <p className="mt-1 text-sm text-muted">{filteredItems.length} invoices visible</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {[
+              ["all", "All"],
+              ["needs_action", "Needs action"],
+              ["blocked", "Blocked"],
+              ["on_hold", "On hold"],
+              ["rejected", "Rejected"],
+              ["approval_ready", "Approval ready"],
+              ["high_risk", "High risk"],
+              ["missing_po", "Missing PO"]
+            ].map(([value, label]) => (
+              <Button
+                className={filter === value ? "border-primary bg-blue-50 text-primary" : ""}
+                key={value}
+                onClick={() => setFilter(value as Filter)}
+                size="sm"
+                variant="secondary"
+              >
+                {label}
+              </Button>
+            ))}
+          </div>
+        </CardHeader>
 
-        <div className="grid lg:grid-cols-[minmax(320px,420px)_minmax(0,1fr)] xl:grid-cols-[minmax(360px,420px)_minmax(520px,1fr)]">
-          <div className="divide-y divide-border border-b border-border lg:border-b-0 lg:border-r">
-            {filteredItems.length ? (
-              filteredItems.map((item) => (
-                <button
-                  className={`grid w-full gap-3 px-4 py-3 text-left text-sm hover:bg-[hsl(var(--background))] sm:grid-cols-[150px_1fr_120px_120px] ${
-                    selectedItem?.invoice.invoice_id === item.invoice.invoice_id ? "bg-[hsl(var(--background))]" : ""
-                  }`}
-                  key={item.invoice.invoice_id}
-                  onClick={() => setSelectedInvoiceId(item.invoice.invoice_id)}
-                  type="button"
-                >
-                  <span>
-                    <span className="block font-medium">{item.invoice.canonical_invoice.invoice_number}</span>
-                    <span className="block text-xs text-muted">#{shortId(item.invoice.invoice_id)}</span>
-                  </span>
-                  <span>
-                    <span className="block">{item.invoice.canonical_invoice.supplier_name}</span>
-                    <span className="mt-1 flex flex-wrap gap-1">
-                      {item.duplicateLikely ? <StatusBadge status="likely duplicate" /> : null}
-                      {item.poMatchStatus === "missing_po" ? <StatusBadge status="missing PO" /> : null}
-                      {item.riskLevel !== "not recorded" ? <StatusBadge status={item.riskLevel} /> : null}
-                    </span>
-                  </span>
-                  <span>{money(item.invoice.canonical_invoice.grand_total, item.invoice.canonical_invoice.currency)}</span>
-                  <span>
-                    <span className="block font-medium">{humanize(item.workflowStatus)}</span>
-                    <span className="block text-xs text-muted">{humanize(item.approvalStatus)}</span>
-                  </span>
-                </button>
-              ))
+        <div className="grid gap-0 lg:grid-cols-[minmax(320px,380px)_minmax(0,1fr)] xl:grid-cols-[minmax(360px,420px)_minmax(560px,1fr)]">
+          <div className="border-b border-border bg-slate-50/60 lg:border-b-0 lg:border-r">
+            {isLoading ? (
+              <div className="space-y-3 p-4">
+                {[0, 1, 2, 3].map((item) => (
+                  <div className="rounded-lg border border-border bg-surface p-4" key={item}>
+                    <LoadingSkeleton className="h-4 w-32" />
+                    <LoadingSkeleton className="mt-3 h-4 w-44" />
+                    <LoadingSkeleton className="mt-4 h-6 w-24" />
+                  </div>
+                ))}
+              </div>
+            ) : filteredItems.length ? (
+              <div className="space-y-3 p-4">
+                {filteredItems.map((item) => (
+                  <QueueRow
+                    isSelected={selectedItem?.invoice.invoice_id === item.invoice.invoice_id}
+                    item={item}
+                    key={item.invoice.invoice_id}
+                    onClick={() => setSelectedInvoiceId(item.invoice.invoice_id)}
+                  />
+                ))}
+              </div>
             ) : (
-              <div className="px-4 py-8 text-sm text-muted">No invoices match this filter.</div>
+              <div className="p-4">
+                <EmptyState
+                  description="Try another filter or process a new invoice to populate the review queue."
+                  title="No invoices match this filter"
+                />
+              </div>
             )}
           </div>
 
-          <div className="space-y-5 p-4 lg:p-5">
+          <div className="min-w-0 bg-white">
+            {error ? (
+              <div className="mx-5 mt-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+                {error}
+              </div>
+            ) : null}
+
             {selectedItem ? (
-              <>
-                <div className="flex flex-col gap-3 border-b border-border pb-4 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <p className="text-lg font-semibold">{selectedItem.invoice.canonical_invoice.invoice_number}</p>
-                    <p className="text-sm text-muted">{selectedItem.invoice.canonical_invoice.supplier_name}</p>
-                    <p className="mt-2 text-base font-medium">
-                      {money(
-                        selectedItem.invoice.canonical_invoice.grand_total,
-                        selectedItem.invoice.canonical_invoice.currency
+              <div className="space-y-5 p-5">
+                <SelectedInvoiceHeader
+                  erpResult={erpResult}
+                  selectedItem={selectedItem}
+                  vendorPreview={vendorPreview}
+                />
+
+                <div className="grid gap-4 2xl:grid-cols-2">
+                  <SectionCard title="Invoice Summary">
+                    <div className="space-y-3">
+                      <DetailRow label="Invoice number" value={selectedItem.invoice.canonical_invoice.invoice_number} />
+                      <DetailRow label="Vendor" value={selectedItem.invoice.canonical_invoice.supplier_name} />
+                      <DetailRow
+                        label="Amount"
+                        value={money(
+                          selectedItem.invoice.canonical_invoice.grand_total,
+                          selectedItem.invoice.canonical_invoice.currency
+                        )}
+                      />
+                      <DetailRow label="Due date" value={dueDateLabel(selectedItem.dueDate)} />
+                      <DetailRow label="PO match" value={<StatusBadge status={selectedItem.poMatchStatus} />} />
+                      <DetailRow label="Duplicate status" value={<StatusBadge status={selectedItem.duplicateLikely ? "duplicate" : "clear"} />} />
+                    </div>
+                  </SectionCard>
+
+                  <SectionCard title="Review Notes / Audit Context">
+                    <div className="space-y-4">
+                      <div>
+                        <p className="text-xs font-medium uppercase tracking-[0.08em] text-muted">Current blocker</p>
+                        <p className="mt-1 text-sm">{selectedItem.blockerReason}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium uppercase tracking-[0.08em] text-muted">Latest activity</p>
+                        {selectedNotifications.length ? (
+                          <div className="mt-2 space-y-2">
+                            {selectedNotifications.map((event) => (
+                              <div className="rounded-md bg-slate-50 px-3 py-2 text-sm" key={event.notification_id}>
+                                <p className="font-medium">{humanize(event.notification_type)}</p>
+                                <p className="mt-1 text-xs text-muted">
+                                  {event.recipient_role} - {event.status} via {event.channel}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="mt-2 text-sm text-muted">No notification activity recorded for this invoice yet.</p>
+                        )}
+                      </div>
+                    </div>
+                  </SectionCard>
+                </div>
+
+                <div className="grid gap-4 2xl:grid-cols-3">
+                  <SectionCard title="Approval Decision">
+                    <div className="space-y-4">
+                      <div className="flex flex-wrap gap-2">
+                        <StatusBadge status={selectedItem.workflowStatus} />
+                        <StatusBadge status={selectedItem.approvalStatus} />
+                        {selectedItem.riskLevel !== "not recorded" ? <StatusBadge status={selectedItem.riskLevel} /> : null}
+                      </div>
+                      {canApproveInvoice && selectedItem.canDecide ? (
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            disabled={Boolean(activeAction)}
+                            onClick={() => void decideApproval("approve")}
+                            variant="primary"
+                          >
+                            Approve
+                          </Button>
+                          <Button
+                            disabled={Boolean(activeAction)}
+                            onClick={() => void decideApproval("hold")}
+                            variant="secondary"
+                          >
+                            Keep on Hold
+                          </Button>
+                          <Button
+                            disabled={Boolean(activeAction)}
+                            onClick={() => void decideApproval("reject")}
+                            variant="danger"
+                          >
+                            Reject
+                          </Button>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted">No approval decision is available for this state.</p>
                       )}
-                    </p>
-                    <p className="mt-1 text-xs text-muted">Invoice ID #{shortId(selectedItem.invoice.invoice_id)}</p>
-                  </div>
-                  <div className="flex flex-wrap gap-2 sm:justify-end">
-                    <StatusBadge status={selectedItem.workflowStatus} />
-                    {selectedItem.duplicateLikely ? <StatusBadge status="duplicate" /> : null}
-                    {erpResult ? <StatusBadge status="exported" /> : null}
-                  </div>
-                </div>
+                      {approvalMessage ? <FeedbackMessage>{approvalMessage}</FeedbackMessage> : null}
+                    </div>
+                  </SectionCard>
 
-                <div className="overflow-hidden rounded-md border border-border">
-                  <DetailRow label="Workflow" value={<StatusBadge status={selectedItem.workflowStatus} />} />
-                  <DetailRow label="Approval" value={<StatusBadge status={selectedItem.approvalStatus} />} />
-                  <DetailRow label="PO match" value={<StatusBadge status={selectedItem.poMatchStatus} />} />
-                  <DetailRow label="Risk" value={<StatusBadge status={selectedItem.riskLevel} />} />
-                  <DetailRow
-                    label="ERP ready"
-                    value={<StatusBadge status={selectedItem.erpReady ? "erp_ready" : "erp_blocked"} />}
-                  />
-                  <DetailRow
-                    label="Duplicate status"
-                    value={<StatusBadge status={selectedItem.duplicateLikely ? "duplicate" : "clear"} />}
-                  />
-                  <DetailRow
-                    label="Vendor-safe status"
-                    value={<StatusBadge status={vendorPreview?.status ?? "loading"} />}
-                  />
-                </div>
-
-                <div className="rounded-md border border-border px-3 py-2 text-sm">
-                  <p className="text-xs text-muted">Blocker reason</p>
-                  <p className="mt-1">{selectedItem.blockerReason}</p>
-                </div>
-
-                <div className="rounded-md border border-border px-3 py-3 text-sm">
-                  <p className="mb-2 text-xs text-muted">Vendor-safe preview</p>
-                  {vendorPreview ? (
-                    <>
-                      <p className="font-medium">{humanize(vendorPreview.status)}</p>
-                      <p className="mt-1 text-muted">{vendorPreview.public_message}</p>
-                    </>
-                  ) : (
-                    <p className="text-muted">Loading vendor-safe status...</p>
-                  )}
-                </div>
-
-                {selectedNotifications.length ? (
-                  <div className="rounded-md border border-border px-3 py-2 text-sm">
-                    <p className="mb-2 text-xs text-muted">Latest notifications</p>
-                    <div className="space-y-2">
-                      {selectedNotifications.map((event) => (
-                        <div key={event.notification_id}>
-                          <p className="font-medium">{humanize(event.notification_type)}</p>
-                          <p className="text-xs text-muted">
-                            {event.recipient_role} - {event.status} via {event.channel}
+                  <SectionCard title="ERP Actions">
+                    <div className="space-y-4">
+                      <DetailRow label="Export readiness" value={<StatusBadge status={selectedItem.erpReady ? "erp_ready" : "erp_blocked"} />} />
+                      <Button
+                        disabled={!selectedItem.erpReady || !canExportErp || Boolean(activeAction)}
+                        onClick={() => void exportToMockErp()}
+                        variant="secondary"
+                      >
+                        <Send className="h-4 w-4" />
+                        {activeAction === "export" ? "Exporting..." : "Export to Mock ERP"}
+                      </Button>
+                      {selectedItem.erpReady ? null : (
+                        <p className="text-sm text-muted">Approval must be ready before ERP export is enabled.</p>
+                      )}
+                      {erpMessage ? <FeedbackMessage>{erpMessage}</FeedbackMessage> : null}
+                      {erpResult ? (
+                        <div className="rounded-md bg-slate-50 px-3 py-2 text-sm">
+                          <p className="font-medium">Mock ERP export {erpResult.status}</p>
+                          <p className="mt-1 text-xs text-muted">
+                            {erpResult.adapter_type} - {erpResult.external_id ?? "no external id"}
                           </p>
                         </div>
-                      ))}
+                      ) : null}
                     </div>
-                  </div>
-                ) : null}
+                  </SectionCard>
 
-                <div className="grid gap-3 xl:grid-cols-3">
-                  <ActionGroup title="Approval actions">
-                    {canApproveInvoice && selectedItem.canDecide ? (
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          disabled={Boolean(activeAction)}
-                          onClick={() => void decideApproval("approve")}
-                          size="sm"
-                          variant="primary"
-                        >
-                          Approve
-                        </Button>
-                        <Button
-                          disabled={Boolean(activeAction)}
-                          onClick={() => void decideApproval("reject")}
-                          size="sm"
-                          variant="danger"
-                        >
-                          Reject
-                        </Button>
-                        <Button
-                          disabled={Boolean(activeAction)}
-                          onClick={() => void decideApproval("hold")}
-                          size="sm"
-                          variant="secondary"
-                        >
-                          Keep on Hold
-                        </Button>
+                  <SectionCard title="Vendor Actions">
+                    <div className="space-y-4">
+                      <DetailRow label="Vendor-safe status" value={<StatusBadge status={vendorPreview?.status ?? "loading"} />} />
+                      <div className="rounded-md bg-slate-50 px-3 py-3 text-sm">
+                        {vendorPreview ? (
+                          <>
+                            <p className="font-medium">{humanize(vendorPreview.status)}</p>
+                            <p className="mt-1 text-muted">{vendorPreview.public_message}</p>
+                          </>
+                        ) : (
+                          <p className="text-muted">Loading vendor-safe status...</p>
+                        )}
                       </div>
-                    ) : (
-                      <p className="text-sm text-muted">No approval decision is available for this state.</p>
-                    )}
-                    {approvalMessage ? <p className="text-sm text-green-700">{approvalMessage}</p> : null}
-                  </ActionGroup>
-
-                  <ActionGroup title="ERP action">
-                    <Button
-                      disabled={!selectedItem.erpReady || !canExportErp || Boolean(activeAction)}
-                      onClick={() => void exportToMockErp()}
-                      size="sm"
-                      variant="secondary"
-                    >
-                      <Send className="h-4 w-4" />
-                      {activeAction === "export" ? "Exporting..." : "Export to Mock ERP"}
-                    </Button>
-                    {selectedItem.erpReady ? null : (
-                      <p className="text-sm text-muted">This invoice is not export-ready yet.</p>
-                    )}
-                    {erpMessage ? <p className="text-sm text-green-700">{erpMessage}</p> : null}
-                  </ActionGroup>
-
-                  <ActionGroup title="Vendor">
-                    <Button
-                      disabled={Boolean(activeAction)}
-                      onClick={() => void loadVendorPreview(selectedItem.invoice.invoice_id)}
-                      size="sm"
-                      variant="secondary"
-                    >
-                      <ExternalLink className="h-4 w-4" />
-                      Preview vendor-safe status
-                    </Button>
-                    {vendorMessage ? <p className="text-sm text-green-700">{vendorMessage}</p> : null}
-                  </ActionGroup>
+                      <Button
+                        disabled={Boolean(activeAction)}
+                        onClick={() => void loadVendorPreview(selectedItem.invoice.invoice_id)}
+                        variant="secondary"
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                        Preview vendor-safe status
+                      </Button>
+                      {vendorMessage ? <FeedbackMessage>{vendorMessage}</FeedbackMessage> : null}
+                    </div>
+                  </SectionCard>
                 </div>
-
-                {erpResult ? (
-                  <div className="rounded-md border border-border px-3 py-2 text-sm">
-                    <p className="font-medium">Mock ERP export {erpResult.status}</p>
-                    <p className="text-xs text-muted">
-                      {erpResult.adapter_type} - {erpResult.external_id ?? "no external id"}
-                    </p>
-                  </div>
-                ) : null}
-                {error ? <p className="text-sm text-red-700">{error}</p> : null}
-              </>
+              </div>
             ) : (
-              <div className="px-1 py-4 text-sm text-muted">No invoice selected.</div>
+              <div className="p-5">
+                <EmptyState
+                  description="Choose an invoice from the queue to inspect details and take action."
+                  title="No invoice selected"
+                />
+              </div>
             )}
           </div>
         </div>
-      </div>
+      </Card>
     </section>
   );
+}
+
+type InboxItem = ReturnType<typeof buildInboxItems>[number];
+
+function QueueRow({
+  item,
+  isSelected,
+  onClick
+}: {
+  item: InboxItem;
+  isSelected: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      className={cn(
+        "w-full rounded-lg border bg-surface p-4 text-left transition-all",
+        "hover:border-primary/40 hover:shadow-sm focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15",
+        isSelected ? "border-primary bg-blue-50/60 shadow-sm" : "border-border",
+        item.isOverdue && "border-l-4 border-l-danger"
+      )}
+      onClick={onClick}
+      type="button"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate font-medium">{item.invoice.canonical_invoice.supplier_name}</p>
+          <p className="mt-1 text-sm text-muted">
+            {item.invoice.canonical_invoice.invoice_number} - #{shortId(item.invoice.invoice_id)}
+          </p>
+        </div>
+        <p className="shrink-0 text-right font-semibold">
+          {money(item.invoice.canonical_invoice.grand_total, item.invoice.canonical_invoice.currency)}
+        </p>
+      </div>
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2 text-sm text-muted">
+          <CalendarDays className="h-4 w-4" />
+          <span className={dueTone(item.dueDate)}>{dueDateLabel(item.dueDate)}</span>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <StatusBadge status={item.workflowStatus} />
+          {item.riskLevel !== "not recorded" ? <StatusBadge status={item.riskLevel} /> : null}
+        </div>
+      </div>
+      {item.duplicateLikely || item.poMatchStatus === "missing_po" ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {item.duplicateLikely ? <StatusBadge status="likely duplicate" /> : null}
+          {item.poMatchStatus === "missing_po" ? <StatusBadge status="missing PO" /> : null}
+        </div>
+      ) : null}
+    </button>
+  );
+}
+
+function SelectedInvoiceHeader({
+  selectedItem,
+  vendorPreview,
+  erpResult
+}: {
+  selectedItem: InboxItem;
+  vendorPreview: VendorInvoiceStatus | null;
+  erpResult: ERPSyncResult | null;
+}) {
+  return (
+    <div className="flex flex-col gap-4 border-b border-border pb-5 xl:flex-row xl:items-start xl:justify-between">
+      <div>
+        <p className="text-sm font-medium text-muted">Selected invoice</p>
+        <h3 className="mt-1 text-2xl font-semibold">{selectedItem.invoice.canonical_invoice.supplier_name}</h3>
+        <div className="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-sm">
+          <span>
+            <span className="text-muted">Invoice</span>{" "}
+            <strong>{selectedItem.invoice.canonical_invoice.invoice_number}</strong>
+          </span>
+          <span>
+            <span className="text-muted">Due</span>{" "}
+            <strong className={dueTone(selectedItem.dueDate)}>{dueDateLabel(selectedItem.dueDate)}</strong>
+          </span>
+          <span>
+            <span className="text-muted">Amount</span>{" "}
+            <strong>
+              {money(
+                selectedItem.invoice.canonical_invoice.grand_total,
+                selectedItem.invoice.canonical_invoice.currency
+              )}
+            </strong>
+          </span>
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-2 xl:max-w-xs xl:justify-end">
+        <StatusBadge status={selectedItem.workflowStatus} />
+        <StatusBadge status={selectedItem.approvalStatus} />
+        {selectedItem.riskLevel !== "not recorded" ? <StatusBadge status={selectedItem.riskLevel} /> : null}
+        {selectedItem.duplicateLikely ? <StatusBadge status="duplicate" /> : null}
+        {erpResult ? <StatusBadge status="exported" /> : null}
+        {vendorPreview ? <StatusBadge status={vendorPreview.status} /> : null}
+      </div>
+    </div>
+  );
+}
+
+function SectionCard({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <Card className="shadow-none">
+      <CardHeader className="px-4 py-3">
+        <h4 className="text-sm font-semibold">{title}</h4>
+      </CardHeader>
+      <CardContent className="p-4">{children}</CardContent>
+    </Card>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="flex items-start justify-between gap-4 text-sm">
+      <span className="text-muted">{label}</span>
+      <span className="text-right font-medium">{value}</span>
+    </div>
+  );
+}
+
+function FeedbackMessage({ children }: { children: ReactNode }) {
+  return <p className="rounded-md bg-green-50 px-3 py-2 text-sm text-success">{children}</p>;
 }
 
 function buildInboxItems(invoices: InvoiceRecord[], approvals: ApprovalTask[], notifications: NotificationEvent[]) {
@@ -469,6 +607,7 @@ function buildInboxItems(invoices: InvoiceRecord[], approvals: ApprovalTask[], n
       const canDecide = canDecideApproval({ approvalStatus, workflowStatus, riskLevel, poMatchStatus });
       const erpReady = erpReadyFor(task, workflowStatus);
       const blockerReason = task?.reason ?? "No approval task has been created.";
+      const dueDate = invoice.canonical_invoice.due_date ?? null;
 
       return {
         invoice,
@@ -481,7 +620,9 @@ function buildInboxItems(invoices: InvoiceRecord[], approvals: ApprovalTask[], n
           duplicateLikely || (duplicateInvoiceNumbers.get(invoice.canonical_invoice.invoice_number) ?? 0) > 1,
         erpReady,
         canDecide,
-        blockerReason
+        blockerReason,
+        dueDate,
+        isOverdue: isPastDue(dueDate)
       };
     })
     .sort((left, right) => right.invoice.invoice_id.localeCompare(left.invoice.invoice_id));
@@ -538,24 +679,6 @@ function matchesFilter(item: ReturnType<typeof buildInboxItems>[number], filter:
   }
 }
 
-function DetailRow({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <div className="grid gap-2 border-b border-border px-3 py-2 last:border-b-0 sm:grid-cols-[150px_1fr]">
-      <span className="text-sm text-muted">{label}</span>
-      <span className="text-sm font-medium">{value}</span>
-    </div>
-  );
-}
-
-function ActionGroup({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <div className="space-y-2 rounded-md border border-border px-3 py-3">
-      <p className="text-xs text-muted">{title}</p>
-      {children}
-    </div>
-  );
-}
-
 function shortId(value: string) {
   return value.slice(-8);
 }
@@ -568,6 +691,46 @@ function money(value: number, currency: string) {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: currency || "USD",
+    minimumFractionDigits: 2,
     maximumFractionDigits: 2
   }).format(value || 0);
+}
+
+function dueDateLabel(value: string | null) {
+  if (!value) return "No due date";
+  const parsedDate = parseDate(value);
+  if (!parsedDate) return "Invalid due date";
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "2-digit",
+    year: "numeric"
+  }).format(parsedDate);
+}
+
+function dueTone(value: string | null) {
+  if (!value) return "text-muted";
+  if (!parseDate(value)) return "text-muted";
+  const daysUntilDue = daysUntil(value);
+  if (daysUntilDue < 0) return "text-danger";
+  if (daysUntilDue <= 7) return "text-warning";
+  return "text-success";
+}
+
+function isPastDue(value: string | null) {
+  return value ? daysUntil(value) < 0 : false;
+}
+
+function daysUntil(value: string) {
+  const today = stripTime(new Date());
+  const due = stripTime(parseDate(value) ?? new Date());
+  return Math.round((due.getTime() - today.getTime()) / 86_400_000);
+}
+
+function stripTime(value: Date) {
+  return new Date(value.getFullYear(), value.getMonth(), value.getDate());
+}
+
+function parseDate(value: string) {
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
