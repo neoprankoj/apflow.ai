@@ -227,12 +227,15 @@ export function InvoiceUploadPanel({
   const signInRequired = !isSignedIn;
   const isBusy = activeAction !== null;
   const reviewStatus = processResult?.review_status ?? extractResult?.review_status;
-  const reviewTasks = extractResult?.review_tasks ?? pipeline?.review_tasks ?? [];
+  const reviewTasks = processResult ? pipeline?.review_tasks ?? [] : extractResult?.review_tasks ?? [];
   const reviewIssues = reviewTasks.flatMap((task) => task.issues ?? []);
   const correctedIssueFields = new Set(
     reviewTasks.flatMap((task) => Object.keys(task.corrected_fields ?? {}))
   );
   const visibleReviewIssues = reviewIssues.filter((issue) => !correctedIssueFields.has(issue.field_name));
+  const resolvedReviewFields = fields
+    .filter((field) => !field.requires_review && field.value !== null && field.value !== undefined && field.value !== "")
+    .map((field) => field.field_name);
   const correctionFields = Array.from(
     new Set(
       [
@@ -849,6 +852,11 @@ export function InvoiceUploadPanel({
                   Saved corrections are pending re-check on the next Process run.
                 </p>
               ) : null}
+              {!visibleReviewIssues.length && resolvedReviewFields.length ? (
+                <p className="text-sm text-green-700">
+                  Resolved fields: {resolvedReviewFields.join(", ")}.
+                </p>
+              ) : null}
               {correctionFields.length ? (
                 <div className="grid gap-3 sm:grid-cols-2">
                   {correctionFields.map((fieldName) => (
@@ -916,7 +924,7 @@ export function InvoiceUploadPanel({
                   ? "Your current role cannot export invoices to ERP."
                   : erpExportReady
                     ? "Invoice is ready for explicit mock ERP export."
-                    : "Process an approval-ready invoice first."}
+                    : exportReadinessBlocker(pipeline, reviewStatus)}
               </div>
             )}
             {erpLogs.length ? (
@@ -962,7 +970,11 @@ export function InvoiceUploadPanel({
               <div className="rounded-md border border-border px-4 py-5 text-muted">
                 {signInRequired
                   ? "Sign in before preparing a vendor-safe preview."
-                  : "Process an invoice, then preview the restricted vendor view."}
+                  : invoiceId
+                    ? "Vendor-safe preview is available after processing this invoice."
+                    : pipeline
+                      ? "This process result did not create an invoice record to preview."
+                      : "Process an invoice, then preview the restricted vendor view."}
               </div>
             )}
           </div>
@@ -1079,6 +1091,10 @@ function buildTimeline(input: {
   const reviewRequired = reviewStatus === "review_required";
   const poStatus = pipeline?.po_match_result?.match_status;
   const riskLevel = pipeline?.fraud_risk_result?.risk_level;
+  const validationStatus = pipeline?.validation_result?.validation_status;
+  const duplicateStatus = pipeline?.duplicate_result?.status;
+  const approvalRoute = pipeline?.approval_result?.route;
+  const exportBlocker = exportReadinessBlocker(pipeline, reviewStatus);
 
   return [
     {
@@ -1108,19 +1124,19 @@ function buildTimeline(input: {
     {
       id: "validated",
       label: "Validated",
-      status: processed && !reviewRequired ? "completed" : "pending",
+      status: validationStatus ? (validationStatus === "failed" ? "warning" : "completed") : "pending",
       timestamp: input.timestamps.processed,
-      summary: pipeline?.validation_result?.validation_status
-        ? `Validation ${pipeline.validation_result.validation_status}.`
+      summary: validationStatus
+        ? `Validation ${validationStatus}.`
         : "Validation waits for processing."
     },
     {
       id: "duplicate_checked",
       label: "Duplicate Checked",
-      status: processed && !reviewRequired ? "completed" : "pending",
+      status: duplicateStatus ? (duplicateStatus === "likely_duplicate" ? "warning" : "completed") : "pending",
       timestamp: input.timestamps.processed,
-      summary: pipeline?.duplicate_result?.status
-        ? `Duplicate status ${pipeline.duplicate_result.status.replaceAll("_", " ")}.`
+      summary: duplicateStatus
+        ? `Duplicate status ${duplicateStatus.replaceAll("_", " ")}.`
         : "Duplicate check waits for processing."
     },
     {
@@ -1142,10 +1158,10 @@ function buildTimeline(input: {
     {
       id: "approval_routed",
       label: "Approval Routed",
-      status: pipeline?.approval_result ? "completed" : "pending",
+      status: approvalRoute ? (approvalRoute === "blocked" ? "warning" : "completed") : "pending",
       timestamp: input.timestamps.processed,
-      summary: pipeline?.approval_result
-        ? `Approval route is ${pipeline.approval_result.route.replaceAll("_", " ")}.`
+      summary: approvalRoute
+        ? `Approval route is ${approvalRoute.replaceAll("_", " ")}.`
         : "Approval route waits for processing."
     },
     {
@@ -1153,7 +1169,7 @@ function buildTimeline(input: {
       label: "ERP Export Ready",
       status: pipeline?.erp_export_ready ? "completed" : processed ? "warning" : "pending",
       timestamp: input.timestamps.processed,
-      summary: pipeline?.erp_export_ready ? "Invoice can be exported explicitly." : "Invoice is not ready for export yet."
+      summary: pipeline?.erp_export_ready ? "Invoice can be exported explicitly." : exportBlocker
     },
     {
       id: "exported_to_erp",
@@ -1165,6 +1181,20 @@ function buildTimeline(input: {
         : "No ERP export has been triggered."
     }
   ];
+}
+
+function exportReadinessBlocker(
+  pipeline: ProcessResult["pipeline_result"] | undefined,
+  reviewStatus: string | undefined
+) {
+  if (reviewStatus === "review_required") return "Human review must be resolved before ERP export.";
+  if (!pipeline) return "Process an invoice to determine export readiness.";
+  if (pipeline.approval_result?.route === "blocked") return "Approval policy blocked this invoice.";
+  if (pipeline.approval_result?.route) return `Approval route ${pipeline.approval_result.route.replaceAll("_", " ")} is not export-ready.`;
+  if (pipeline.po_match_result?.match_status) {
+    return `PO match result is ${pipeline.po_match_result.match_status.replaceAll("_", " ")}.`;
+  }
+  return "Invoice is not ready for export yet.";
 }
 
 function statusFor(done: boolean, waiting: StepStatus, failed: boolean): StepStatus {

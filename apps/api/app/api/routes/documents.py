@@ -306,6 +306,11 @@ def _apply_corrections_to_ocr_result(
         update={
             "fields": fields,
             "confidence_summary": summary,
+            "raw_response": {
+                **ocr_result.raw_response,
+                "corrected_fields_applied": True,
+                "corrected_field_count": len(corrections),
+            },
             "error": None,
         }
     )
@@ -318,7 +323,7 @@ def _normalize_corrections(corrections: dict) -> dict[str, str | float]:
         "tax_amount": "tax_total",
         "purchase_order_number": "po_number",
     }
-    numeric_fields = {"subtotal", "tax_total", "grand_total"}
+    numeric_fields = {"subtotal", "tax_total", "shipping_amount", "fee_total", "discount_total", "grand_total"}
     allowed = set(ExtractedInvoiceFields.model_fields)
     normalized: dict[str, str | float] = {}
     for raw_name, raw_value in corrections.items():
