@@ -540,6 +540,15 @@ def continue_full_pipeline_from_extraction(
     notification_agent: NotificationAgent,
     review_agent: HumanReviewAgent,
 ) -> dict:
+    corrected_fields_applied = bool(
+        extraction.ocr_result
+        and extraction.ocr_result.raw_response.get("corrected_fields_applied")
+    )
+    corrected_field_count = int(
+        extraction.ocr_result.raw_response.get("corrected_field_count", 0)
+        if extraction.ocr_result
+        else 0
+    )
     review_task = (
         review_agent.inspect_extraction(extraction.ocr_result, raw_invoice_id=raw_invoice_id)
         if extraction.ocr_result is not None
@@ -547,6 +556,13 @@ def continue_full_pipeline_from_extraction(
     )
     review_tasks = [review_task] if review_task is not None and review_task.status != "not_required" else []
     if review_tasks:
+        unresolved_review_fields = sorted(
+            {
+                issue.field_name
+                for task in review_tasks
+                for issue in task.issues
+            }
+        )
         return {
             "invoice": None,
             "validation_result": None,
@@ -561,6 +577,11 @@ def continue_full_pipeline_from_extraction(
             "confidence_summary": extraction.confidence_summary,
             "review_status": review_task.status,
             "review_tasks": review_tasks,
+            "corrected_fields_applied": corrected_fields_applied,
+            "corrected_field_count": corrected_field_count,
+            "unresolved_review_fields": unresolved_review_fields,
+            "invoice_created": False,
+            "blocker_reason": _review_blocker_reason(unresolved_review_fields),
         }
 
     normalized = normalization_agent.normalize(
@@ -672,4 +693,16 @@ def continue_full_pipeline_from_extraction(
         "confidence_summary": extraction.confidence_summary,
         "review_status": review_task.status if review_task else "not_required",
         "review_tasks": [],
+        "corrected_fields_applied": corrected_fields_applied,
+        "corrected_field_count": corrected_field_count,
+        "unresolved_review_fields": [],
+        "invoice_created": True,
+        "blocker_reason": None,
     }
+
+
+def _review_blocker_reason(unresolved_review_fields: list[str]) -> str:
+    if not unresolved_review_fields:
+        return "Human review remains required before invoice creation."
+    fields = ", ".join(unresolved_review_fields)
+    return f"Human review remains required for fields: {fields}."
