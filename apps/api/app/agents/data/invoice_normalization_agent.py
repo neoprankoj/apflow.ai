@@ -43,8 +43,22 @@ class InvoiceNormalizationAgent(BaseAgent[InvoiceNormalizationInput, InvoiceNorm
 
             subtotal = round(float(fields.subtotal or 0), 2)
             tax_total = round(float(fields.tax_total or 0), 2)
-            grand_total = round(float(fields.grand_total or subtotal + tax_total), 2)
+            shipping_amount = round(float(fields.shipping_amount or 0), 2)
+            fee_total = round(float(fields.fee_total or 0), 2)
+            discount_total = round(float(fields.discount_total or 0), 2)
+            grand_total = round(
+                float(fields.grand_total or subtotal + tax_total + shipping_amount + fee_total - discount_total),
+                2,
+            )
             invoice_date = fields.invoice_date or date.today().isoformat()
+            total_components_complete = self._total_components_complete(
+                subtotal=fields.subtotal,
+                tax_total=fields.tax_total,
+                shipping_amount=fields.shipping_amount,
+                fee_total=fields.fee_total,
+                discount_total=fields.discount_total,
+                grand_total=fields.grand_total,
+            )
 
             canonical = CanonicalInvoice(
                 invoice_number=self._required(fields.invoice_number, "invoice_number"),
@@ -55,7 +69,11 @@ class InvoiceNormalizationAgent(BaseAgent[InvoiceNormalizationInput, InvoiceNorm
                 currency=currency,
                 subtotal=subtotal,
                 tax_total=tax_total,
+                shipping_amount=shipping_amount,
+                fee_total=fee_total,
+                discount_total=discount_total,
                 grand_total=grand_total,
+                total_components_complete=total_components_complete,
                 po_number=fields.po_number,
                 line_items=request.line_items,
             )
@@ -108,3 +126,20 @@ class InvoiceNormalizationAgent(BaseAgent[InvoiceNormalizationInput, InvoiceNorm
         if value is None or not value.strip():
             raise ValueError(f"{field_name} is required for normalization")
         return value
+
+    def _total_components_complete(
+        self,
+        *,
+        subtotal: float | None,
+        tax_total: float | None,
+        shipping_amount: float | None,
+        fee_total: float | None,
+        discount_total: float | None,
+        grand_total: float | None,
+    ) -> bool:
+        if subtotal is None or grand_total is None:
+            return False
+        optional_components = [tax_total, shipping_amount, fee_total, discount_total]
+        if any(value is not None for value in optional_components):
+            return True
+        return round(float(subtotal), 2) == round(float(grand_total), 2)

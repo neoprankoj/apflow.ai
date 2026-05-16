@@ -183,6 +183,58 @@ def test_ocr_space_parser_handles_common_invoice_variants(tenant_id):
     assert result.confidence_summary.average_confidence > 0.5
 
 
+def test_ocr_space_parser_handles_invoice_header_date_and_shipping_total(tenant_id, human_review_agent):
+    adapter = OCRSpaceOCRAdapter(Settings(ocr_space_api_key="test-key"))
+
+    result = adapter.normalize_provider_response(
+        {
+            "IsErroredOnProcessing": False,
+            "ParsedResults": [
+                {
+                    "ParsedText": (
+                        "SuperStore\n\n"
+                        "INVOICE\n"
+                        "# 36259\n\n"
+                        "Bill To:\n"
+                        "Aaron Bergman\n\n"
+                        "Ship To:\n"
+                        "98103, Seattle,\n"
+                        "Washington,\n"
+                        "United States\n\n"
+                        "Date: Mar 06 2012\n"
+                        "Ship Mode: First Class\n\n"
+                        "Balance Due: $58.11\n\n"
+                        "| Item | Quantity | Rate | Amount |\n"
+                        "| --- | --- | --- | --- |\n"
+                        "| Newell 330 Art, Office Supplies, OFF-AR-5309 | 3 | $17.94 | $53.82 |\n\n"
+                        "Subtotal: $53.82\n"
+                        "Shipping: $4.29\n"
+                        "Total: $58.11\n\n"
+                        "Notes:\n"
+                        "Thanks for your business!\n\n"
+                        "Terms:\n\n"
+                        "Order ID : CA-2012-AB10015140-40974\n"
+                    )
+                }
+            ],
+        },
+        tenant_id,
+    )
+    field_map = {field.field_name: field for field in result.fields}
+    task = human_review_agent.inspect_extraction(result, raw_invoice_id=uuid4())
+
+    assert field_map["invoice_number"].value == "36259"
+    assert field_map["invoice_date"].value == "Mar 06 2012"
+    assert field_map["supplier_name"].value == "SuperStore"
+    assert field_map["subtotal"].value == 53.82
+    assert field_map["shipping_amount"].value == 4.29
+    assert field_map["grand_total"].value == 58.11
+    assert field_map["currency"].value == "USD"
+    assert "invoice_number" not in result.confidence_summary.required_fields_missing
+    assert "invoice_date" not in result.confidence_summary.required_fields_missing
+    assert all(issue.field_name != "grand_total" for issue in task.issues)
+
+
 def test_ocr_space_parser_handles_empty_parsed_text_safely(tenant_id):
     adapter = OCRSpaceOCRAdapter(Settings(ocr_space_api_key="test-key"))
 
