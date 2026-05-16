@@ -91,6 +91,46 @@ def test_rejected_invoice_remains_non_exportable_with_reason(auth_enabled):
     assert response.json()["blocker_reason"] == "Duplicate confirmed by AP."
 
 
+@pytest.mark.parametrize(
+    ("action", "approval_status", "workflow_status"),
+    [
+        ("approve", "approved", "approval_ready"),
+        ("reject", "rejected", "rejected"),
+        ("hold", "on_hold", "blocked"),
+    ],
+)
+def test_approval_decisions_keep_workflow_and_admin_lists_available(
+    auth_enabled,
+    action,
+    approval_status,
+    workflow_status,
+):
+    client = TestClient(create_app())
+    owner = _register(client, f"{action}-owner@example.com")
+    repository = dependencies.get_repository()
+    invoice_id = _seed_blocked_invoice(repository, owner["tenant"]["id"])
+    headers = _auth_headers(owner["access_token"])
+
+    response = client.post(
+        f"/invoices/{invoice_id}/approval-decision",
+        json={"tenant_id": owner["tenant"]["id"], "action": action},
+        headers=headers,
+    )
+    workflows = client.get(
+        f"/invoices/workflows?tenant_id={owner['tenant']['id']}",
+        headers=headers,
+    )
+    users = client.get("/admin/users", headers=headers)
+
+    assert response.status_code == 200
+    assert response.json()["approval_status"] == approval_status
+    assert response.json()["workflow_status"] == workflow_status
+    assert workflows.status_code == 200
+    assert workflows.json()[-1]["status"] == approval_status
+    assert workflows.json()[-1]["state"] == workflow_status
+    assert users.status_code == 200
+
+
 def _seed_blocked_invoice(repository, tenant_id):
     tenant_id = UUID(str(tenant_id))
     vendor = repository.add_vendor(tenant_id, "Blocked Vendor")

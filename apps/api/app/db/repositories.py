@@ -176,12 +176,16 @@ class SQLAlchemyAPRepository:
         return [self._membership_schema(row) for row in rows]
 
     def list_users_for_tenant(self, tenant_id: UUID) -> list[tuple[UserRecordSchema, TenantMembershipSchema]]:
-        rows = self.session.execute(
-            select(dbm.User, dbm.TenantMembership)
-            .join(dbm.TenantMembership, dbm.TenantMembership.user_id == dbm.User.id)
-            .where(dbm.TenantMembership.tenant_id == tenant_id)
-        ).all()
-        return [(self._user_schema(user), self._membership_schema(membership)) for user, membership in rows]
+        try:
+            rows = self.session.execute(
+                select(dbm.User, dbm.TenantMembership)
+                .join(dbm.TenantMembership, dbm.TenantMembership.user_id == dbm.User.id)
+                .where(dbm.TenantMembership.tenant_id == tenant_id)
+            ).all()
+            return [(self._user_schema(user), self._membership_schema(membership)) for user, membership in rows]
+        except Exception:
+            self.session.rollback()
+            raise
 
     def update_membership_role(self, tenant_id: UUID, user_id: UUID, role: UserRole) -> TenantMembershipSchema:
         row = self.session.scalar(
@@ -652,18 +656,22 @@ class SQLAlchemyAPRepository:
         self.session.commit()
 
     def list_workflow_states(self, tenant_id: UUID) -> list[WorkflowState]:
-        rows = self.session.scalars(select(dbm.WorkflowState).where(dbm.WorkflowState.tenant_id == tenant_id)).all()
-        return [
-            WorkflowState(
-                workflow_id=row.workflow_id,
-                tenant_id=row.tenant_id,
-                state=row.state,
-                status=row.status,
-                current_agent=row.current_agent,
-                retry_count=row.retry_count,
-            )
-            for row in rows
-        ]
+        try:
+            rows = self.session.scalars(select(dbm.WorkflowState).where(dbm.WorkflowState.tenant_id == tenant_id)).all()
+            return [
+                WorkflowState(
+                    workflow_id=row.workflow_id,
+                    tenant_id=row.tenant_id,
+                    state=row.state,
+                    status=row.status,
+                    current_agent=row.current_agent,
+                    retry_count=row.retry_count,
+                )
+                for row in rows
+            ]
+        except Exception:
+            self.session.rollback()
+            raise
 
     def ensure_phase3_fixtures(self, tenant_id: UUID) -> None:
         InMemoryAPRepository.ensure_phase3_fixtures(self, tenant_id)  # type: ignore[arg-type]

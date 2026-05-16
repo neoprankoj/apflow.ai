@@ -61,6 +61,7 @@ from app.core.schemas import (
     PurchaseOrderMatchingInput,
     RiskLevel,
     SupplierIdentityInput,
+    WorkflowState,
 )
 
 router = APIRouter()
@@ -461,6 +462,16 @@ def decide_invoice_approval(
             correlation_id=payload.correlation_id,
         )
     )
+    if hasattr(repository, "store_workflow_state"):
+        repository.store_workflow_state(
+            WorkflowState(
+                workflow_id=invoice_id,
+                tenant_id=payload.tenant_id,
+                state=workflow_status,
+                status=updated_task.status,
+                current_agent="ApprovalRoutingAgent",
+            )
+        )
     return ApprovalDecisionResult(
         invoice_id=invoice_id,
         approval_task_id=updated_task.approval_task_id,
