@@ -9,12 +9,16 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        border: "hsl(var(--border))",
-        background: "hsl(var(--background))",
-        foreground: "hsl(var(--foreground))",
-        muted: "hsl(var(--muted))",
-        accent: "hsl(var(--accent))",
-        danger: "hsl(var(--danger))"
+        border: "var(--border)",
+        background: "var(--background)",
+        surface: "var(--surface)",
+        foreground: "var(--foreground)",
+        muted: "var(--muted)",
+        primary: "var(--primary)",
+        success: "var(--success)",
+        warning: "var(--warning)",
+        danger: "var(--danger)",
+        info: "var(--info)"
       }
     }
   },

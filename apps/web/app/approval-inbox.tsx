@@ -1,7 +1,9 @@
 "use client";
 
-import { AlertTriangle, CheckCircle2, ExternalLink, Send } from "lucide-react";
+import { ExternalLink, Send } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { Button } from "../components/ui/button";
+import { StatusBadge } from "../components/ui/status-badge";
 import { apiFetch } from "./frontend-api";
 
 type InvoiceRecord = {
@@ -262,9 +264,9 @@ export function ApprovalInbox({
                   <span>
                     <span className="block">{item.invoice.canonical_invoice.supplier_name}</span>
                     <span className="mt-1 flex flex-wrap gap-1">
-                      {item.duplicateLikely ? <Badge label="likely duplicate" tone="warning" /> : null}
-                      {item.poMatchStatus === "missing_po" ? <Badge label="missing PO" tone="warning" /> : null}
-                      {item.riskLevel !== "not recorded" ? <Badge label={item.riskLevel} tone="warning" /> : null}
+                      {item.duplicateLikely ? <StatusBadge status="likely duplicate" /> : null}
+                      {item.poMatchStatus === "missing_po" ? <StatusBadge status="missing PO" /> : null}
+                      {item.riskLevel !== "not recorded" ? <StatusBadge status={item.riskLevel} /> : null}
                     </span>
                   </span>
                   <span>{money(item.invoice.canonical_invoice.grand_total, item.invoice.canonical_invoice.currency)}</span>
@@ -357,30 +359,30 @@ export function ApprovalInbox({
                   <ActionGroup title="Approval actions">
                     {canApproveInvoice && selectedItem.canDecide ? (
                       <div className="flex flex-wrap gap-2">
-                        <button
-                          className="rounded-md border border-border px-3 py-2 text-sm"
+                        <Button
                           disabled={Boolean(activeAction)}
                           onClick={() => void decideApproval("approve")}
-                          type="button"
+                          size="sm"
+                          variant="primary"
                         >
                           Approve
-                        </button>
-                        <button
-                          className="rounded-md border border-border px-3 py-2 text-sm"
+                        </Button>
+                        <Button
                           disabled={Boolean(activeAction)}
                           onClick={() => void decideApproval("reject")}
-                          type="button"
+                          size="sm"
+                          variant="danger"
                         >
                           Reject
-                        </button>
-                        <button
-                          className="rounded-md border border-border px-3 py-2 text-sm"
+                        </Button>
+                        <Button
                           disabled={Boolean(activeAction)}
                           onClick={() => void decideApproval("hold")}
-                          type="button"
+                          size="sm"
+                          variant="secondary"
                         >
                           Keep on Hold
-                        </button>
+                        </Button>
                       </div>
                     ) : (
                       <p className="text-sm text-muted">No approval decision is available for this state.</p>
@@ -389,15 +391,15 @@ export function ApprovalInbox({
                   </ActionGroup>
 
                   <ActionGroup title="ERP action">
-                    <button
-                      className="inline-flex items-center rounded-md border border-border px-3 py-2 text-sm disabled:text-muted"
+                    <Button
                       disabled={!selectedItem.erpReady || !canExportErp || Boolean(activeAction)}
                       onClick={() => void exportToMockErp()}
-                      type="button"
+                      size="sm"
+                      variant="secondary"
                     >
-                      <Send className="mr-2 h-4 w-4" />
+                      <Send className="h-4 w-4" />
                       {activeAction === "export" ? "Exporting..." : "Export to Mock ERP"}
-                    </button>
+                    </Button>
                     {selectedItem.erpReady ? null : (
                       <p className="text-sm text-muted">This invoice is not export-ready yet.</p>
                     )}
@@ -405,15 +407,15 @@ export function ApprovalInbox({
                   </ActionGroup>
 
                   <ActionGroup title="Vendor">
-                    <button
-                      className="inline-flex items-center rounded-md border border-border px-3 py-2 text-sm"
+                    <Button
                       disabled={Boolean(activeAction)}
                       onClick={() => void loadVendorPreview(selectedItem.invoice.invoice_id)}
-                      type="button"
+                      size="sm"
+                      variant="secondary"
                     >
-                      <ExternalLink className="mr-2 h-4 w-4" />
+                      <ExternalLink className="h-4 w-4" />
                       Preview vendor-safe status
-                    </button>
+                    </Button>
                     {vendorMessage ? <p className="text-sm text-green-700">{vendorMessage}</p> : null}
                   </ActionGroup>
                 </div>
@@ -552,42 +554,6 @@ function ActionGroup({ title, children }: { title: string; children: ReactNode }
       {children}
     </div>
   );
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const normalized = status.replaceAll(" ", "_");
-  const tone = badgeTone(normalized);
-  const label = humanize(normalized);
-  return (
-    <span
-      className={`inline-flex items-center rounded border px-2 py-1 text-xs ${
-        tone === "ok"
-          ? "border-green-200 bg-green-50 text-green-800"
-          : tone === "danger"
-            ? "border-red-200 bg-red-50 text-red-800"
-            : tone === "muted"
-              ? "border-border bg-[hsl(var(--background))] text-muted"
-              : "border-amber-200 bg-amber-50 text-amber-800"
-      }`}
-    >
-      {tone === "ok" ? <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> : null}
-      {tone === "warning" || tone === "danger" ? <AlertTriangle className="mr-1 h-3.5 w-3.5" /> : null}
-      {label}
-    </span>
-  );
-}
-
-function Badge({ label }: { label: string; tone: "ok" | "warning" }) {
-  return <StatusBadge status={label} />;
-}
-
-function badgeTone(status: string): "ok" | "warning" | "danger" | "muted" {
-  if (["approved", "approval_ready", "erp_ready", "clear", "exported"].includes(status)) return "ok";
-  if (["rejected"].includes(status)) return "danger";
-  if (["blocked", "on_hold", "missing_po", "high", "critical", "duplicate", "erp_blocked"].includes(status)) {
-    return "warning";
-  }
-  return "muted";
 }
 
 function shortId(value: string) {
