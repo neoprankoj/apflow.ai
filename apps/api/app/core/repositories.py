@@ -603,8 +603,32 @@ class InMemoryAPRepository:
         task.history.append({"action": str(status), "actor_id": actor_id})
         return task
 
-    def clear_demo_operational_data(self, tenant_id: UUID) -> None:
+    def clear_demo_operational_data(self, tenant_id: UUID) -> dict[str, int]:
         invoice_ids = {record.invoice_id for record in self.list_invoices(tenant_id)}
+        cleared = {
+            "vendor_messages": sum(message.tenant_id == tenant_id for message in self.vendor_messages.values()),
+            "vendor_portal_access": sum(
+                record.tenant_id == tenant_id for record in self.vendor_portal_access.values()
+            ),
+            "human_review_tasks": sum(task.tenant_id == tenant_id for task in self.review_tasks.values()),
+            "erp_external_references": sum(invoice_id in self.invoice_external_ids for invoice_id in invoice_ids),
+            "erp_sync_logs": sum(record.tenant_id == tenant_id for record in self.erp_sync_logs.values()),
+            "workflow_events": 0,
+            "workflow_states": sum(record.tenant_id == tenant_id for record in self.workflow_states.values()),
+            "notification_events": sum(
+                record.tenant_id == tenant_id for record in self.notification_events.values()
+            ),
+            "approval_tasks": sum(record.tenant_id == tenant_id for record in self.approval_tasks.values()),
+            "invoice_line_items": sum(
+                len(record.canonical_invoice.line_items)
+                for record in self.invoices.values()
+                if record.tenant_id == tenant_id
+            ),
+            "uploaded_invoice_documents": sum(
+                document.tenant_id == tenant_id for document in self.uploaded_documents.values()
+            ),
+            "invoices": len(invoice_ids),
+        }
         self.raw_invoices = {
             raw_invoice_id: record
             for raw_invoice_id, record in self.raw_invoices.items()
@@ -662,6 +686,7 @@ class InMemoryAPRepository:
         }
         for invoice_id in invoice_ids:
             self.invoice_external_ids.pop(invoice_id, None)
+        return cleared
 
     def ensure_phase3_fixtures(self, tenant_id: UUID) -> None:
         vendors = self.list_vendors(tenant_id)

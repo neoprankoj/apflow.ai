@@ -62,8 +62,12 @@ def test_demo_reset_creates_demo_records_for_owner(auth_enabled, staging_demo_re
 
     assert response.status_code == 200
     body = response.json()
+    assert body["status"] == "reset"
     assert body["tenant_id"] == owner["tenant"]["id"]
     assert body["message"] == "Demo data reset successfully."
+    assert body["cleared"]["invoices"] >= 1
+    assert body["cleared"]["notification_events"] >= 1
+    assert "notifications" not in body["cleared"]
     assert body["invoice_number"] is None
     assert body["workflow_status"] == "clean"
     assert body["seed_mode"] == "clean"
@@ -92,6 +96,38 @@ def test_demo_reset_clears_operational_data_and_preserves_users(auth_enabled, st
     assert client.get(f"/documents/invoices?tenant_id={tenant_id}", headers=headers).json() == []
     users = client.get("/admin/users", headers=headers).json()
     assert [record["user"]["email"] for record in users] == ["demo-reset-clear@example.com"]
+
+
+def test_demo_reset_succeeds_with_no_operational_data(auth_enabled, staging_demo_reset):
+    client = TestClient(create_app())
+    owner = _register(client, "demo-reset-empty@example.com")
+
+    response = client.post("/admin/demo/reset", headers=_auth_headers(owner["access_token"]))
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "reset"
+    assert body["cleared"]["invoices"] == 0
+    assert body["cleared"]["notification_events"] == 0
+
+
+def test_demo_reset_is_repeatable_and_login_still_works(auth_enabled, staging_demo_reset):
+    client = TestClient(create_app())
+    owner = _register(client, "demo-reset-repeat@example.com")
+    headers = _auth_headers(owner["access_token"])
+    _create_demo_operational_data(client, owner)
+
+    first = client.post("/admin/demo/reset", headers=headers)
+    second = client.post("/admin/demo/reset", headers=headers)
+    login = client.post(
+        "/auth/login",
+        json={"email": "demo-reset-repeat@example.com", "password": "password-123"},
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert second.json()["cleared"]["invoices"] == 0
+    assert login.status_code == 200
 
 
 def test_demo_reset_does_not_call_ocr_provider(auth_enabled, staging_demo_reset):
