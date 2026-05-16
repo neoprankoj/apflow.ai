@@ -189,6 +189,41 @@ def test_demo_reset_can_seed_review_required_without_ocr(auth_enabled, staging_d
     assert tasks[0]["status"] == "review_required"
 
 
+def test_demo_reset_can_seed_inbox_demo_without_ocr(auth_enabled, staging_demo_reset):
+    def fail_if_ocr_agent_requested():
+        raise AssertionError("deterministic seed should not request OCR dependencies")
+
+    dependencies.get_invoice_extraction_agent.cache_clear()
+    app = create_app()
+    app.dependency_overrides[dependencies.get_invoice_extraction_agent] = fail_if_ocr_agent_requested
+    client = TestClient(app)
+    owner = _register(client, "demo-seed-inbox@example.com")
+    tenant_id = owner["tenant"]["id"]
+    headers = _auth_headers(owner["access_token"])
+
+    response = client.post("/admin/demo/reset?seed_mode=inbox_demo", headers=headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["workflow_status"] == "approval_ready"
+    invoices = client.get(f"/invoices?tenant_id={tenant_id}", headers=headers).json()
+    tasks = client.get(f"/invoices/approval-tasks?tenant_id={tenant_id}", headers=headers).json()
+    review_tasks = client.get(f"/review/tasks?tenant_id={tenant_id}", headers=headers).json()
+    invoice_numbers = [invoice["canonical_invoice"]["invoice_number"] for invoice in invoices]
+    task_statuses = {task["status"] for task in tasks}
+
+    assert {
+        "DEMO-INBOX-READY",
+        "DEMO-INBOX-BLOCKED",
+        "DEMO-INBOX-HOLD",
+        "DEMO-INBOX-REJECTED",
+        "DEMO-INBOX-DUPLICATE",
+    }.issubset(set(invoice_numbers))
+    assert invoice_numbers.count("DEMO-INBOX-DUPLICATE") == 2
+    assert {"approved", "blocked", "on_hold", "rejected", "pending"}.issubset(task_statuses)
+    assert len(review_tasks) == 1
+
+
 def test_production_config_rejects_demo_reset():
     with pytest.raises(ValidationError, match="ALLOW_DEMO_RESET"):
         Settings(

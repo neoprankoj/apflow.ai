@@ -20,6 +20,7 @@ def test_backend_seed_mode_mapping():
     assert module.backend_seed_mode("approval-ready") == "approval_ready"
     assert module.backend_seed_mode("review-required") == "review_required"
     assert module.backend_seed_mode("vendor-preview") == "approval_ready"
+    assert module.backend_seed_mode("inbox-demo") == "inbox_demo"
     assert module.backend_seed_mode("all") == "all"
 
 

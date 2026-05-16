@@ -59,6 +59,7 @@
 ## Approval Inbox
 
 - [ ] Approval Inbox shows blocked, held, rejected, and approval-ready invoices.
+- [ ] `inbox-demo` seed mode creates ready, blocked, on-hold, rejected, duplicate-like, and review-required examples without OCR.
 - [ ] Duplicate invoice numbers remain distinguishable by invoice ID suffix.
 - [ ] Needs action, blocked, on hold, rejected, approval ready, high risk, and missing PO filters work.
 - [ ] Blocked invoice detail shows blocker reason, PO state, risk, and vendor-safe preview.
