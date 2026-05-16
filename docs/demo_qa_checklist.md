@@ -56,6 +56,16 @@
 - [ ] External invoice ID appears.
 - [ ] Recent ERP sync result appears.
 
+## Approval Inbox
+
+- [ ] Approval Inbox shows blocked, held, rejected, and approval-ready invoices.
+- [ ] Duplicate invoice numbers remain distinguishable by invoice ID suffix.
+- [ ] Needs action, blocked, on hold, rejected, approval ready, high risk, and missing PO filters work.
+- [ ] Blocked invoice detail shows blocker reason, PO state, risk, and vendor-safe preview.
+- [ ] Owner/admin/approver can approve, reject, and hold an eligible invoice from the inbox.
+- [ ] Approval-ready invoice can be exported from the inbox.
+- [ ] Rejected invoices do not expose invalid approval actions.
+
 ## Vendor Portal
 
 - [ ] Vendor preview is available for a linked invoice.
