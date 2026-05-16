@@ -27,6 +27,7 @@ import {
   getStoredToken,
   setStoredToken
 } from "./frontend-api";
+import { ApprovalInbox } from "./approval-inbox";
 import { InvoiceUploadPanel } from "./invoice-upload-panel";
 
 const DEMO_EMAIL = "demo-owner@apflow.local";
@@ -41,6 +42,7 @@ type InvoiceRecord = {
     supplier_name: string;
     grand_total: number;
     currency: string;
+    po_number?: string | null;
   };
 };
 
@@ -60,6 +62,7 @@ type NotificationEvent = {
   recipient_role: string;
   status: string;
   channel: string;
+  payload?: Record<string, unknown>;
 };
 
 type WorkflowState = {
@@ -441,6 +444,7 @@ export default function Dashboard() {
     ["overview", "Overview"],
     ["upload-invoice", "Upload Invoice"],
     ["ocr-review", "OCR Review"],
+    ["approval-inbox", "Approval Inbox"],
     ["approvals", "Approvals"],
     ["erp-export", "ERP Export"],
     ["vendor-portal-preview", "Vendor Portal Preview"],
@@ -574,6 +578,22 @@ export default function Dashboard() {
               tenantId={tenantId}
             />
           </div>
+
+          <ApprovalInbox
+            accessToken={accessToken}
+            apiBaseUrl={apiBaseUrl}
+            approvals={approvals}
+            canApproveInvoice={canApproveInvoice}
+            canExportErp={canExportErp}
+            invoices={invoices}
+            notifications={notifications}
+            onRefresh={() => {
+              if (accessToken && currentUser) {
+                return loadProtectedData(accessToken, currentUser);
+              }
+            }}
+            tenantId={tenantId}
+          />
 
           <section className="scroll-mt-6 space-y-3" id="approvals">
             <SectionHeading title="Approvals" subtitle="Recent invoices, review work, and workflow states" />

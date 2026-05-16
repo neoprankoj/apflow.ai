@@ -53,13 +53,22 @@ Use this script for a private staging demo. Keep the presenter flow deterministi
 3. Show the external invoice ID and sync result.
 4. Explain that the adapter pattern is live now and real ERP adapters are the next integration step.
 
-## G. Demo Path 6 - Vendor Portal Preview
+## G. Demo Path 6 - Approval Inbox
+
+1. Open `Approval Inbox`.
+2. Select a blocked invoice and show workflow, approval status, PO state, risk, and vendor-safe preview.
+3. Approve one blocked invoice and show it move into an export-ready state.
+4. Put another blocked invoice `On hold`.
+5. Show a rejected invoice and explain that it remains non-exportable.
+6. Export an approval-ready invoice from the inbox.
+
+## H. Demo Path 7 - Vendor Portal Preview
 
 1. Use the vendor preview section or create a vendor access token through the demo flow.
 2. Show the vendor-safe invoice status.
 3. Confirm that fraud scores, audit logs, ERP sync logs, approval-policy internals, and risk reasons are not exposed.
 
-## H. Demo Cleanup
+## I. Demo Cleanup
 
 1. Enable `ALLOW_DEMO_RESET=true` only when needed on private staging.
 2. Use the dashboard reset action or `POST /admin/demo/reset`.
