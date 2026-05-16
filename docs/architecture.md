@@ -186,7 +186,7 @@ Docker remains practical:
 - `docker-compose.staging.yml` layers restart policies, staging env file usage, and an optional Caddy reverse proxy profile.
 - `deploy/Caddyfile` routes the frontend and API hosts to the `web` and `api` services and is ready for Let's Encrypt through Caddy.
 
-`scripts/seed_demo_data.py` seeds a demo tenant through the API without printing bearer tokens. `scripts/verify_runtime.py` now checks health, readiness, dashboard reachability, mock pipeline, invoice upload/process, ERP export, vendor messages, chatbot, and vendor-safe invoice status.
+`scripts/seed_demo_data.py` seeds a demo tenant through the API without printing bearer tokens. Explicit seed modes call staging-only reset seed paths that create deterministic demo records without invoking live OCR. `scripts/verify_runtime.py` now checks health, readiness, dashboard reachability, mock pipeline, invoice upload/process, ERP export, vendor messages, chatbot, and vendor-safe invoice status.
 
 ## Phase 14 Azure OCR Validation
 

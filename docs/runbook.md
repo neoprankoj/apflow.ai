@@ -114,6 +114,29 @@ Production additionally requires `AUTH_ENABLED=true` and rejects `DEMO_MODE=true
 
 Never enable demo reset in production. Production settings reject `ALLOW_DEMO_RESET=true` during startup.
 
+## Demo Operations
+
+1. Check readiness before a demo:
+
+```powershell
+Invoke-WebRequest http://127.0.0.1:8000/ready
+python scripts/verify_runtime.py --auth-enabled
+```
+
+2. Enable `ALLOW_DEMO_RESET=true` temporarily only when you need to change demo state.
+3. Seed an explicit deterministic mode without calling live OCR:
+
+```powershell
+python scripts/seed_demo_data.py --api-base-url http://127.0.0.1:8000 --mode clean
+python scripts/seed_demo_data.py --api-base-url http://127.0.0.1:8000 --mode approval-ready
+python scripts/seed_demo_data.py --api-base-url http://127.0.0.1:8000 --mode review-required
+python scripts/seed_demo_data.py --api-base-url http://127.0.0.1:8000 --mode vendor-preview
+```
+
+4. Use `approval-ready` for the stable presenter path and `review-required` for the human-review path.
+5. Set `ALLOW_DEMO_RESET=false` again after cleanup and restart the API service.
+6. Use `docs/demo_script.md` and `docs/demo_qa_checklist.md` before live demos.
+
 ## Safe Stop, Start, And Backups
 
 Start or update:

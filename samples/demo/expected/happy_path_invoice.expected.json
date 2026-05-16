@@ -1,0 +1,9 @@
+{
+  "scenario": "happy_path_invoice",
+  "expected_workflow_status": "approval_ready",
+  "invoice_number": "DEMO-INVOICE-1001",
+  "supplier_name": "APFlow Demo Supplier Ltd.",
+  "purchase_order_number": "PO-DEMO-1001",
+  "allowed_ocr_providers": ["mock"],
+  "notes": "This deterministic seed bypasses live OCR so the approval-ready demo remains stable."
+}

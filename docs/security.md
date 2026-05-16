@@ -39,7 +39,7 @@ APFlow AI is tenant-first and deny-by-default.
 - Production rejects `DEMO_MODE=true` unless `ALLOW_DEMO_MODE_IN_PRODUCTION=true` is deliberately set for a controlled private demo.
 - `CORS_ALLOWED_ORIGINS` must name exact frontend origins in staging and production.
 - Startup logs may include environment, auth mode, repository mode, OCR provider, storage provider, ERP adapters, and public URLs; they must not include passwords, tokens, OCR keys, MinIO secrets, or database passwords.
-- `scripts/seed_demo_data.py` prints demo login details but does not print bearer tokens. Rotate seeded credentials before giving access beyond a private staging demo.
+- `scripts/seed_demo_data.py` prints demo login details but does not print bearer tokens. Deterministic seed modes do not invoke live OCR providers. Rotate seeded credentials before giving access beyond a private staging demo.
 - Back up PostgreSQL and document storage volumes before upgrades. Do not run `docker compose down -v` on staging unless deleting persistent data is intentional.
 - Real VPS staging should be exposed only through HTTPS reverse proxy domains. Do not expose PostgreSQL, Redis, MinIO, FastAPI, or Next.js service ports directly except through trusted firewall rules.
 - `scripts/check_staging.sh` and `scripts/verify_runtime.py --auth-enabled` are intended to validate HTTPS health, auth, upload/process, ERP export, and vendor-safe status without printing secrets.

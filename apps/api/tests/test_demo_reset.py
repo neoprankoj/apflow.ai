@@ -146,6 +146,49 @@ def test_demo_reset_does_not_call_ocr_provider(auth_enabled, staging_demo_reset)
     assert response.json()["workflow_status"] == "clean"
 
 
+def test_demo_reset_can_seed_approval_ready_without_ocr(auth_enabled, staging_demo_reset):
+    def fail_if_ocr_agent_requested():
+        raise AssertionError("deterministic seed should not request OCR dependencies")
+
+    dependencies.get_invoice_extraction_agent.cache_clear()
+    app = create_app()
+    app.dependency_overrides[dependencies.get_invoice_extraction_agent] = fail_if_ocr_agent_requested
+    client = TestClient(app)
+    owner = _register(client, "demo-seed-approval@example.com")
+
+    response = client.post(
+        "/admin/demo/reset?seed_mode=approval_ready",
+        headers=_auth_headers(owner["access_token"]),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["workflow_status"] == "approval_ready"
+    assert body["invoice_number"] == "DEMO-INVOICE-1001"
+    assert body["erp_export_ready"] is True
+
+
+def test_demo_reset_can_seed_review_required_without_ocr(auth_enabled, staging_demo_reset):
+    def fail_if_ocr_agent_requested():
+        raise AssertionError("deterministic seed should not request OCR dependencies")
+
+    dependencies.get_invoice_extraction_agent.cache_clear()
+    app = create_app()
+    app.dependency_overrides[dependencies.get_invoice_extraction_agent] = fail_if_ocr_agent_requested
+    client = TestClient(app)
+    owner = _register(client, "demo-seed-review@example.com")
+    tenant_id = owner["tenant"]["id"]
+    headers = _auth_headers(owner["access_token"])
+
+    response = client.post("/admin/demo/reset?seed_mode=review_required", headers=headers)
+
+    assert response.status_code == 200
+    assert response.json()["workflow_status"] == "review_required"
+    tasks = client.get(f"/review/tasks?tenant_id={tenant_id}", headers=headers).json()
+    assert len(tasks) == 1
+    assert tasks[0]["status"] == "review_required"
+
+
 def test_production_config_rejects_demo_reset():
     with pytest.raises(ValidationError, match="ALLOW_DEMO_RESET"):
         Settings(
