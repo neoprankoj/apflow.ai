@@ -15,6 +15,7 @@ Use this script for a private staging demo. Keep the presenter flow deterministi
    - approval ready: `python scripts/seed_demo_data.py --api-base-url <api-url> --mode approval-ready`
    - review required: `python scripts/seed_demo_data.py --api-base-url <api-url> --mode review-required`
    - vendor preview: `python scripts/seed_demo_data.py --api-base-url <api-url> --mode vendor-preview`
+   - inbox demo: `python scripts/seed_demo_data.py --api-base-url <api-url> --mode inbox-demo`
 
 ## B. Demo Path 1 - Clean Dashboard
 
@@ -55,12 +56,13 @@ Use this script for a private staging demo. Keep the presenter flow deterministi
 
 ## G. Demo Path 6 - Approval Inbox
 
-1. Open `Approval Inbox`.
-2. Select a blocked invoice and show workflow, approval status, PO state, risk, and vendor-safe preview.
-3. Approve one blocked invoice and show it move into an export-ready state.
-4. Put another blocked invoice `On hold`.
-5. Show a rejected invoice and explain that it remains non-exportable.
-6. Export an approval-ready invoice from the inbox.
+1. Seed `inbox-demo` when you need all approval examples ready before the meeting.
+2. Open `Approval Inbox`.
+3. Select the blocked/high-risk invoice and show workflow, approval status, missing PO, risk badge, and vendor-safe preview.
+4. Approve one blocked invoice and show it move into an export-ready state.
+5. Select the existing `On hold` and `Rejected` examples and explain why they remain non-exportable.
+6. Select the duplicate-like invoices and explain the duplicate badge plus short invoice ID suffix.
+7. Export the approval-ready invoice from the inbox.
 
 ## H. Demo Path 7 - Vendor Portal Preview
 

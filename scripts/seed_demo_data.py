@@ -25,7 +25,7 @@ def main() -> int:
     parser.add_argument("--adapter", default="priority")
     parser.add_argument(
         "--mode",
-        choices=("clean", "approval-ready", "review-required", "vendor-preview", "all"),
+        choices=("clean", "approval-ready", "review-required", "vendor-preview", "inbox-demo", "all"),
         default="approval-ready",
     )
     args = parser.parse_args()

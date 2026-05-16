@@ -1,7 +1,7 @@
 "use client";
 
 import { AlertTriangle, CheckCircle2, ExternalLink, Send } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { apiFetch } from "./frontend-api";
 
 type InvoiceRecord = {
@@ -96,7 +96,9 @@ export function ApprovalInbox({
   const [filter, setFilter] = useState<Filter>("all");
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
   const [vendorPreview, setVendorPreview] = useState<VendorInvoiceStatus | null>(null);
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [approvalMessage, setApprovalMessage] = useState<string | null>(null);
+  const [erpMessage, setErpMessage] = useState<string | null>(null);
+  const [vendorMessage, setVendorMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeAction, setActiveAction] = useState<string | null>(null);
   const [erpResult, setErpResult] = useState<ERPSyncResult | null>(null);
@@ -125,7 +127,9 @@ export function ApprovalInbox({
   useEffect(() => {
     setVendorPreview(null);
     setErpResult(null);
-    setStatusMessage(null);
+    setApprovalMessage(null);
+    setErpMessage(null);
+    setVendorMessage(null);
     setError(null);
     if (!selectedItem || !apiBaseUrl || !tenantId || !accessToken) return;
     void loadVendorPreview(selectedItem.invoice.invoice_id);
@@ -136,7 +140,7 @@ export function ApprovalInbox({
     if (!selectedItem || !apiBaseUrl || !tenantId || !accessToken || !canApproveInvoice) return;
     setActiveAction(action);
     setError(null);
-    setStatusMessage(null);
+    setApprovalMessage(null);
     try {
       const result = await apiFetch<ApprovalDecisionResult>(
         apiBaseUrl,
@@ -151,7 +155,7 @@ export function ApprovalInbox({
       );
       await onRefresh();
       await loadVendorPreview(selectedItem.invoice.invoice_id);
-      setStatusMessage(
+      setApprovalMessage(
         `Approval decision saved: ${result.approval_status.replaceAll("_", " ")}. ${
           result.blocker_reason ?? ""
         }`.trim()
@@ -167,7 +171,7 @@ export function ApprovalInbox({
     if (!selectedItem || !apiBaseUrl || !tenantId || !accessToken || !canExportErp) return;
     setActiveAction("export");
     setError(null);
-    setStatusMessage(null);
+    setErpMessage(null);
     try {
       const result = await apiFetch<ERPSyncResult>(apiBaseUrl, "/erp/export-invoice", {
         method: "POST",
@@ -183,7 +187,7 @@ export function ApprovalInbox({
       setErpResult(result);
       await onRefresh();
       await loadVendorPreview(selectedItem.invoice.invoice_id);
-      setStatusMessage(`Mock ERP export ${result.status}; external ID ${result.external_id ?? "not returned"}.`);
+      setErpMessage(`Mock ERP export ${result.status}; external ID ${result.external_id ?? "not returned"}.`);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "ERP export failed.");
     } finally {
@@ -193,6 +197,7 @@ export function ApprovalInbox({
 
   async function loadVendorPreview(invoiceId: string) {
     if (!apiBaseUrl || !tenantId || !accessToken) return;
+    setVendorMessage(null);
     try {
       const preview = await apiFetch<VendorInvoiceStatus>(
         apiBaseUrl,
@@ -200,6 +205,7 @@ export function ApprovalInbox({
         { token: accessToken, action: "Load inbox vendor preview" }
       );
       setVendorPreview(preview);
+      setVendorMessage(`Vendor-safe status refreshed: ${humanize(preview.status)}.`);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Vendor preview failed.");
     }
@@ -237,7 +243,7 @@ export function ApprovalInbox({
           ))}
         </div>
 
-        <div className="grid lg:grid-cols-[1.15fr_0.85fr]">
+        <div className="grid lg:grid-cols-[minmax(320px,420px)_minmax(0,1fr)] xl:grid-cols-[minmax(360px,420px)_minmax(520px,1fr)]">
           <div className="divide-y divide-border border-b border-border lg:border-b-0 lg:border-r">
             {filteredItems.length ? (
               filteredItems.map((item) => (
@@ -273,30 +279,45 @@ export function ApprovalInbox({
             )}
           </div>
 
-          <div className="space-y-4 p-4">
+          <div className="space-y-5 p-4 lg:p-5">
             {selectedItem ? (
               <>
-                <div className="flex items-start justify-between gap-3">
+                <div className="flex flex-col gap-3 border-b border-border pb-4 sm:flex-row sm:items-start sm:justify-between">
                   <div>
-                    <p className="font-semibold">{selectedItem.invoice.canonical_invoice.invoice_number}</p>
+                    <p className="text-lg font-semibold">{selectedItem.invoice.canonical_invoice.invoice_number}</p>
                     <p className="text-sm text-muted">{selectedItem.invoice.canonical_invoice.supplier_name}</p>
+                    <p className="mt-2 text-base font-medium">
+                      {money(
+                        selectedItem.invoice.canonical_invoice.grand_total,
+                        selectedItem.invoice.canonical_invoice.currency
+                      )}
+                    </p>
+                    <p className="mt-1 text-xs text-muted">Invoice ID #{shortId(selectedItem.invoice.invoice_id)}</p>
                   </div>
-                  <Badge label={selectedItem.erpReady ? "ERP ready" : "ERP blocked"} tone={selectedItem.erpReady ? "ok" : "warning"} />
+                  <div className="flex flex-wrap gap-2 sm:justify-end">
+                    <StatusBadge status={selectedItem.workflowStatus} />
+                    {selectedItem.duplicateLikely ? <StatusBadge status="duplicate" /> : null}
+                    {erpResult ? <StatusBadge status="exported" /> : null}
+                  </div>
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <Metric label="Workflow" value={humanize(selectedItem.workflowStatus)} />
-                  <Metric label="Approval" value={humanize(selectedItem.approvalStatus)} />
-                  <Metric label="PO match" value={humanize(selectedItem.poMatchStatus)} />
-                  <Metric label="Risk" value={selectedItem.riskLevel} />
-                  <Metric
-                    label="Amount"
-                    value={money(
-                      selectedItem.invoice.canonical_invoice.grand_total,
-                      selectedItem.invoice.canonical_invoice.currency
-                    )}
+                <div className="overflow-hidden rounded-md border border-border">
+                  <DetailRow label="Workflow" value={<StatusBadge status={selectedItem.workflowStatus} />} />
+                  <DetailRow label="Approval" value={<StatusBadge status={selectedItem.approvalStatus} />} />
+                  <DetailRow label="PO match" value={<StatusBadge status={selectedItem.poMatchStatus} />} />
+                  <DetailRow label="Risk" value={<StatusBadge status={selectedItem.riskLevel} />} />
+                  <DetailRow
+                    label="ERP ready"
+                    value={<StatusBadge status={selectedItem.erpReady ? "erp_ready" : "erp_blocked"} />}
                   />
-                  <Metric label="Invoice ID" value={shortId(selectedItem.invoice.invoice_id)} />
+                  <DetailRow
+                    label="Duplicate status"
+                    value={<StatusBadge status={selectedItem.duplicateLikely ? "duplicate" : "clear"} />}
+                  />
+                  <DetailRow
+                    label="Vendor-safe status"
+                    value={<StatusBadge status={vendorPreview?.status ?? "loading"} />}
+                  />
                 </div>
 
                 <div className="rounded-md border border-border px-3 py-2 text-sm">
@@ -304,18 +325,8 @@ export function ApprovalInbox({
                   <p className="mt-1">{selectedItem.blockerReason}</p>
                 </div>
 
-                <div className="rounded-md border border-border px-3 py-2 text-sm">
-                  <div className="mb-2 flex items-center justify-between">
-                    <p className="text-xs text-muted">Vendor-safe preview</p>
-                    <button
-                      className="inline-flex items-center text-xs text-muted"
-                      onClick={() => void loadVendorPreview(selectedItem.invoice.invoice_id)}
-                      type="button"
-                    >
-                      <ExternalLink className="mr-1 h-3.5 w-3.5" />
-                      Refresh
-                    </button>
-                  </div>
+                <div className="rounded-md border border-border px-3 py-3 text-sm">
+                  <p className="mb-2 text-xs text-muted">Vendor-safe preview</p>
                   {vendorPreview ? (
                     <>
                       <p className="font-medium">{humanize(vendorPreview.status)}</p>
@@ -342,46 +353,70 @@ export function ApprovalInbox({
                   </div>
                 ) : null}
 
-                {canApproveInvoice && selectedItem.canDecide ? (
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      className="rounded-md border border-border px-3 py-2 text-sm"
-                      disabled={Boolean(activeAction)}
-                      onClick={() => void decideApproval("approve")}
-                      type="button"
-                    >
-                      Approve
-                    </button>
-                    <button
-                      className="rounded-md border border-border px-3 py-2 text-sm"
-                      disabled={Boolean(activeAction)}
-                      onClick={() => void decideApproval("reject")}
-                      type="button"
-                    >
-                      Reject
-                    </button>
-                    <button
-                      className="rounded-md border border-border px-3 py-2 text-sm"
-                      disabled={Boolean(activeAction)}
-                      onClick={() => void decideApproval("hold")}
-                      type="button"
-                    >
-                      Keep on Hold
-                    </button>
-                  </div>
-                ) : null}
+                <div className="grid gap-3 xl:grid-cols-3">
+                  <ActionGroup title="Approval actions">
+                    {canApproveInvoice && selectedItem.canDecide ? (
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          className="rounded-md border border-border px-3 py-2 text-sm"
+                          disabled={Boolean(activeAction)}
+                          onClick={() => void decideApproval("approve")}
+                          type="button"
+                        >
+                          Approve
+                        </button>
+                        <button
+                          className="rounded-md border border-border px-3 py-2 text-sm"
+                          disabled={Boolean(activeAction)}
+                          onClick={() => void decideApproval("reject")}
+                          type="button"
+                        >
+                          Reject
+                        </button>
+                        <button
+                          className="rounded-md border border-border px-3 py-2 text-sm"
+                          disabled={Boolean(activeAction)}
+                          onClick={() => void decideApproval("hold")}
+                          type="button"
+                        >
+                          Keep on Hold
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted">No approval decision is available for this state.</p>
+                    )}
+                    {approvalMessage ? <p className="text-sm text-green-700">{approvalMessage}</p> : null}
+                  </ActionGroup>
 
-                {selectedItem.erpReady ? (
-                  <button
-                    className="inline-flex items-center rounded-md border border-border px-3 py-2 text-sm disabled:text-muted"
-                    disabled={!canExportErp || Boolean(activeAction)}
-                    onClick={() => void exportToMockErp()}
-                    type="button"
-                  >
-                    <Send className="mr-2 h-4 w-4" />
-                    {activeAction === "export" ? "Exporting..." : "Export to Mock ERP"}
-                  </button>
-                ) : null}
+                  <ActionGroup title="ERP action">
+                    <button
+                      className="inline-flex items-center rounded-md border border-border px-3 py-2 text-sm disabled:text-muted"
+                      disabled={!selectedItem.erpReady || !canExportErp || Boolean(activeAction)}
+                      onClick={() => void exportToMockErp()}
+                      type="button"
+                    >
+                      <Send className="mr-2 h-4 w-4" />
+                      {activeAction === "export" ? "Exporting..." : "Export to Mock ERP"}
+                    </button>
+                    {selectedItem.erpReady ? null : (
+                      <p className="text-sm text-muted">This invoice is not export-ready yet.</p>
+                    )}
+                    {erpMessage ? <p className="text-sm text-green-700">{erpMessage}</p> : null}
+                  </ActionGroup>
+
+                  <ActionGroup title="Vendor">
+                    <button
+                      className="inline-flex items-center rounded-md border border-border px-3 py-2 text-sm"
+                      disabled={Boolean(activeAction)}
+                      onClick={() => void loadVendorPreview(selectedItem.invoice.invoice_id)}
+                      type="button"
+                    >
+                      <ExternalLink className="mr-2 h-4 w-4" />
+                      Preview vendor-safe status
+                    </button>
+                    {vendorMessage ? <p className="text-sm text-green-700">{vendorMessage}</p> : null}
+                  </ActionGroup>
+                </div>
 
                 {erpResult ? (
                   <div className="rounded-md border border-border px-3 py-2 text-sm">
@@ -391,7 +426,6 @@ export function ApprovalInbox({
                     </p>
                   </div>
                 ) : null}
-                {statusMessage ? <p className="text-sm text-green-700">{statusMessage}</p> : null}
                 {error ? <p className="text-sm text-red-700">{error}</p> : null}
               </>
             ) : (
@@ -502,28 +536,58 @@ function matchesFilter(item: ReturnType<typeof buildInboxItems>[number], filter:
   }
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
+function DetailRow({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <div className="rounded-md border border-border px-3 py-2">
-      <p className="text-xs text-muted">{label}</p>
-      <p className="mt-1 truncate font-medium">{value}</p>
+    <div className="grid gap-2 border-b border-border px-3 py-2 last:border-b-0 sm:grid-cols-[150px_1fr]">
+      <span className="text-sm text-muted">{label}</span>
+      <span className="text-sm font-medium">{value}</span>
     </div>
   );
 }
 
-function Badge({ label, tone }: { label: string; tone: "ok" | "warning" }) {
+function ActionGroup({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className="space-y-2 rounded-md border border-border px-3 py-3">
+      <p className="text-xs text-muted">{title}</p>
+      {children}
+    </div>
+  );
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const normalized = status.replaceAll(" ", "_");
+  const tone = badgeTone(normalized);
+  const label = humanize(normalized);
   return (
     <span
-      className={`inline-flex items-center rounded border px-1.5 py-0.5 text-[11px] ${
+      className={`inline-flex items-center rounded border px-2 py-1 text-xs ${
         tone === "ok"
           ? "border-green-200 bg-green-50 text-green-800"
-          : "border-amber-200 bg-amber-50 text-amber-800"
+          : tone === "danger"
+            ? "border-red-200 bg-red-50 text-red-800"
+            : tone === "muted"
+              ? "border-border bg-[hsl(var(--background))] text-muted"
+              : "border-amber-200 bg-amber-50 text-amber-800"
       }`}
     >
-      {tone === "ok" ? <CheckCircle2 className="mr-1 h-3 w-3" /> : <AlertTriangle className="mr-1 h-3 w-3" />}
+      {tone === "ok" ? <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> : null}
+      {tone === "warning" || tone === "danger" ? <AlertTriangle className="mr-1 h-3.5 w-3.5" /> : null}
       {label}
     </span>
   );
+}
+
+function Badge({ label }: { label: string; tone: "ok" | "warning" }) {
+  return <StatusBadge status={label} />;
+}
+
+function badgeTone(status: string): "ok" | "warning" | "danger" | "muted" {
+  if (["approved", "approval_ready", "erp_ready", "clear", "exported"].includes(status)) return "ok";
+  if (["rejected"].includes(status)) return "danger";
+  if (["blocked", "on_hold", "missing_po", "high", "critical", "duplicate", "erp_blocked"].includes(status)) {
+    return "warning";
+  }
+  return "muted";
 }
 
 function shortId(value: string) {
