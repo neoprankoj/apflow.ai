@@ -219,8 +219,7 @@ export default function Dashboard() {
       if (!apiBaseUrl) return;
       const query = `tenant_id=${user.tenant.id}`;
       const userPermissions = new Set(user.permissions);
-      try {
-        const [invoices, approvals, notifications, workflows, reviewTasks, adminUsers] = await Promise.all([
+      const [invoices, approvals, notifications, workflows, reviewTasks, adminUsers] = await Promise.allSettled([
           apiFetch<InvoiceRecord[]>(apiBaseUrl, `/invoices?${query}`, { token, action: "List invoices" }),
           apiFetch<ApprovalTask[]>(apiBaseUrl, `/invoices/approval-tasks?${query}`, {
             token,
@@ -243,32 +242,42 @@ export default function Dashboard() {
             : Promise.resolve([])
         ]);
 
-        let vendorAccess: VendorAccess | null = null;
-        let vendorInvoices: VendorInvoice[] = [];
-        try {
-          vendorAccess = await apiFetch<VendorAccess>(apiBaseUrl, "/vendor/access", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ tenant_id: user.tenant.id, email: "vendor@example.com" }),
-            token,
-            action: "Create vendor demo access"
-          });
-          if (vendorAccess.access_token) {
-            vendorInvoices = await apiFetch<VendorInvoice[]>(
-              apiBaseUrl,
-              `/vendor/invoices?${query}&access_token=${encodeURIComponent(vendorAccess.access_token)}`,
-              { action: "List vendor invoices" }
-            );
-          }
-        } catch (error) {
-          console.warn("[APFlow] Vendor preview setup failed", error);
-        }
+      const refreshErrors = [invoices, approvals, notifications, workflows, reviewTasks, adminUsers]
+        .filter((result): result is PromiseRejectedResult => result.status === "rejected")
+        .map((result) => (result.reason instanceof Error ? result.reason.message : "Dashboard data failed to load."));
 
-        setDashboardData({ invoices, approvals, notifications, workflows, reviewTasks, adminUsers, vendorAccess, vendorInvoices });
+      let vendorAccess: VendorAccess | null = null;
+      let vendorInvoices: VendorInvoice[] = [];
+      try {
+        vendorAccess = await apiFetch<VendorAccess>(apiBaseUrl, "/vendor/access", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ tenant_id: user.tenant.id, email: "vendor@example.com" }),
+          token,
+          action: "Create vendor demo access"
+        });
+        if (vendorAccess.access_token) {
+          vendorInvoices = await apiFetch<VendorInvoice[]>(
+            apiBaseUrl,
+            `/vendor/invoices?${query}&access_token=${encodeURIComponent(vendorAccess.access_token)}`,
+            { action: "List vendor invoices" }
+          );
+        }
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Dashboard data failed to load.";
-        setApiError(message);
+        console.warn("[APFlow] Vendor preview setup failed", error);
       }
+
+      setDashboardData((current) => ({
+        invoices: invoices.status === "fulfilled" ? invoices.value : current.invoices,
+        approvals: approvals.status === "fulfilled" ? approvals.value : current.approvals,
+        notifications: notifications.status === "fulfilled" ? notifications.value : current.notifications,
+        workflows: workflows.status === "fulfilled" ? workflows.value : current.workflows,
+        reviewTasks: reviewTasks.status === "fulfilled" ? reviewTasks.value : current.reviewTasks,
+        adminUsers: adminUsers.status === "fulfilled" ? adminUsers.value : current.adminUsers,
+        vendorAccess,
+        vendorInvoices
+      }));
+      setApiError(refreshErrors.length ? refreshErrors.join(" ") : null);
     },
     [apiBaseUrl]
   );

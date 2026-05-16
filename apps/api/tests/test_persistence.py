@@ -43,6 +43,7 @@ from app.core.schemas import (
     HumanReviewStatus,
     HumanReviewTask,
     UploadedInvoiceDocument,
+    UserRole,
     WorkflowState,
     WorkflowStatus,
 )
@@ -329,6 +330,52 @@ def test_sql_repository_demo_cleanup_targets_only_migrated_tables():
     assert "notification_events" in cleanup_tables
     assert "notifications" not in cleanup_tables
     assert "approval_flows" not in cleanup_tables
+
+
+@pytest.mark.parametrize("status", ["approval_ready", "review_required", "blocked", "approved", "rejected", "on_hold", "exported"])
+def test_sql_repository_workflow_states_round_trip_business_statuses(sql_repository, status):
+    tenant = sql_repository.create_tenant("Workflow Tenant", f"workflow-{status}")
+    sql_repository.store_workflow_state(
+        WorkflowState(
+            tenant_id=tenant.id,
+            workflow_id=uuid4(),
+            state=status,
+            status=status,
+        )
+    )
+
+    states = sql_repository.list_workflow_states(tenant.id)
+
+    assert states[-1].status == status
+
+
+def test_sql_repository_rolls_back_after_failed_workflow_read(sql_repository, monkeypatch):
+    tenant = sql_repository.create_tenant("Rollback Tenant", "rollback-tenant")
+    user = sql_repository.create_user("rollback@example.com", "Rollback User", "hash")
+    sql_repository.create_membership(tenant.id, user.id, UserRole.OWNER)
+    original_scalars = sql_repository.session.scalars
+    rollback_calls = 0
+
+    def failing_scalars(*args, **kwargs):
+        raise RuntimeError("simulated workflow read failure")
+
+    original_rollback = sql_repository.session.rollback
+
+    def tracking_rollback():
+        nonlocal rollback_calls
+        rollback_calls += 1
+        return original_rollback()
+
+    monkeypatch.setattr(sql_repository.session, "scalars", failing_scalars)
+    monkeypatch.setattr(sql_repository.session, "rollback", tracking_rollback)
+
+    with pytest.raises(RuntimeError, match="simulated workflow read failure"):
+        sql_repository.list_workflow_states(tenant.id)
+
+    monkeypatch.setattr(sql_repository.session, "scalars", original_scalars)
+
+    assert rollback_calls == 1
+    assert sql_repository.list_users_for_tenant(tenant.id)[0][0].email == "rollback@example.com"
 
 
 def test_sql_repository_demo_cleanup_rolls_back_on_failure(sql_repository, monkeypatch):

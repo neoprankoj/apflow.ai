@@ -332,7 +332,7 @@ class WorkflowState(APFlowModel):
     workflow_id: UUID
     tenant_id: UUID
     state: str
-    status: WorkflowStatus
+    status: str
     current_agent: str | None = None
     retry_count: int = 0
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
