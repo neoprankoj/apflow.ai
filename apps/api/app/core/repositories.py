@@ -464,6 +464,28 @@ class InMemoryAPRepository:
     def list_approval_tasks(self, tenant_id: UUID) -> list[ApprovalTaskRecord]:
         return [record for record in self.approval_tasks.values() if record.tenant_id == tenant_id]
 
+    def get_latest_approval_task(self, tenant_id: UUID, invoice_id: UUID) -> ApprovalTaskRecord | None:
+        tasks = [
+            task
+            for task in self.list_approval_tasks(tenant_id)
+            if task.invoice_id == invoice_id
+        ]
+        return tasks[-1] if tasks else None
+
+    def update_approval_task(
+        self,
+        tenant_id: UUID,
+        approval_task_id: UUID,
+        status: ApprovalTaskStatus,
+        reason: str,
+    ) -> ApprovalTaskRecord:
+        task = self.approval_tasks[approval_task_id]
+        if task.tenant_id != tenant_id:
+            raise KeyError("approval task is outside tenant scope")
+        task.status = status
+        task.reason = reason
+        return task
+
     def store_notification_event(
         self,
         tenant_id: UUID,

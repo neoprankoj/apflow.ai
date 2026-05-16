@@ -24,6 +24,7 @@ Initial endpoints:
 - `GET /invoices/workflows?tenant_id={uuid}`
 - `GET /invoices/audit-events?tenant_id={uuid}`
 - `GET /invoices/{invoice_id}?tenant_id={uuid}`
+- `POST /invoices/{invoice_id}/approval-decision`
 - `POST /documents/invoices/upload`
 - `GET /documents/invoices?tenant_id={uuid}`
 - `GET /documents/invoices/{document_id}?tenant_id={uuid}`
@@ -50,6 +51,7 @@ Initial endpoints:
 - `POST /vendor/access`
 - `GET /vendor/invoices?tenant_id={uuid}`
 - `GET /vendor/invoices/{invoice_id}?tenant_id={uuid}`
+- `GET /vendor/preview/invoices/{invoice_id}?tenant_id={uuid}`
 - `POST /vendor/messages`
 - `POST /vendor/chat`
 - `GET /vendor/messages?tenant_id={uuid}`
@@ -186,6 +188,10 @@ Example payload:
 ```
 
 Vendor endpoints require `X-Vendor-Access-Token` or an `access_token` query value except `POST /vendor/access`, which creates a demo/dev portal token. The returned token is shown once; only its hash is stored.
+
+`POST /invoices/{invoice_id}/approval-decision` requires `invoice:approve` and accepts `approve`, `reject`, or `hold`. It updates the latest approval task, records audit and notification events, and returns whether the invoice is now ERP-export-ready.
+
+`GET /vendor/preview/invoices/{invoice_id}?tenant_id={uuid}` is an internal authenticated preview endpoint. It returns the same vendor-safe projection shown in the portal without exposing internal risk, audit, or ERP details.
 
 Vendor invoice responses expose only invoice identifiers, supplier name, dates, currency, total, vendor-safe status, public message, missing-information field names, and mocked payment status when available.
 

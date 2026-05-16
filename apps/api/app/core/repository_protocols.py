@@ -68,6 +68,16 @@ class ApprovalRepository(Protocol):
 
     def list_approval_tasks(self, tenant_id: UUID) -> list[ApprovalTaskRecord]: ...
 
+    def get_latest_approval_task(self, tenant_id: UUID, invoice_id: UUID) -> ApprovalTaskRecord | None: ...
+
+    def update_approval_task(
+        self,
+        tenant_id: UUID,
+        approval_task_id: UUID,
+        status: ApprovalTaskStatus,
+        reason: str,
+    ) -> ApprovalTaskRecord: ...
+
 
 class NotificationRepository(Protocol):
     def store_notification_event(

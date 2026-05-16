@@ -534,8 +534,38 @@ class SQLAlchemyAPRepository:
         return self._approval_task_record(row)
 
     def list_approval_tasks(self, tenant_id: UUID) -> list[ApprovalTaskRecord]:
-        rows = self.session.scalars(select(dbm.ApprovalTask).where(dbm.ApprovalTask.tenant_id == tenant_id)).all()
+        rows = self.session.scalars(
+            select(dbm.ApprovalTask)
+            .where(dbm.ApprovalTask.tenant_id == tenant_id)
+            .order_by(dbm.ApprovalTask.created_at, dbm.ApprovalTask.updated_at)
+        ).all()
         return [self._approval_task_record(row) for row in rows]
+
+    def get_latest_approval_task(self, tenant_id: UUID, invoice_id: UUID) -> ApprovalTaskRecord | None:
+        row = self.session.scalar(
+            select(dbm.ApprovalTask)
+            .where(
+                dbm.ApprovalTask.tenant_id == tenant_id,
+                dbm.ApprovalTask.invoice_id == invoice_id,
+            )
+            .order_by(dbm.ApprovalTask.created_at.desc(), dbm.ApprovalTask.updated_at.desc())
+        )
+        return self._approval_task_record(row) if row else None
+
+    def update_approval_task(
+        self,
+        tenant_id: UUID,
+        approval_task_id: UUID,
+        status: ApprovalTaskStatus,
+        reason: str,
+    ) -> ApprovalTaskRecord:
+        row = self.session.get(dbm.ApprovalTask, approval_task_id)
+        if row is None or row.tenant_id != tenant_id:
+            raise KeyError("approval task is outside tenant scope")
+        row.status = str(status)
+        row.reason = reason
+        self.session.commit()
+        return self._approval_task_record(row)
 
     def store_notification_event(
         self,

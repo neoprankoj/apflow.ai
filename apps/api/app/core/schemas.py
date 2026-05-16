@@ -121,10 +121,20 @@ class ApprovalTaskStatus(StrEnum):
     AUTO_APPROVED = "auto_approved"
     PENDING = "pending"
     BLOCKED = "blocked"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    ON_HOLD = "on_hold"
+
+
+class ApprovalDecisionAction(StrEnum):
+    APPROVE = "approve"
+    REJECT = "reject"
+    HOLD = "hold"
 
 
 class NotificationType(StrEnum):
     APPROVAL_REQUIRED = "approval_required"
+    APPROVAL_DECISION_RECORDED = "approval_decision_recorded"
     INVOICE_BLOCKED = "invoice_blocked"
     DUPLICATE_DETECTED = "duplicate_detected"
     VALIDATION_FAILED = "validation_failed"
@@ -633,6 +643,25 @@ class ApprovalRoutingOutput(APFlowModel):
     assigned_role: str
     approval_status: ApprovalTaskStatus
     reason: str
+
+
+class ApprovalDecisionRequest(APFlowModel):
+    tenant_id: UUID
+    action: ApprovalDecisionAction
+    reason: str | None = None
+    correlation_id: UUID = Field(default_factory=uuid4)
+
+
+class ApprovalDecisionResult(APFlowModel):
+    invoice_id: UUID
+    approval_task_id: UUID
+    action: ApprovalDecisionAction
+    route: ApprovalRoute
+    approval_status: ApprovalTaskStatus
+    reason: str
+    workflow_status: str
+    erp_export_ready: bool
+    blocker_reason: str | None = None
 
 
 class NotificationInput(APFlowModel):

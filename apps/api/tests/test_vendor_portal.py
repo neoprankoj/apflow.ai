@@ -63,6 +63,28 @@ def test_vendor_safe_status_mapping():
     )
     assert map_vendor_invoice_status(repository, tenant_id, invoice) == VendorSafeStatus.UNDER_REVIEW
 
+    blocked_invoice = _seed_invoice(repository, tenant_id, vendor.vendor_id, "INV-BLOCKED-MAP")
+    repository.create_approval_task(
+        tenant_id=tenant_id,
+        invoice_id=blocked_invoice.invoice_id,
+        route=ApprovalRoute.BLOCKED,
+        assigned_role="ap_admin",
+        status=ApprovalTaskStatus.BLOCKED,
+        reason="High-risk invoice requires AP review.",
+    )
+    assert map_vendor_invoice_status(repository, tenant_id, blocked_invoice) == VendorSafeStatus.UNDER_REVIEW
+
+    rejected_invoice = _seed_invoice(repository, tenant_id, vendor.vendor_id, "INV-REJECTED-MAP")
+    repository.create_approval_task(
+        tenant_id=tenant_id,
+        invoice_id=rejected_invoice.invoice_id,
+        route=ApprovalRoute.BLOCKED,
+        assigned_role="ap_admin",
+        status=ApprovalTaskStatus.REJECTED,
+        reason="Rejected by AP reviewer.",
+    )
+    assert map_vendor_invoice_status(repository, tenant_id, rejected_invoice) == VendorSafeStatus.REJECTED
+
     repository.store_erp_sync_log(
         ERPSyncLog(
             tenant_id=tenant_id,
@@ -103,6 +125,31 @@ def test_vendor_can_see_own_invoices_only_and_detail_hides_internal_fields():
     assert "audit_events" not in own_detail.json()
     assert "erp_sync_logs" not in own_detail.json()
     assert other_detail.status_code == 403
+
+
+def test_internal_vendor_preview_for_blocked_invoice_is_safe():
+    client = TestClient(create_app())
+    repository = dependencies.get_repository()
+    tenant_id = uuid4()
+    vendor = repository.add_vendor(tenant_id, "Preview Vendor")
+    invoice = _seed_invoice(repository, tenant_id, vendor.vendor_id, "INV-PREVIEW")
+    repository.create_approval_task(
+        tenant_id=tenant_id,
+        invoice_id=invoice.invoice_id,
+        route=ApprovalRoute.BLOCKED,
+        assigned_role="ap_admin",
+        status=ApprovalTaskStatus.BLOCKED,
+        reason="Internal high-risk policy block.",
+    )
+
+    response = client.get(f"/vendor/preview/invoices/{invoice.invoice_id}?tenant_id={tenant_id}")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "under_review"
+    assert body["public_message"] == "This invoice is under AP review."
+    assert "risk" not in body
+    assert "audit_events" not in body
 
 
 def test_vendor_message_submission_creates_notification_event():

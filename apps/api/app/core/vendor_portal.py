@@ -51,11 +51,15 @@ def map_vendor_invoice_status(
     if not approval_tasks:
         return VendorSafeStatus.RECEIVED
     latest = approval_tasks[-1]
-    if latest.route == ApprovalRoute.BLOCKED:
+    if latest.status == ApprovalTaskStatus.REJECTED:
         return VendorSafeStatus.REJECTED
-    if latest.status == ApprovalTaskStatus.AUTO_APPROVED:
+    if latest.status in {ApprovalTaskStatus.AUTO_APPROVED, ApprovalTaskStatus.APPROVED}:
         return VendorSafeStatus.APPROVED
-    if latest.status == ApprovalTaskStatus.PENDING:
+    if latest.status in {
+        ApprovalTaskStatus.PENDING,
+        ApprovalTaskStatus.BLOCKED,
+        ApprovalTaskStatus.ON_HOLD,
+    }:
         return VendorSafeStatus.UNDER_REVIEW
     return VendorSafeStatus.UNDER_REVIEW
 
