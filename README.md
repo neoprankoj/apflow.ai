@@ -132,7 +132,7 @@ docker compose -f docker-compose.yml -f docker-compose.staging.yml --profile pro
 
 Never use `docker compose down -v` on staging unless you intentionally want to delete PostgreSQL, MinIO, and document storage volumes.
 
-Detailed VPS deployment instructions are in `docs/deployment.md`. Staging security checks are in `docs/security_staging_checklist.md`.
+Detailed VPS deployment instructions are in `docs/deployment.md`. Day-two staging operations are in `docs/operations_staging.md`. Staging security checks are in `docs/security_staging_checklist.md`.
 
 Real VPS deployment shortcut:
 
