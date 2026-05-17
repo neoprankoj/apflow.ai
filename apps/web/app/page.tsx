@@ -37,6 +37,7 @@ import {
   setStoredToken
 } from "./frontend-api";
 import { ApprovalInbox } from "./approval-inbox";
+import { AuditTimeline, type AuditEvent } from "./audit-timeline";
 import { InvoiceUploadPanel } from "./invoice-upload-panel";
 
 const DEMO_EMAIL = "demo-owner@apflow.local";
@@ -80,12 +81,16 @@ type WorkflowState = {
   state: string;
   status: string;
   current_agent: string | null;
+  updated_at?: string | null;
 };
 
 type ReviewTask = {
   task_id: string;
   status: string;
   issues: Array<{ field_name: string; issue_type: string; message: string; confidence?: number }>;
+  invoice_id?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
 };
 
 type CurrentUser = {
@@ -148,6 +153,7 @@ type DashboardData = {
   approvals: ApprovalTask[];
   notifications: NotificationEvent[];
   workflows: WorkflowState[];
+  auditEvents: AuditEvent[];
   reviewTasks: ReviewTask[];
   adminUsers: AdminUser[];
   vendorAccess: VendorAccess | null;
@@ -159,6 +165,7 @@ const emptyDashboardData: DashboardData = {
   approvals: [],
   notifications: [],
   workflows: [],
+  auditEvents: [],
   reviewTasks: [],
   adminUsers: [],
   vendorAccess: null,
@@ -235,7 +242,7 @@ export default function Dashboard() {
       try {
         const query = `tenant_id=${user.tenant.id}`;
         const userPermissions = new Set(user.permissions);
-        const [invoices, approvals, notifications, workflows, reviewTasks, adminUsers] = await Promise.allSettled([
+        const [invoices, approvals, notifications, workflows, auditEvents, reviewTasks, adminUsers] = await Promise.allSettled([
           apiFetch<InvoiceRecord[]>(apiBaseUrl, `/invoices?${query}`, { token, action: "List invoices" }),
           apiFetch<ApprovalTask[]>(apiBaseUrl, `/invoices/approval-tasks?${query}`, {
             token,
@@ -249,6 +256,12 @@ export default function Dashboard() {
             token,
             action: "List workflow states"
           }),
+          userPermissions.has("audit:read")
+            ? apiFetch<AuditEvent[]>(apiBaseUrl, `/invoices/audit-events?${query}`, {
+                token,
+                action: "List audit events"
+              })
+            : Promise.resolve([]),
           apiFetch<ReviewTask[]>(apiBaseUrl, `/review/tasks?${query}`, {
             token,
             action: "List review tasks"
@@ -263,6 +276,7 @@ export default function Dashboard() {
           refreshErrorMessage(approvals, "Approval task list failed; other dashboard data remains available."),
           refreshErrorMessage(notifications, "Notification list failed; other dashboard data remains available."),
           refreshErrorMessage(workflows, "Workflow state list failed; current invoice state remains available."),
+          refreshErrorMessage(auditEvents, "Audit event list failed; other dashboard data remains available."),
           refreshErrorMessage(reviewTasks, "Review task list failed; other dashboard data remains available."),
           refreshErrorMessage(adminUsers, "Tenant user list failed; other dashboard data remains available.")
         ].filter((message): message is string => Boolean(message));
@@ -293,6 +307,7 @@ export default function Dashboard() {
           approvals: approvals.status === "fulfilled" ? approvals.value : current.approvals,
           notifications: notifications.status === "fulfilled" ? notifications.value : current.notifications,
           workflows: workflows.status === "fulfilled" ? workflows.value : current.workflows,
+          auditEvents: auditEvents.status === "fulfilled" ? auditEvents.value : current.auditEvents,
           reviewTasks: reviewTasks.status === "fulfilled" ? reviewTasks.value : current.reviewTasks,
           adminUsers: adminUsers.status === "fulfilled" ? adminUsers.value : current.adminUsers,
           vendorAccess,
@@ -438,7 +453,7 @@ export default function Dashboard() {
     }
   }
 
-  const { invoices, approvals, notifications, workflows, reviewTasks, adminUsers, vendorAccess, vendorInvoices } =
+  const { invoices, approvals, notifications, workflows, auditEvents, reviewTasks, adminUsers, vendorAccess, vendorInvoices } =
     dashboardData;
   const pendingApprovals = approvals.filter((task) => task.status === "pending");
   const duplicateWarnings = notifications.filter((event) => event.notification_type === "duplicate_detected");
@@ -481,6 +496,7 @@ export default function Dashboard() {
   const unauthorized = ready?.auth_enabled && !isSignedIn;
   const navItems = [
     { id: "overview", label: "Overview" },
+    { id: "audit-trail", label: "Audit Trail" },
     { id: "upload-invoice", label: "Upload Invoice" },
     { id: "ocr-review", label: "OCR Review" },
     { id: "approval-inbox", label: "Approval Inbox" },
@@ -970,6 +986,16 @@ export default function Dashboard() {
               </Card>
             </div>
           </section>
+
+          <AuditTimeline
+            auditEvents={auditEvents}
+            canAudit={canAudit}
+            invoices={invoices}
+            isLoading={protectedDataLoading}
+            notifications={notifications}
+            reviewTasks={reviewTasks}
+            workflows={workflows}
+          />
 
           <div id="upload-invoice-top">
             <InvoiceUploadPanel

@@ -70,7 +70,14 @@ Use this script for a private staging demo. Keep the presenter flow deterministi
 2. Show the vendor-safe invoice status.
 3. Confirm that fraud scores, audit logs, ERP sync logs, approval-policy internals, and risk reasons are not exposed.
 
-## I. Demo Cleanup
+## I. Demo Path 8 - Audit Trail
+
+1. After upload, review, approval, and ERP export actions, open `Audit Trail`.
+2. Show the sequence of OCR, review, approval, vendor, and ERP events.
+3. Use the filters to isolate approval, review, and ERP activity.
+4. Explain that the timeline proves what happened without exposing raw technical logs to the presenter.
+
+## J. Demo Cleanup
 
 1. Enable `ALLOW_DEMO_RESET=true` only when needed on private staging.
 2. Use the dashboard reset action or `POST /admin/demo/reset`.

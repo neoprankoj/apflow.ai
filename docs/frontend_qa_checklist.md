@@ -15,6 +15,7 @@ Use this short checklist before merging frontend UI changes.
 - [ ] KPI cards show readable labels, values, and context text.
 - [ ] Quick actions are visible and work as expected.
 - [ ] Priority work and recent activity are understandable at a glance.
+- [ ] Audit Trail shows readable activity after invoice actions.
 
 ## Approval Inbox
 
@@ -41,6 +42,12 @@ Use this short checklist before merging frontend UI changes.
 - [ ] Export action is available only when the invoice is export-ready.
 - [ ] Export result and external ID are shown after success.
 - [ ] Blocked or rejected invoices explain why export is unavailable.
+
+## Audit Trail
+
+- [ ] Approval, review, OCR, ERP, vendor, and system filters work.
+- [ ] Activity items show readable labels instead of raw technical event names.
+- [ ] Unknown or incomplete historical events render safely without breaking the page.
 
 ## Loading, empty, and error states
 

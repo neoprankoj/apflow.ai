@@ -637,6 +637,7 @@ class SQLAlchemyAPRepository:
                 entity_id=row.entity_id,
                 correlation_id=row.correlation_id,
                 metadata=row.metadata_json,
+                recorded_at=row.recorded_at,
             )
             for row in rows
         ]

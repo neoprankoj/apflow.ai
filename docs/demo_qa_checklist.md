@@ -76,6 +76,13 @@
 - [ ] ERP sync internals are hidden.
 - [ ] Vendor chatbot answers only allowed invoice/payment questions.
 
+## Audit Trail
+
+- [ ] Audit Trail loads for roles with audit access.
+- [ ] Upload, review, approval, and ERP actions appear after the demo flow.
+- [ ] Approval, review, OCR, ERP, vendor, and system filters work.
+- [ ] Unknown historical events display safely instead of breaking the dashboard.
+
 ## Reset
 
 - [ ] Reset disabled message is clear when `ALLOW_DEMO_RESET=false`.
