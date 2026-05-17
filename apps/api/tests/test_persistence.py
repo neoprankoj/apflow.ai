@@ -221,6 +221,7 @@ def test_sql_repository_persists_audit_events(sql_repository):
     events = sql_repository.list_audit_events(tenant_id)
     assert len(events) == 1
     assert events[0].action == "test.persisted"
+    assert events[0].recorded_at is not None
 
 
 def test_sql_repository_persists_human_review_tasks(sql_repository):

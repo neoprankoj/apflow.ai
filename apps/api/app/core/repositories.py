@@ -101,6 +101,7 @@ class AuditEventRecord:
     entity_id: UUID
     correlation_id: UUID
     metadata: dict
+    recorded_at: datetime
 
 
 @dataclass
@@ -524,6 +525,7 @@ class InMemoryAPRepository:
             entity_id=event.entity_id,
             correlation_id=event.correlation_id,
             metadata=event.metadata,
+            recorded_at=datetime.now(UTC),
         )
 
     def list_audit_events(self, tenant_id: UUID) -> list[AuditEventRecord]:
