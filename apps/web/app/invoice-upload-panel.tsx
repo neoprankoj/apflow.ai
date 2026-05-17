@@ -240,7 +240,7 @@ export function InvoiceUploadPanel({
     /file type|file extension|e216|unable to recognize/i.test(providerErrorMessage)
       ? "OCR.space could not detect file type. Try a real exported PDF/image or check filetype configuration."
       : null;
-  const fields = ocrResult?.fields ?? [];
+  const fields = useMemo(() => ocrResult?.fields ?? [], [ocrResult?.fields]);
   const reviewRequiredFields = Array.from(
     new Set([
       ...fields.filter((field) => field.requires_review).map((field) => field.field_name),
@@ -270,28 +270,37 @@ export function InvoiceUploadPanel({
   const signInRequired = !isSignedIn;
   const isBusy = activeAction !== null;
   const reviewStatus = processResult?.review_status ?? extractResult?.review_status;
-  const reviewTasks = processResult ? pipeline?.review_tasks ?? [] : extractResult?.review_tasks ?? [];
-  const reviewIssues = reviewTasks.flatMap((task) => task.issues ?? []);
-  const correctedIssueFields = new Set(
-    reviewTasks.flatMap((task) => Object.keys(task.corrected_fields ?? {}))
+  const hasProcessResult = Boolean(processResult);
+  const reviewTasks = useMemo(
+    () => (hasProcessResult ? pipeline?.review_tasks ?? [] : extractResult?.review_tasks ?? []),
+    [extractResult?.review_tasks, hasProcessResult, pipeline?.review_tasks]
+  );
+  const reviewIssues = useMemo(() => reviewTasks.flatMap((task) => task.issues ?? []), [reviewTasks]);
+  const correctedIssueFields = useMemo(
+    () => new Set(reviewTasks.flatMap((task) => Object.keys(task.corrected_fields ?? {}))),
+    [reviewTasks]
   );
   const visibleReviewIssues = reviewIssues.filter((issue) => !correctedIssueFields.has(issue.field_name));
   const resolvedReviewFields = fields
     .filter((field) => !field.requires_review && field.value !== null && field.value !== undefined && field.value !== "")
     .map((field) => field.field_name);
-  const correctionFields = Array.from(
-    new Set(
-      [
-        ...(reviewTasks.length ? REQUIRED_CORRECTION_FIELDS : []),
-        ...reviewIssues.map((issue) => issue.field_name),
-        ...(confidence?.required_fields_missing ?? []),
-        ...(confidence?.required_fields_low_confidence ?? [])
-      ].filter((fieldName) => fieldName !== "document")
-    )
+  const correctionFields = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          [
+            ...(reviewTasks.length ? REQUIRED_CORRECTION_FIELDS : []),
+            ...reviewIssues.map((issue) => issue.field_name),
+            ...(confidence?.required_fields_missing ?? []),
+            ...(confidence?.required_fields_low_confidence ?? [])
+          ].filter((fieldName) => fieldName !== "document")
+        )
+      ),
+    [confidence?.required_fields_low_confidence, confidence?.required_fields_missing, reviewIssues, reviewTasks.length]
   );
   const correctionDefaults = useMemo(
     () => buildCorrectionDefaults(correctionFields, fields, reviewIssues, reviewTasks),
-    [correctionFields.join("|"), fields, reviewIssues, reviewTasks]
+    [correctionFields, fields, reviewIssues, reviewTasks]
   );
   const demoSteps = buildDemoSteps({
     signedIn: isSignedIn,

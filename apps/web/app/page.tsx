@@ -444,9 +444,6 @@ export default function Dashboard() {
   const duplicateWarnings = notifications.filter((event) => event.notification_type === "duplicate_detected");
   const highRiskInvoices = notifications.filter((event) => event.notification_type === "invoice_blocked");
   const openReviewTasks = reviewTasks.filter((task) => task.status === "review_required");
-  const lowConfidenceTasks = reviewTasks.filter((task) =>
-    task.issues.some((issue) => issue.issue_type === "low_confidence")
-  );
   const recentInvoices = invoices.slice(-6).reverse();
   const recentNotifications = notifications.slice(-5).reverse();
   const recentWorkflows = workflows.slice(-5).reverse();
