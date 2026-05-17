@@ -4,21 +4,28 @@ import {
   AlertTriangle,
   Bell,
   Bot,
+  CalendarClock,
   CheckCircle2,
   Clock3,
+  Download,
   FileText,
+  FilePlus2,
   Loader2,
   LogIn,
   MessageSquare,
+  RefreshCw,
   ScanText,
   ShieldCheck,
-  UserRound
+  UserRound,
+  WalletCards
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppLayout } from "../components/layout/app-layout";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader } from "../components/ui/card";
 import { EmptyState } from "../components/ui/empty-state";
+import { LoadingSkeleton } from "../components/ui/loading-skeleton";
+import { StatusBadge } from "../components/ui/status-badge";
 import { DemoResetButton } from "./demo-reset-button";
 import {
   ApiRequestError,
@@ -45,6 +52,7 @@ type InvoiceRecord = {
     grand_total: number;
     currency: string;
     po_number?: string | null;
+    due_date?: string | null;
   };
 };
 
@@ -443,6 +451,32 @@ export default function Dashboard() {
   const recentNotifications = notifications.slice(-5).reverse();
   const recentWorkflows = workflows.slice(-5).reverse();
   const recentReviewTasks = reviewTasks.slice(-5).reverse();
+  const latestApprovalByInvoice = useMemo(() => {
+    const latest = new Map<string, ApprovalTask>();
+    approvals.forEach((task) => latest.set(task.invoice_id, task));
+    return latest;
+  }, [approvals]);
+  const totalPayables = invoices.reduce((sum, invoice) => sum + invoice.canonical_invoice.grand_total, 0);
+  const overdueInvoices = invoices.filter((invoice) => isPastDue(invoice.canonical_invoice.due_date ?? null));
+  const dueThisWeekInvoices = invoices.filter((invoice) => isDueThisWeek(invoice.canonical_invoice.due_date ?? null));
+  const overdueAmount = overdueInvoices.reduce((sum, invoice) => sum + invoice.canonical_invoice.grand_total, 0);
+  const dueThisWeekAmount = dueThisWeekInvoices.reduce((sum, invoice) => sum + invoice.canonical_invoice.grand_total, 0);
+  const blockedInvoices = invoices.filter((invoice) => {
+    const task = latestApprovalByInvoice.get(invoice.invoice_id);
+    return Boolean(task && ["blocked", "on_hold", "rejected"].includes(task.status));
+  });
+  const urgentInvoices = buildUrgentInvoices(invoices, latestApprovalByInvoice, notifications);
+  const activityItems = recentNotifications.length
+    ? recentNotifications.map((event) => ({
+        id: event.notification_id,
+        title: humanize(event.notification_type),
+        detail: `${humanize(event.recipient_role)} - ${event.status} via ${event.channel}`
+      }))
+    : recentWorkflows.map((workflow) => ({
+        id: workflow.workflow_id,
+        title: humanize(workflow.state),
+        detail: `${humanize(workflow.status)}${workflow.current_agent ? ` - ${workflow.current_agent}` : ""}`
+      }));
   const selectedOcrProvider = ocrProviders.find((provider) => provider.selected);
   const azureOcrProvider = ocrProviders.find((provider) => provider.provider === "azure");
   const ocrSpaceProvider = ocrProviders.find((provider) => provider.provider === "ocr_space");
@@ -470,6 +504,41 @@ export default function Dashboard() {
           ? "OCR.space OCR is selected. Uploaded PDFs/images will use OCR.space while OCR_PROVIDER=ocr_space."
           : "OCR.space API key missing. Set OCR_SPACE_API_KEY in .env.staging."
         : "Mock OCR is active. Set OCR_PROVIDER=ocr_space and OCR_SPACE_API_KEY to test OCR.space, or use Azure credentials to test Azure.";
+
+  const refreshDashboard = useCallback(async () => {
+    await loadPublicData();
+    if (accessToken && currentUser) {
+      await loadProtectedData(accessToken, currentUser);
+    }
+  }, [accessToken, currentUser, loadProtectedData, loadPublicData]);
+
+  function scrollToSection(id: string) {
+    setActiveSection(id);
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function exportReport() {
+    if (!invoices.length) return;
+    const rows = [
+      ["Invoice Number", "Vendor", "Amount", "Currency", "Due Date", "Approval Status"],
+      ...invoices.map((invoice) => [
+        invoice.canonical_invoice.invoice_number,
+        invoice.canonical_invoice.supplier_name,
+        invoice.canonical_invoice.grand_total.toFixed(2),
+        invoice.canonical_invoice.currency,
+        invoice.canonical_invoice.due_date ?? "",
+        latestApprovalByInvoice.get(invoice.invoice_id)?.status ?? "not_routed"
+      ])
+    ];
+    const csv = rows.map((row) => row.map(csvCell).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `apflow-payables-report-${formatDateForFile(new Date())}.csv`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
 
   return (
     <AppLayout
@@ -702,7 +771,7 @@ export default function Dashboard() {
       breadcrumbs={["Operations"]}
       navItems={navItems}
       onSectionChange={setActiveSection}
-      subtitle="Private demo health and workload summary"
+      subtitle="Payables exposure, approval workload, and next actions"
       title="Dashboard"
     >
           {apiError ? (
@@ -730,22 +799,178 @@ export default function Dashboard() {
             </div>
           ) : null}
 
-          <section className="scroll-mt-6 space-y-3" id="overview">
-            <SectionHeading title="Overview" subtitle="Private demo health and workload summary" />
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              {[
-                ["Total invoices", invoices.length.toString()],
-                ["Pending approvals", pendingApprovals.length.toString()],
-                ["Review required", openReviewTasks.length.toString()],
-                ["Low confidence", lowConfidenceTasks.length.toString()]
-              ].map(([label, value]) => (
-                <Card key={label}>
-                  <CardContent>
-                    <p className="text-sm text-muted">{label}</p>
-                    <p className="mt-2 text-2xl font-semibold">{value}</p>
-                  </CardContent>
-                </Card>
-              ))}
+          <section className="scroll-mt-6 space-y-5" id="overview">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+              <SectionHeading
+                title="Overview"
+                subtitle="Track payable exposure, due dates, and the work that needs attention first."
+              />
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={() => scrollToSection("approval-inbox")} variant="primary">
+                  Review Pending
+                </Button>
+                <Button onClick={() => scrollToSection("upload-invoice-top")} variant="secondary">
+                  <FilePlus2 className="h-4 w-4" />
+                  Add Invoice
+                </Button>
+                <Button disabled={!invoices.length} onClick={exportReport} variant="secondary">
+                  <Download className="h-4 w-4" />
+                  Export Report
+                </Button>
+                <Button onClick={() => void refreshDashboard()} variant="ghost">
+                  <RefreshCw className="h-4 w-4" />
+                  Refresh Data
+                </Button>
+              </div>
+            </div>
+
+            {protectedDataLoading ? (
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                {[0, 1, 2, 3].map((item) => (
+                  <Card key={item}>
+                    <CardContent className="space-y-4">
+                      <LoadingSkeleton className="h-4 w-28" />
+                      <LoadingSkeleton className="h-8 w-32" />
+                      <LoadingSkeleton className="h-4 w-40" />
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <KpiCard
+                  context={`${invoices.length} open ${invoices.length === 1 ? "invoice" : "invoices"}`}
+                  icon={WalletCards}
+                  label="Total Payables"
+                  tone="info"
+                  value={money(totalPayables, primaryCurrency(invoices))}
+                />
+                <KpiCard
+                  context={
+                    pendingApprovals.length
+                      ? "Ready for AP review"
+                      : "No approvals waiting"
+                  }
+                  icon={Clock3}
+                  label="Pending Approvals"
+                  tone={pendingApprovals.length ? "warning" : "success"}
+                  value={pendingApprovals.length.toString()}
+                />
+                <KpiCard
+                  context={
+                    overdueInvoices.length
+                      ? `${overdueInvoices.length} ${overdueInvoices.length === 1 ? "invoice" : "invoices"} past due`
+                      : "No overdue invoices"
+                  }
+                  icon={AlertTriangle}
+                  label="Overdue"
+                  tone={overdueInvoices.length ? "danger" : "success"}
+                  value={money(overdueAmount, primaryCurrency(invoices))}
+                />
+                <KpiCard
+                  context={
+                    dueThisWeekInvoices.length
+                      ? `${dueThisWeekInvoices.length} due within 7 days`
+                      : "Nothing due this week"
+                  }
+                  icon={CalendarClock}
+                  label="Due This Week"
+                  tone={dueThisWeekInvoices.length ? "warning" : "success"}
+                  value={money(dueThisWeekAmount, primaryCurrency(invoices))}
+                />
+              </div>
+            )}
+
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
+              <Card>
+                <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h3 className="text-base font-semibold">Priority Work</h3>
+                    <p className="mt-1 text-sm text-muted">Invoices that deserve attention before routine processing.</p>
+                  </div>
+                  {blockedInvoices.length ? (
+                    <div className="flex items-center gap-2 text-sm">
+                      <StatusBadge status="blocked" />
+                      <span className="text-muted">{blockedInvoices.length}</span>
+                    </div>
+                  ) : null}
+                </CardHeader>
+                <CardContent className="p-0">
+                  {protectedDataLoading ? (
+                    <div className="space-y-3 p-5">
+                      {[0, 1, 2].map((item) => (
+                        <LoadingSkeleton className="h-16 w-full" key={item} />
+                      ))}
+                    </div>
+                  ) : urgentInvoices.length ? (
+                    <div className="divide-y divide-border">
+                      {urgentInvoices.map((item) => (
+                        <div className="space-y-3 px-5 py-4 text-sm" key={item.invoice.invoice_id}>
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                            <div className="min-w-0">
+                              <p className="truncate font-medium">{item.invoice.canonical_invoice.supplier_name}</p>
+                              <p className="mt-1 text-muted">
+                                {item.invoice.canonical_invoice.invoice_number} - due {formatDate(item.dueDate)}
+                              </p>
+                            </div>
+                            <p className="shrink-0 font-semibold">
+                              {money(
+                                item.invoice.canonical_invoice.grand_total,
+                                item.invoice.canonical_invoice.currency
+                              )}
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <StatusBadge status={item.status} />
+                            {item.riskLevel ? <StatusBadge status={item.riskLevel} /> : null}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="p-5">
+                      <EmptyState
+                        description={
+                          isSignedIn
+                            ? "No overdue, blocked, or pending invoices need attention right now."
+                            : "Sign in to load payable priority work."
+                        }
+                        title="No urgent work"
+                      />
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <h3 className="text-base font-semibold">Recent Activity</h3>
+                  <p className="mt-1 text-sm text-muted">Latest workflow and notification changes.</p>
+                </CardHeader>
+                <CardContent>
+                  {protectedDataLoading ? (
+                    <div className="space-y-3">
+                      {[0, 1, 2].map((item) => (
+                        <LoadingSkeleton className="h-12 w-full" key={item} />
+                      ))}
+                    </div>
+                  ) : activityItems.length ? (
+                    <div className="space-y-4">
+                      {activityItems.slice(0, 4).map((item) => (
+                        <div key={item.id}>
+                          <p className="text-sm font-medium">{item.title}</p>
+                          <p className="mt-1 text-sm text-muted">{item.detail}</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <EmptyState
+                      description={isSignedIn ? "Workflow activity will appear here after processing begins." : "Sign in to load recent activity."}
+                      title="No recent activity"
+                    />
+                  )}
+                </CardContent>
+              </Card>
             </div>
           </section>
 
@@ -943,10 +1168,52 @@ function SectionHeading({ title, subtitle }: { title: string; subtitle: string }
   );
 }
 
+function KpiCard({
+  icon: Icon,
+  label,
+  value,
+  context,
+  tone
+}: {
+  icon: typeof WalletCards;
+  label: string;
+  value: string;
+  context: string;
+  tone: "success" | "warning" | "danger" | "info";
+}) {
+  return (
+    <Card>
+      <CardContent className="space-y-4">
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-muted">{label}</p>
+          <span
+            className={
+              tone === "success"
+                ? "rounded-md bg-green-50 p-2 text-success"
+                : tone === "warning"
+                  ? "rounded-md bg-amber-50 p-2 text-warning"
+                  : tone === "danger"
+                    ? "rounded-md bg-red-50 p-2 text-danger"
+                    : "rounded-md bg-cyan-50 p-2 text-info"
+            }
+          >
+            <Icon className="h-4 w-4" />
+          </span>
+        </div>
+        <div>
+          <p className="text-2xl font-semibold tracking-tight">{value}</p>
+          <p className="mt-1 text-sm text-muted">{context}</p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function money(value: number, currency: string) {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: currency || "USD",
+    minimumFractionDigits: 2,
     maximumFractionDigits: 2
   }).format(value || 0);
 }
@@ -955,4 +1222,102 @@ function refreshErrorMessage<T>(result: PromiseSettledResult<T>, prefix: string)
   if (result.status === "fulfilled") return null;
   const detail = result.reason instanceof Error ? result.reason.message : "Dashboard data failed to load.";
   return `${prefix} ${detail}`;
+}
+
+function primaryCurrency(invoices: InvoiceRecord[]) {
+  return invoices[0]?.canonical_invoice.currency ?? "USD";
+}
+
+function isPastDue(value: string | null) {
+  const parsed = parseDate(value);
+  if (!parsed) return false;
+  return stripTime(parsed).getTime() < stripTime(new Date()).getTime();
+}
+
+function isDueThisWeek(value: string | null) {
+  const parsed = parseDate(value);
+  if (!parsed) return false;
+  const today = stripTime(new Date());
+  const due = stripTime(parsed);
+  const daysUntilDue = Math.round((due.getTime() - today.getTime()) / 86_400_000);
+  return daysUntilDue >= 0 && daysUntilDue <= 7;
+}
+
+function formatDate(value: string | null) {
+  const parsed = parseDate(value);
+  if (!parsed) return "No due date";
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "2-digit",
+    year: "numeric"
+  }).format(parsed);
+}
+
+function parseDate(value: string | null) {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function stripTime(value: Date) {
+  return new Date(value.getFullYear(), value.getMonth(), value.getDate());
+}
+
+function humanize(value: string) {
+  return value.replaceAll("_", " ");
+}
+
+function buildUrgentInvoices(
+  invoices: InvoiceRecord[],
+  approvals: Map<string, ApprovalTask>,
+  notifications: NotificationEvent[]
+) {
+  const notificationByInvoice = new Map<string, NotificationEvent[]>();
+  notifications.forEach((event) => {
+    const current = notificationByInvoice.get(event.invoice_id) ?? [];
+    current.push(event);
+    notificationByInvoice.set(event.invoice_id, current);
+  });
+
+  return invoices
+    .map((invoice) => {
+      const task = approvals.get(invoice.invoice_id);
+      const dueDate = invoice.canonical_invoice.due_date ?? null;
+      const invoiceNotifications = notificationByInvoice.get(invoice.invoice_id) ?? [];
+      const blockedNotification = [...invoiceNotifications]
+        .reverse()
+        .find((event) => event.notification_type === "invoice_blocked");
+      const riskLevel =
+        typeof blockedNotification?.payload?.risk_level === "string"
+          ? humanize(blockedNotification.payload.risk_level)
+          : null;
+      const status = isPastDue(dueDate)
+        ? "overdue"
+        : task?.status === "blocked"
+          ? "blocked"
+          : task?.status === "pending"
+            ? "pending"
+            : task?.status === "on_hold"
+              ? "on hold"
+              : null;
+      return status ? { invoice, dueDate, status, riskLevel } : null;
+    })
+    .filter((item): item is NonNullable<typeof item> => Boolean(item))
+    .sort((left, right) => urgencyRank(left.status) - urgencyRank(right.status))
+    .slice(0, 4);
+}
+
+function urgencyRank(status: string) {
+  if (status === "overdue") return 0;
+  if (status === "blocked") return 1;
+  if (status === "on hold") return 2;
+  return 3;
+}
+
+function csvCell(value: string) {
+  return `"${value.replaceAll('"', '""')}"`;
+}
+
+function formatDateForFile(value: Date) {
+  return value.toISOString().slice(0, 10);
 }
