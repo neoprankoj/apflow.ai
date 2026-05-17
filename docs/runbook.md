@@ -1,5 +1,7 @@
 # Runbook
 
+For repeatable VPS staging deploy, backup, restore, rollback, and verification procedures, use [operations_staging.md](operations_staging.md).
+
 ## Failed Workflow Event
 
 1. Check the workflow correlation ID in audit events.
