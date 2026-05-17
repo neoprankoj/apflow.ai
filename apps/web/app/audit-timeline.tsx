@@ -2,6 +2,7 @@
 
 import { Activity, Bell, FileSearch, ScanText, Send, ShieldCheck, UserRound } from "lucide-react";
 import { useMemo, useState } from "react";
+import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader } from "../components/ui/card";
 import { EmptyState } from "../components/ui/empty-state";
 import { LoadingSkeleton } from "../components/ui/loading-skeleton";
@@ -53,6 +54,14 @@ type NotificationEvent = {
   channel: string;
 };
 
+type TimelineUser = {
+  user: {
+    id: string;
+    email: string;
+    full_name: string;
+  };
+};
+
 type Filter = "all" | "approval" | "review" | "ocr" | "erp" | "vendor" | "system";
 type Source = Exclude<Filter, "all">;
 
@@ -65,6 +74,7 @@ type TimelineItem = {
   invoiceNumber?: string | null;
   vendorName?: string | null;
   actor?: string | null;
+  sourceLabel: string;
   status?: string | null;
   timestamp?: string | null;
   metadata?: Record<string, unknown> | null;
@@ -76,6 +86,8 @@ export function AuditTimeline({
   notifications,
   reviewTasks,
   invoices,
+  currentUser,
+  tenantUsers,
   isLoading,
   canAudit
 }: {
@@ -84,13 +96,15 @@ export function AuditTimeline({
   notifications: NotificationEvent[];
   reviewTasks: ReviewTask[];
   invoices: InvoiceRecord[];
+  currentUser: TimelineUser | null;
+  tenantUsers: TimelineUser[];
   isLoading: boolean;
   canAudit: boolean;
 }) {
   const [filter, setFilter] = useState<Filter>("all");
   const items = useMemo(
-    () => buildTimelineItems(auditEvents, workflows, notifications, reviewTasks, invoices),
-    [auditEvents, invoices, notifications, reviewTasks, workflows]
+    () => buildTimelineItems(auditEvents, workflows, notifications, reviewTasks, invoices, currentUser, tenantUsers),
+    [auditEvents, currentUser, invoices, notifications, reviewTasks, tenantUsers, workflows]
   );
   const visibleItems = filter === "all" ? items : items.filter((item) => item.source === filter);
 
@@ -121,19 +135,20 @@ export function AuditTimeline({
               ["vendor", "Vendor"],
               ["system", "System"]
             ].map(([value, label]) => (
-              <button
+              <Button
                 className={cn(
-                  "rounded-md border px-3 py-2 text-sm transition-colors",
+                  "rounded-md",
                   filter === value
                     ? "border-primary bg-blue-50 font-medium text-primary"
-                    : "border-border bg-surface text-foreground hover:bg-slate-50"
+                    : ""
                 )}
                 key={value}
                 onClick={() => setFilter(value as Filter)}
-                type="button"
+                size="sm"
+                variant="secondary"
               >
                 {label}
-              </button>
+              </Button>
             ))}
           </div>
         </CardHeader>
@@ -187,19 +202,23 @@ function TimelineRow({ item }: { item: TimelineItem }) {
           {item.status ? <StatusBadge status={item.status} /> : null}
         </div>
         <p className="mt-1 text-sm text-muted">{item.description}</p>
-        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
-          <span>
-            {item.invoiceNumber ?? "No invoice number"}
-            {item.vendorName ? ` - ${item.vendorName}` : ""}
-          </span>
-          {item.actor ? <span>{item.actor}</span> : null}
+        <div className="mt-3 space-y-1 text-xs text-muted">
+          <p>
+            <span className="font-medium text-foreground">Invoice</span>{" "}
+            {item.invoiceNumber ?? "not linked"}
+            {item.vendorName ? ` · ${item.vendorName}` : ""}
+          </p>
+          <p>
+            <span className="font-medium text-foreground">Actor</span> {item.actor ?? "System"}
+          </p>
+          <p>
+            <span className="font-medium text-foreground">Source</span> {item.sourceLabel}
+          </p>
         </div>
-        {hasMetadata(item.metadata) ? (
+        {item.metadata && hasMetadata(item.metadata) ? (
           <details className="mt-2 text-xs text-muted">
             <summary className="cursor-pointer select-none">Details</summary>
-            <pre className="mt-2 overflow-x-auto rounded-md bg-slate-50 p-3">
-              {JSON.stringify(item.metadata, null, 2)}
-            </pre>
+            <FriendlyMetadata metadata={item.metadata} />
           </details>
         ) : null}
       </div>
@@ -213,9 +232,16 @@ function buildTimelineItems(
   workflows: WorkflowState[],
   notifications: NotificationEvent[],
   reviewTasks: ReviewTask[],
-  invoices: InvoiceRecord[]
+  invoices: InvoiceRecord[],
+  currentUser: TimelineUser | null,
+  tenantUsers: TimelineUser[]
 ) {
   const invoiceById = new Map(invoices.map((invoice) => [invoice.invoice_id, invoice]));
+  const actorNamesById = new Map(
+    [currentUser, ...tenantUsers]
+      .filter((user): user is TimelineUser => Boolean(user))
+      .map((user) => [user.user.id, user.user.full_name || user.user.email])
+  );
   const items = [
     ...auditEvents.map((event) => {
       const action = safeString(event.action);
@@ -230,7 +256,8 @@ function buildTimelineItems(
         invoiceId: event.entity_type === "invoice" ? event.entity_id : null,
         invoiceNumber: invoice?.canonical_invoice.invoice_number ?? readMetadataText(metadata, "invoice_number"),
         vendorName: invoice?.canonical_invoice.supplier_name ?? readMetadataText(metadata, "supplier_name"),
-        actor: actorLabel(event.actor_type, event.actor_id),
+        actor: actorLabel(event.actor_type, event.actor_id, actorNamesById),
+        sourceLabel: sourceLabelForAction(action),
         status: readAuditStatus(action, metadata),
         timestamp: event.recorded_at,
         metadata
@@ -248,7 +275,8 @@ function buildTimelineItems(
         invoiceId: task.invoice_id,
         invoiceNumber: invoice?.canonical_invoice.invoice_number ?? null,
         vendorName: invoice?.canonical_invoice.supplier_name ?? null,
-        actor: null,
+        actor: "Human review",
+        sourceLabel: "Human review",
         status: task.status,
         timestamp: task.updated_at ?? task.created_at ?? null,
         metadata: task.issues.length ? { issue_count: task.issues.length } : null
@@ -260,13 +288,12 @@ function buildTimelineItems(
         id: `workflow-${workflow.workflow_id}-${workflow.updated_at ?? workflow.status}`,
         source: "system",
         title: titleForWorkflowState(workflow.state),
-        description: workflow.current_agent
-          ? `${humanize(workflow.status)} by ${workflow.current_agent}.`
-          : `Workflow status is ${humanize(workflow.status)}.`,
+        description: descriptionForWorkflowState(workflow.state, workflow.status, workflow.current_agent),
         invoiceId: workflow.workflow_id,
         invoiceNumber: invoice?.canonical_invoice.invoice_number ?? null,
         vendorName: invoice?.canonical_invoice.supplier_name ?? null,
-        actor: workflow.current_agent,
+        actor: workflowActorLabel(workflow.current_agent),
+        sourceLabel: workflowSourceLabel(workflow.current_agent),
         status: workflow.status,
         timestamp: workflow.updated_at ?? null,
         metadata: null
@@ -278,11 +305,12 @@ function buildTimelineItems(
         id: `notification-${event.notification_id}`,
         source: sourceForNotification(event.notification_type),
         title: titleForNotification(event.notification_type),
-        description: `${humanize(event.status)} via ${event.channel} for ${humanize(event.recipient_role)}.`,
+        description: descriptionForNotification(event),
         invoiceId: event.invoice_id,
         invoiceNumber: invoice?.canonical_invoice.invoice_number ?? null,
         vendorName: invoice?.canonical_invoice.supplier_name ?? null,
-        actor: null,
+        actor: "System",
+        sourceLabel: sourceLabelForNotification(event.notification_type),
         status: event.status,
         timestamp: null,
         metadata: null
@@ -333,18 +361,23 @@ function titleForAuditAction(action: string) {
 }
 
 function descriptionForAuditAction(action: string, metadata: Record<string, unknown> | null) {
-  if (action === "invoice.approval_approve") return "An authorized reviewer approved the invoice.";
-  if (action === "invoice.approval_reject") return "An authorized reviewer rejected the invoice.";
-  if (action === "invoice.approval_hold") return "An authorized reviewer kept the invoice on hold.";
-  if (action === "review.corrected") return "Human review corrections were saved.";
-  if (action === "review.inspected") return "The extraction was checked for missing or low-confidence fields.";
+  if (action === "invoice.approval_approve") return "Approved by an authorized reviewer.";
+  if (action === "invoice.approval_reject") return "Rejected by an authorized reviewer.";
+  if (action === "invoice.approval_hold") return "Placed on hold for AP follow-up.";
+  if (action === "approval.routed") return "Approval workflow evaluated this invoice.";
+  if (action === "review.corrected") return "Corrected fields were submitted for review.";
+  if (action === "review.inspected") return "Some extracted fields need human review.";
   if (action === "invoice.extracted") return "OCR extraction completed for the uploaded document.";
-  if (action.startsWith("erp.")) return "ERP connector activity was recorded.";
+  if (action === "invoice.duplicate_scored") return "Possible duplicate invoice detection completed.";
+  if (action === "po.matched") return "PO matching was evaluated for this invoice.";
+  if (action === "fraud.risk_scored") return "Risk screening was completed.";
+  if (action.startsWith("erp.export_invoice")) return "Invoice exported to mock Priority ERP.";
+  if (action.startsWith("erp.")) return "ERP activity was recorded.";
   if (action === "notification.sent") {
     const type = readMetadataText(metadata, "notification_type");
     return type ? `${humanize(type)} notification recorded.` : "A notification event was recorded.";
   }
-  return "System activity recorded.";
+  return "System activity was recorded.";
 }
 
 function titleForErpAction(action: string) {
@@ -366,6 +399,16 @@ function titleForWorkflowState(state: string) {
   return labels[state] ?? "Workflow updated";
 }
 
+function descriptionForWorkflowState(state: string, status: string, currentAgent: string | null) {
+  if (state === "blocked") return "Invoice requires AP review before export.";
+  if (state === "review_required") return "Some extracted fields need human review.";
+  if (state === "approval_ready") return "Invoice is ready for approval or export.";
+  if (state === "rejected") return "Invoice was rejected by an authorized reviewer.";
+  if (state === "auto_approved") return "Invoice passed the configured approval workflow.";
+  if (currentAgent) return `${humanize(status)} by ${workflowActorLabel(currentAgent)}.`;
+  return `Workflow status is ${humanize(status)}.`;
+}
+
 function titleForNotification(notificationType: string) {
   const labels: Record<string, string> = {
     approval_required: "Approval requested",
@@ -377,6 +420,14 @@ function titleForNotification(notificationType: string) {
   return labels[notificationType] ?? "Notification created";
 }
 
+function descriptionForNotification(event: NotificationEvent) {
+  if (event.notification_type === "invoice_blocked") return "Invoice requires AP review before export.";
+  if (event.notification_type === "duplicate_detected") return "Possible duplicate invoice detected.";
+  if (event.notification_type === "approval_required") return "Approval is required before the invoice can continue.";
+  if (event.notification_type === "approval_decision_recorded") return "Approval decision recorded for the invoice.";
+  return `${titleCase(humanize(event.status))} via ${event.channel} for ${humanize(event.recipient_role)}.`;
+}
+
 function readAuditStatus(action: string, metadata: Record<string, unknown> | null) {
   if (action.startsWith("invoice.approval_")) return readMetadataText(metadata, "approval_status");
   if (action === "fraud.risk_scored") return readMetadataText(metadata, "risk_level");
@@ -384,10 +435,54 @@ function readAuditStatus(action: string, metadata: Record<string, unknown> | nul
   return null;
 }
 
-function actorLabel(actorType?: string | null, actorId?: string | null) {
-  if (!actorType && !actorId) return null;
-  if (!actorId) return humanize(actorType ?? "system");
-  return `${humanize(actorType ?? "system")} - ${actorId}`;
+function actorLabel(
+  actorType: string | null | undefined,
+  actorId: string | null | undefined,
+  actorNamesById: Map<string, string>
+) {
+  const normalizedActor = safeString(actorId);
+  if (normalizedActor && actorNamesById.has(normalizedActor)) return actorNamesById.get(normalizedActor) ?? "Authorized reviewer";
+  if (actorType === "user") {
+    if (normalizedActor.includes("@")) return normalizedActor;
+    return "Authorized reviewer";
+  }
+  if (normalizedActor) return agentLabel(normalizedActor);
+  return "System";
+}
+
+function workflowActorLabel(agent: string | null) {
+  return agent ? agentLabel(agent) : "System";
+}
+
+function workflowSourceLabel(agent: string | null) {
+  if (!agent) return "Workflow engine";
+  return agentLabel(agent);
+}
+
+function sourceLabelForAction(action: string) {
+  if (action.startsWith("invoice.approval_") || action.startsWith("approval.")) return "Approval workflow";
+  if (action.startsWith("review.")) return "Human review";
+  if (action.startsWith("invoice.extracted")) return "OCR service";
+  if (action.startsWith("erp.")) return "ERP connector";
+  if (action.startsWith("vendor.")) return "Vendor portal";
+  return "System";
+}
+
+function sourceLabelForNotification(notificationType: string) {
+  if (notificationType.includes("approval")) return "Approval workflow";
+  if (notificationType.includes("vendor")) return "Vendor portal";
+  return "System";
+}
+
+function agentLabel(value: string) {
+  const labels: Record<string, string> = {
+    ApprovalRoutingAgent: "Approval workflow",
+    HumanReviewAgent: "Human review",
+    InvoiceExtractionAgent: "OCR service",
+    OCRExtractionAgent: "OCR service",
+    APWorkflowOrchestratorAgent: "Workflow engine"
+  };
+  return labels[value] ?? "System";
 }
 
 function iconFor(source: Source) {
@@ -416,6 +511,72 @@ function readMetadataText(metadata: Record<string, unknown> | null, key: string)
 
 function hasMetadata(metadata: Record<string, unknown> | null | undefined) {
   return Boolean(metadata && Object.keys(metadata).length);
+}
+
+function FriendlyMetadata({ metadata }: { metadata: Record<string, unknown> }) {
+  const rows = friendlyMetadataRows(metadata);
+  return (
+    <div className="mt-2 space-y-3 rounded-md bg-slate-50 p-3">
+      {rows.length ? (
+        <dl className="grid gap-2 sm:grid-cols-[140px_1fr]">
+          {rows.map((row) => (
+            <div className="contents" key={row.label}>
+              <dt className="font-medium text-foreground">{row.label}</dt>
+              <dd>{row.value}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : (
+        <p>No friendly details available.</p>
+      )}
+      <details>
+        <summary className="cursor-pointer select-none">Raw metadata</summary>
+        <pre className="mt-2 overflow-x-auto rounded-md bg-white p-3">
+          {JSON.stringify(metadata, null, 2)}
+        </pre>
+      </details>
+    </div>
+  );
+}
+
+function friendlyMetadataRows(metadata: Record<string, unknown>) {
+  return [
+    ["approval_status", "Approval status"],
+    ["route", "Approval route"],
+    ["reason", "Reason"],
+    ["approval_task_id", "Approval task"],
+    ["invoice_id", "Invoice ID"],
+    ["external_id", "External ERP ID"],
+    ["provider", "Provider"]
+  ]
+    .map(([key, label]) => {
+      const value = metadata[key];
+      if (value === undefined || value === null || value === "") return null;
+      return { label, value: metadataValueLabel(key, value) };
+    })
+    .filter((row): row is { label: string; value: string } => Boolean(row));
+}
+
+function metadataValueLabel(key: string, value: unknown) {
+  if (typeof value !== "string") return String(value);
+  if (key === "approval_status") return titleCase(humanize(value));
+  if (key === "route") return approvalRouteLabel(value);
+  return value;
+}
+
+function approvalRouteLabel(value: string) {
+  const labels: Record<string, string> = {
+    blocked: "Blocked invoice review",
+    ap_review: "AP review",
+    manager_approval: "Manager approval",
+    controller_approval: "Controller approval",
+    auto_approve: "Auto approve"
+  };
+  return labels[value] ?? titleCase(humanize(value));
+}
+
+function titleCase(value: string) {
+  return value.replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 function timestampValue(value?: string | null) {

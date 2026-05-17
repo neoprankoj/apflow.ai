@@ -990,10 +990,12 @@ export default function Dashboard() {
           <AuditTimeline
             auditEvents={auditEvents}
             canAudit={canAudit}
+            currentUser={currentUser}
             invoices={invoices}
             isLoading={protectedDataLoading}
             notifications={notifications}
             reviewTasks={reviewTasks}
+            tenantUsers={adminUsers}
             workflows={workflows}
           />
 
