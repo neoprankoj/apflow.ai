@@ -213,6 +213,14 @@ Keep `PRIORITY_ERP_ENABLE_WRITES=false` while validating a tenant mapping. Use `
 
 Priority entity/form names vary by customer environment. Confirm the tenant's actual forms and fields before enabling real sync or export. Vendor and PO sync return `mapping_required` until their mappings exist; real invoice export returns a payload preview with `write_disabled` while writes remain disabled. Failures are routed through `ErrorHandlerAgent` and recorded in ERP sync logs.
 
+For safe staging edits, use the dashboard `Admin` section:
+
+1. Open `Priority ERP Mapping`.
+2. Load the current tenant mapping or start from the sample JSON.
+3. Validate before saving.
+4. Treat the sample as a template only; verify every entity and field against the customer's Priority environment.
+5. Confirm the UI still shows mock mode and writes disabled unless operations explicitly changes those runtime settings.
+
 ## OCR And Human Review
 
 1. Check `GET /ocr/providers` for available providers.

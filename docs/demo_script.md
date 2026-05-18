@@ -54,7 +54,15 @@ Use this script for a private staging demo. Keep the presenter flow deterministi
 3. Show the external invoice ID and sync result.
 4. Explain that the adapter pattern is live now and real ERP adapters are the next integration step.
 
-## G. Demo Path 6 - Approval Inbox
+## G. Demo Path 6 - Priority Mapping Admin
+
+1. Open `Admin`, then show `Priority ERP Mapping`.
+2. Confirm that mock mode is still active and real writes are disabled by default.
+3. Load the safe sample mapping and explain that it is only a template.
+4. Click `Validate` and show status, warnings, and summary.
+5. Save only after explaining that customer-specific Priority entity names must be verified first.
+
+## H. Demo Path 7 - Approval Inbox
 
 1. Seed `inbox-demo` when you need all approval examples ready before the meeting.
 2. Open `Approval Inbox`.
@@ -64,20 +72,20 @@ Use this script for a private staging demo. Keep the presenter flow deterministi
 6. Select the duplicate-like invoices and explain the duplicate badge plus short invoice ID suffix.
 7. Export the approval-ready invoice from the inbox.
 
-## H. Demo Path 7 - Vendor Portal Preview
+## I. Demo Path 8 - Vendor Portal Preview
 
 1. Use the vendor preview section or create a vendor access token through the demo flow.
 2. Show the vendor-safe invoice status.
 3. Confirm that fraud scores, audit logs, ERP sync logs, approval-policy internals, and risk reasons are not exposed.
 
-## I. Demo Path 8 - Audit Trail
+## J. Demo Path 9 - Audit Trail
 
 1. After upload, review, approval, and ERP export actions, open `Audit Trail`.
 2. Show the sequence of OCR, review, approval, vendor, and ERP events.
 3. Use the filters to isolate approval, review, and ERP activity.
 4. Explain that the timeline proves what happened without exposing raw technical logs to the presenter.
 
-## J. Demo Cleanup
+## K. Demo Cleanup
 
 1. Enable `ALLOW_DEMO_RESET=true` only when needed on private staging.
 2. Use the dashboard reset action or `POST /admin/demo/reset`.

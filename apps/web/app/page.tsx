@@ -39,6 +39,7 @@ import {
 import { ApprovalInbox } from "./approval-inbox";
 import { AuditTimeline, type AuditEvent } from "./audit-timeline";
 import { InvoiceUploadPanel } from "./invoice-upload-panel";
+import { PriorityMappingAdmin } from "./priority-mapping-admin";
 
 const DEMO_EMAIL = "demo-owner@apflow.local";
 const DEMO_PASSWORD = "password-123";
@@ -145,7 +146,7 @@ type ReadyStatus = {
   status: string;
   auth_enabled: boolean;
   demo_mode: boolean;
-  checks: Record<string, { status?: string; provider?: string; mode?: string }>;
+  checks: Record<string, { status?: string; provider?: string; mode?: string; priority_mode?: string }>;
 };
 
 type DashboardData = {
@@ -205,6 +206,7 @@ export default function Dashboard() {
   const tenantId = currentUser?.tenant.id ?? null;
   const permissions = useMemo(() => new Set(currentUser?.permissions ?? []), [currentUser]);
   const canExportErp = permissions.has("invoice:export_erp");
+  const canConfigureErp = permissions.has("erp:configure");
   const canApproveInvoice = permissions.has("invoice:approve");
   const canAdmin = permissions.has("tenant:admin");
   const canReview = permissions.has("review:correct");
@@ -494,6 +496,10 @@ export default function Dashboard() {
   const ocrSpaceProvider = ocrProviders.find((provider) => provider.provider === "ocr_space");
   const isSignedIn = authStatus === "authenticated" && Boolean(accessToken && currentUser);
   const unauthorized = ready?.auth_enabled && !isSignedIn;
+  const priorityMode =
+    typeof ready?.checks?.erp_adapters?.priority_mode === "string"
+      ? ready.checks.erp_adapters.priority_mode
+      : "mock";
   const navItems = [
     { id: "overview", label: "Overview" },
     { id: "audit-trail", label: "Audit Trail" },
@@ -747,7 +753,7 @@ export default function Dashboard() {
           </Card>
 
           {canAdmin ? (
-            <Card className="scroll-mt-6" id="admin">
+            <Card>
               <CardContent>
                 <h2 className="text-base font-semibold">Tenant Users</h2>
                 <div className="mt-3 space-y-3 text-sm">
@@ -1034,6 +1040,14 @@ export default function Dashboard() {
                 return loadProtectedData(accessToken, currentUser);
               }
             }}
+            tenantId={tenantId}
+          />
+
+          <PriorityMappingAdmin
+            accessToken={accessToken}
+            apiBaseUrl={apiBaseUrl}
+            canConfigureErp={canConfigureErp}
+            priorityMode={priorityMode}
             tenantId={tenantId}
           />
 
