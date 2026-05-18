@@ -152,12 +152,60 @@ Upload returns tenant-scoped document metadata plus a storage reference:
 
 It runs OCR extraction and then continues through the existing full pipeline. If a corrected human review task exists for the uploaded document, corrected fields are applied before validation and approval routing. The response contains the uploaded document, extraction result, full pipeline result, review status, and workflow status.
 
-ERP endpoints default to mock adapters. Priority also exposes an experimental real-connector foundation when `PRIORITY_ERP_MODE=real`. In that mode, `POST /erp/test-connection` returns safe diagnostics in `details`, while sync/export calls return `mapping_required` until tenant-specific Priority mappings are configured. A minimal ERP request is:
+ERP endpoints default to mock adapters. Priority also exposes an experimental real-connector foundation when `PRIORITY_ERP_MODE=real`. In that mode, `POST /erp/test-connection` returns safe diagnostics in `details`, while tenant-specific mappings can be managed with:
+
+- `GET /erp/priority/mapping?tenant_id={uuid}`
+- `PUT /erp/priority/mapping`
+- `POST /erp/priority/validate-mapping`
+
+Validation is structural unless live Priority metadata is available. Vendor and PO sync return `mapping_required` until the relevant tenant mapping exists. Real invoice export builds a payload preview and returns `write_disabled` while `PRIORITY_ERP_ENABLE_WRITES=false`. A minimal ERP request is:
 
 ```json
 {
   "tenant_id": "11111111-1111-1111-1111-111111111111",
   "adapter_type": "priority"
+}
+```
+
+Example Priority mapping payload:
+
+```json
+{
+  "tenant_id": "11111111-1111-1111-1111-111111111111",
+  "mapping": {
+    "vendors": {
+      "entity_name": "SUPPLIERS",
+      "external_id_field": "SUPNAME",
+      "fields": {
+        "name": "SUPDES",
+        "tax_id": "VATNUM",
+        "email": "EMAIL",
+        "payment_terms": "PAYCODE"
+      }
+    },
+    "purchase_orders": {
+      "entity_name": "PORDERS",
+      "external_id_field": "ORDNAME",
+      "fields": {
+        "po_number": "ORDNAME",
+        "vendor_external_id": "SUPNAME",
+        "status": "ORDSTATUSDES",
+        "total_amount": "TOTPRICE",
+        "currency": "CODE"
+      }
+    },
+    "invoice_export": {
+      "entity_name": "APINVOICES",
+      "external_id_field": "IVNUM",
+      "fields": {
+        "invoice_number": "IVNUM",
+        "invoice_date": "IVDATE",
+        "vendor_external_id": "SUPNAME",
+        "total_amount": "TOTPRICE",
+        "currency": "CODE"
+      }
+    }
+  }
 }
 ```
 

@@ -775,6 +775,35 @@ class ERPConnectionConfig(APFlowModel):
     config: dict[str, Any] = Field(default_factory=dict)
 
 
+class PriorityEntityMapping(APFlowModel):
+    entity_name: str
+    external_id_field: str
+    fields: dict[str, str] = Field(default_factory=dict)
+    line_items_entity_name: str | None = None
+    line_item_fields: dict[str, str] | None = None
+    enabled: bool = True
+
+
+class PriorityMappingConfig(APFlowModel):
+    vendors: PriorityEntityMapping | None = None
+    purchase_orders: PriorityEntityMapping | None = None
+    invoice_export: PriorityEntityMapping | None = None
+    version: str = "1.0"
+    updated_at: datetime | None = None
+
+
+class PriorityMappingValidationRequest(APFlowModel):
+    tenant_id: UUID
+    mapping: PriorityMappingConfig
+
+
+class PriorityMappingValidationResult(APFlowModel):
+    status: str
+    errors: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    summary: dict[str, Any] = Field(default_factory=dict)
+
+
 class ERPSyncRequest(APFlowModel):
     tenant_id: UUID
     operation: ERPOperation = ERPOperation.TEST_CONNECTION
