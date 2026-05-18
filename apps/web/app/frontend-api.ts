@@ -16,6 +16,35 @@ export class ApiRequestError extends Error {
   }
 }
 
+export type PriorityMapping = {
+  version?: string;
+  vendors?: PriorityEntityMapping | null;
+  purchase_orders?: PriorityEntityMapping | null;
+  invoice_export?: PriorityEntityMapping | null;
+  updated_at?: string | null;
+};
+
+export type PriorityEntityMapping = {
+  entity_name: string;
+  external_id_field: string;
+  fields: Record<string, string>;
+  line_items_entity_name?: string | null;
+  line_item_fields?: Record<string, string> | null;
+  enabled?: boolean;
+};
+
+export type PriorityMappingResponse = {
+  tenant_id: string;
+  mapping: PriorityMapping | null;
+};
+
+export type PriorityMappingValidationResult = {
+  status: string;
+  errors: string[];
+  warnings: string[];
+  summary: Record<string, unknown>;
+};
+
 export function getApiBaseUrl() {
   const value = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
   if (!value) return null;
@@ -80,6 +109,44 @@ export async function apiFetch<T>(
     return undefined as T;
   }
   return (await response.json()) as T;
+}
+
+export function getPriorityMapping(apiBaseUrl: string, token: string, tenantId: string) {
+  return apiFetch<PriorityMappingResponse>(
+    apiBaseUrl,
+    `/erp/priority/mapping?tenant_id=${encodeURIComponent(tenantId)}`,
+    { token, action: "Load Priority mapping" }
+  );
+}
+
+export function validatePriorityMapping(
+  apiBaseUrl: string,
+  token: string,
+  tenantId: string,
+  mapping: PriorityMapping
+) {
+  return apiFetch<PriorityMappingValidationResult>(apiBaseUrl, "/erp/priority/validate-mapping", {
+    method: "POST",
+    token,
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ tenant_id: tenantId, mapping }),
+    action: "Validate Priority mapping"
+  });
+}
+
+export function savePriorityMapping(
+  apiBaseUrl: string,
+  token: string,
+  tenantId: string,
+  mapping: PriorityMapping
+) {
+  return apiFetch<Record<string, unknown>>(apiBaseUrl, "/erp/priority/mapping", {
+    method: "PUT",
+    token,
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ tenant_id: tenantId, mapping }),
+    action: "Save Priority mapping"
+  });
 }
 
 async function readResponseDetail(response: Response) {

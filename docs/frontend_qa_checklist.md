@@ -42,6 +42,9 @@ Use this short checklist before merging frontend UI changes.
 - [ ] Export action is available only when the invoice is export-ready.
 - [ ] Export result and external ID are shown after success.
 - [ ] Blocked or rejected invoices explain why export is unavailable.
+- [ ] Priority Mapping Admin loads the current tenant mapping safely.
+- [ ] Invalid mapping JSON shows a local validation message before any save attempt.
+- [ ] View-only users can read the mapping but cannot edit or save it.
 
 ## Audit Trail
 
