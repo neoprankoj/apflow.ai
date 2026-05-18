@@ -20,6 +20,7 @@ from app.core.schemas import (
     ERPSyncStatus,
     ErrorCategory,
     MetricEventInput,
+    PriorityMappingConfig,
     WorkflowErrorInput,
 )
 from app.integrations.erp.base import ERPAdapterError, ERPAdapterProtocol
@@ -29,6 +30,10 @@ from app.integrations.erp.mock_adapters import (
     MockZohoBooksAdapter,
 )
 from app.integrations.erp.priority import PriorityODataAdapter
+from app.integrations.erp.priority_mapping import (
+    config_with_priority_mapping,
+    priority_mapping_from_config,
+)
 
 
 class ERPConnectorAgent(BaseAgent[ERPSyncRequest, ERPSyncResult]):
@@ -58,9 +63,24 @@ class ERPConnectorAgent(BaseAgent[ERPSyncRequest, ERPSyncResult]):
         self.repository.set_erp_connection_config(config)
         return config
 
+    def get_connection_config(self, tenant_id: UUID) -> ERPConnectionConfig:
+        return self.repository.get_erp_connection_config(tenant_id)
+
+    def configure_priority_mapping(
+        self,
+        tenant_id: UUID,
+        mapping: PriorityMappingConfig,
+    ) -> ERPConnectionConfig:
+        config = self.repository.get_erp_connection_config(tenant_id)
+        updated = config.model_copy(
+            update={"config": config_with_priority_mapping(config.config, mapping)}
+        )
+        self.repository.set_erp_connection_config(updated)
+        return updated
+
     def run(self, request: ERPSyncRequest) -> ERPSyncResult:
         adapter_type = self._adapter_type_for(request)
-        adapter = self.adapters[adapter_type]
+        adapter = self._adapter_for_request(adapter_type, request.tenant_id)
         try:
             result = self._execute(adapter_type, adapter, request)
             self._record_success(request, result)
@@ -253,6 +273,30 @@ class ERPConnectorAgent(BaseAgent[ERPSyncRequest, ERPSyncResult]):
 
         if request.operation == ERPOperation.EXPORT_INVOICE:
             invoice_id = self._require_invoice_id(request)
+            if isinstance(adapter, PriorityODataAdapter):
+                invoice = self.repository.get_invoice(request.tenant_id, invoice_id)
+                preview = adapter.build_invoice_payload(invoice.canonical_invoice)
+                if not settings.priority_erp_enable_writes:
+                    raise ERPAdapterError(
+                        "write_disabled",
+                        "Priority writes are disabled; payload preview generated only.",
+                        {
+                            "provider": ERPAdapterType.PRIORITY,
+                            "mode": "real",
+                            "payload_preview": preview,
+                            "writes_enabled": False,
+                        },
+                    )
+                raise ERPAdapterError(
+                    "dry_run_required",
+                    "Priority real export is not enabled for live writes yet.",
+                    {
+                        "provider": ERPAdapterType.PRIORITY,
+                        "mode": "real",
+                        "payload_preview": preview,
+                        "writes_enabled": True,
+                    },
+                )
             export: ERPInvoiceExportResult = adapter.export_invoice(request.tenant_id, invoice_id)
             self.repository.link_external_invoice_id(
                 request.tenant_id,
@@ -351,6 +395,17 @@ class ERPConnectorAgent(BaseAgent[ERPSyncRequest, ERPSyncResult]):
             ERPAdapterType.ODOO: MockOdooERPAdapter(),
             ERPAdapterType.ZOHO_BOOKS: MockZohoBooksAdapter(),
         }
+
+    def _adapter_for_request(
+        self,
+        adapter_type: ERPAdapterType,
+        tenant_id: UUID,
+    ) -> ERPAdapterProtocol:
+        adapter = self.adapters[adapter_type]
+        if adapter_type != ERPAdapterType.PRIORITY or not isinstance(adapter, PriorityODataAdapter):
+            return adapter
+        config = self.repository.get_erp_connection_config(tenant_id)
+        return adapter.with_mapping_config(priority_mapping_from_config(config.config))
 
     def _record_failure(self, request: ERPSyncRequest, result: ERPSyncResult, exc: Exception) -> None:
         self.repository.store_erp_sync_log(

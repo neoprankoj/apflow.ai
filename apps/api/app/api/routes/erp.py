@@ -12,6 +12,12 @@ from app.core.schemas import (
     ERPSyncRequest,
     ERPSyncResult,
     Permission,
+    PriorityMappingValidationRequest,
+    PriorityMappingValidationResult,
+)
+from app.integrations.erp.priority_mapping import (
+    priority_mapping_from_config,
+    validate_priority_mapping_config,
 )
 
 router = APIRouter()
@@ -32,6 +38,55 @@ def configure_erp_connection(
 ) -> ERPConnectionConfig:
     _enforce_body_tenant(config.tenant_id, context)
     return erp_agent.configure_connection(config)
+
+
+@router.get("/config", response_model=ERPConnectionConfig)
+def get_erp_connection_config(
+    tenant_id: UUID = Depends(resolve_tenant_id),
+    adapter: str | None = None,
+    erp_agent: ERPConnectorAgent = Depends(get_erp_connector_agent),
+    _context: CurrentUserContext = Depends(require_permission(Permission.ERP_READ)),
+) -> ERPConnectionConfig:
+    config = erp_agent.get_connection_config(tenant_id)
+    if adapter is not None and adapter != str(config.adapter_type):
+        raise HTTPException(status_code=404, detail="ERP adapter config not found")
+    return config
+
+
+@router.put("/priority/mapping", response_model=ERPConnectionConfig)
+def configure_priority_mapping(
+    request: PriorityMappingValidationRequest,
+    erp_agent: ERPConnectorAgent = Depends(get_erp_connector_agent),
+    context: CurrentUserContext = Depends(require_permission(Permission.ERP_CONFIGURE)),
+) -> ERPConnectionConfig:
+    _enforce_body_tenant(request.tenant_id, context)
+    validation = validate_priority_mapping_config(request.mapping)
+    if validation.status in {"invalid", "mapping_required"}:
+        raise HTTPException(status_code=422, detail=validation.model_dump(mode="json"))
+    return erp_agent.configure_priority_mapping(request.tenant_id, request.mapping)
+
+
+@router.get("/priority/mapping")
+def get_priority_mapping(
+    tenant_id: UUID = Depends(resolve_tenant_id),
+    erp_agent: ERPConnectorAgent = Depends(get_erp_connector_agent),
+    _context: CurrentUserContext = Depends(require_permission(Permission.ERP_READ)),
+) -> dict:
+    config = erp_agent.get_connection_config(tenant_id)
+    mapping = priority_mapping_from_config(config.config)
+    return {
+        "tenant_id": tenant_id,
+        "mapping": mapping.model_dump(mode="json") if mapping is not None else None,
+    }
+
+
+@router.post("/priority/validate-mapping", response_model=PriorityMappingValidationResult)
+def validate_priority_mapping(
+    request: PriorityMappingValidationRequest,
+    context: CurrentUserContext = Depends(require_permission(Permission.ERP_CONFIGURE)),
+) -> PriorityMappingValidationResult:
+    _enforce_body_tenant(request.tenant_id, context)
+    return validate_priority_mapping_config(request.mapping)
 
 
 @router.post("/test-connection", response_model=ERPSyncResult)

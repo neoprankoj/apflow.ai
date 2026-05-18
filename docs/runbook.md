@@ -209,9 +209,9 @@ PRIORITY_ERP_USERNAME=...
 PRIORITY_ERP_PASSWORD=...  # or PRIORITY_ERP_API_KEY for a token secret
 ```
 
-Optional future mapping keys are `PRIORITY_ERP_VENDORS_ENTITY_NAME`, `PRIORITY_ERP_PURCHASE_ORDERS_ENTITY_NAME`, and `PRIORITY_ERP_INVOICES_ENTITY_NAME`.
+Keep `PRIORITY_ERP_ENABLE_WRITES=false` while validating a tenant mapping. Use `POST /erp/test-connection` first, then save and validate tenant-scoped mapping JSON with `/erp/priority/mapping` and `/erp/priority/validate-mapping`.
 
-Run `POST /erp/test-connection` first. Real Priority vendor sync, PO sync, and invoice export intentionally return `mapping_required` until tenant-specific Priority entity/procedure mappings are configured. Failures are routed through `ErrorHandlerAgent` and recorded in ERP sync logs.
+Priority entity/form names vary by customer environment. Confirm the tenant's actual forms and fields before enabling real sync or export. Vendor and PO sync return `mapping_required` until their mappings exist; real invoice export returns a payload preview with `write_disabled` while writes remain disabled. Failures are routed through `ErrorHandlerAgent` and recorded in ERP sync logs.
 
 ## OCR And Human Review
 

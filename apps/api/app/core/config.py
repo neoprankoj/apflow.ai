@@ -47,6 +47,7 @@ class Settings(BaseSettings):
     priority_erp_api_key: str = ""
     priority_erp_timeout_seconds: int = 15
     priority_erp_verify_tls: bool = True
+    priority_erp_enable_writes: bool = False
     priority_erp_vendors_entity_name: str = ""
     priority_erp_purchase_orders_entity_name: str = ""
     priority_erp_invoices_entity_name: str = ""
