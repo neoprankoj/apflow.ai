@@ -193,14 +193,25 @@ bash scripts/restore_postgres.sh backups/apflow-20260507T120000Z.sql --yes
 
 ## ERP Sync
 
-1. Call `GET /erp/adapters` to confirm supported mock adapters.
+1. Call `GET /erp/adapters` to confirm supported adapters.
 2. Optionally set tenant config with `POST /erp/config`.
 3. Run `POST /erp/test-connection` before sync jobs.
 4. Run `POST /erp/sync-vendors` before `POST /erp/sync-purchase-orders` when onboarding a tenant.
 5. Export invoices explicitly with `POST /erp/export-invoice`; the invoice pipeline only reports `erp_export_ready`.
 6. Inspect `GET /erp/sync-logs?tenant_id={uuid}` for success, partial, or failed sync attempts.
 
-All current ERP calls are deterministic mocks. Failures are routed through `ErrorHandlerAgent` and recorded in ERP sync logs.
+Mock mode remains the default. To probe the experimental real Priority connector, set:
+
+```text
+PRIORITY_ERP_MODE=real
+PRIORITY_ERP_BASE_URL=https://your-priority-host/odata/...
+PRIORITY_ERP_USERNAME=...
+PRIORITY_ERP_PASSWORD=...  # or PRIORITY_ERP_API_KEY for a token secret
+```
+
+Optional future mapping keys are `PRIORITY_ERP_VENDORS_ENTITY_NAME`, `PRIORITY_ERP_PURCHASE_ORDERS_ENTITY_NAME`, and `PRIORITY_ERP_INVOICES_ENTITY_NAME`.
+
+Run `POST /erp/test-connection` first. Real Priority vendor sync, PO sync, and invoice export intentionally return `mapping_required` until tenant-specific Priority entity/procedure mappings are configured. Failures are routed through `ErrorHandlerAgent` and recorded in ERP sync logs.
 
 ## OCR And Human Review
 

@@ -9,7 +9,7 @@ APFlow AI is tenant-first and deny-by-default.
 - Vendor-facing experiences must call `TenantSecurityAgent` before returning invoice or payment state.
 - SQLAlchemy repositories apply tenant filters on list and lookup methods. Cross-tenant access raises or returns no records.
 - Dashboard integration can run in demo mode, but `/auth/me` now exposes the current demo or authenticated tenant context.
-- ERP adapter calls are mock-only and tenant-scoped. Sync logs and external ERP references are keyed by tenant.
+- ERP adapter calls are tenant-scoped. Mock mode remains the default; the experimental real Priority connector reads credentials only from environment configuration and returns safe diagnostics without echoing secrets.
 - Real ERP credentials must be stored through a secrets manager or credential reference, not in request payloads, logs, or audit metadata.
 - OCR provider credentials are read from environment variables only. Missing credentials produce safe placeholder responses.
 - Human review tasks, corrections, and history are tenant-scoped. Correction, approve, and reject actions require `review:correct` when auth is enabled.

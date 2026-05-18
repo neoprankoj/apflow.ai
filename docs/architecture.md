@@ -47,6 +47,7 @@ Current adapters:
 - `MockPriorityERPAdapter` with Israeli/local-market-style vendors and POs.
 - `MockOdooERPAdapter` with distributor/manufacturer-style vendors and POs.
 - `MockZohoBooksAdapter` with SMB-style vendors and POs.
+- `PriorityODataAdapter`, an experimental real-connector foundation that validates Priority OData configuration/service-root access and deliberately returns `mapping_required` for vendor, PO, and export flows until a tenant-specific mapping is supplied.
 
 Supported operations:
 
@@ -59,7 +60,7 @@ update_invoice_status
 sync_payment_status
 ```
 
-ERP sync logs and external references are tenant-scoped. Real ERP adapters can be added by implementing `ERPAdapterProtocol` without changing `ERPConnectorAgent`.
+ERP sync logs and external references are tenant-scoped. Real ERP adapters can be added by implementing `ERPAdapterProtocol` without changing `ERPConnectorAgent`. The current Priority real adapter keeps customer-specific entity names configurable through environment variables instead of hardcoding forms.
 
 ## Phase 6 OCR And Review
 

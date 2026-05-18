@@ -25,6 +25,7 @@ def ready() -> dict:
         "document_storage": _document_storage_check(),
         "erp_adapters": {
             "status": "ok",
+            "priority_mode": settings.priority_erp_mode,
             "available": [
                 MockPriorityERPAdapter().get_adapter_name(),
                 MockOdooERPAdapter().get_adapter_name(),

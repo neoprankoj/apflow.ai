@@ -4,6 +4,7 @@ from app.agents.base import BaseAgent
 from app.agents.observability.audit_logging_agent import AuditLoggingAgent
 from app.agents.observability.error_handler_agent import ErrorHandlerAgent
 from app.agents.observability.monitoring_agent import MonitoringAgent
+from app.core.config import settings
 from app.core.repositories import InMemoryAPRepository
 from app.core.schemas import (
     ActorType,
@@ -21,12 +22,13 @@ from app.core.schemas import (
     MetricEventInput,
     WorkflowErrorInput,
 )
-from app.integrations.erp.base import ERPAdapterProtocol
+from app.integrations.erp.base import ERPAdapterError, ERPAdapterProtocol
 from app.integrations.erp.mock_adapters import (
     MockOdooERPAdapter,
     MockPriorityERPAdapter,
     MockZohoBooksAdapter,
 )
+from app.integrations.erp.priority import PriorityODataAdapter
 
 
 class ERPConnectorAgent(BaseAgent[ERPSyncRequest, ERPSyncResult]):
@@ -45,11 +47,7 @@ class ERPConnectorAgent(BaseAgent[ERPSyncRequest, ERPSyncResult]):
         self.audit_agent = audit_agent
         self.monitoring_agent = monitoring_agent
         self.error_handler_agent = error_handler_agent
-        self.adapters = adapters or {
-            ERPAdapterType.PRIORITY: MockPriorityERPAdapter(),
-            ERPAdapterType.ODOO: MockOdooERPAdapter(),
-            ERPAdapterType.ZOHO_BOOKS: MockZohoBooksAdapter(),
-        }
+        self.adapters = adapters or self._default_adapters()
 
     def available_adapters(self) -> list[str]:
         return [str(adapter_type) for adapter_type in self.adapters]
@@ -66,6 +64,16 @@ class ERPConnectorAgent(BaseAgent[ERPSyncRequest, ERPSyncResult]):
         try:
             result = self._execute(adapter_type, adapter, request)
             self._record_success(request, result)
+            return result
+        except ERPAdapterError as exc:
+            result = ERPSyncResult(
+                adapter_type=adapter_type,
+                operation=request.operation,
+                status=ERPSyncStatus.FAILED,
+                errors=[exc.message],
+                details={"error_code": exc.code, **exc.details},
+            )
+            self._record_failure(request, result, exc)
             return result
         except Exception as exc:
             result = ERPSyncResult(
@@ -170,13 +178,26 @@ class ERPConnectorAgent(BaseAgent[ERPSyncRequest, ERPSyncResult]):
         request: ERPSyncRequest,
     ) -> ERPSyncResult:
         if request.operation == ERPOperation.TEST_CONNECTION:
-            adapter.test_connection(request.tenant_id)
+            connection = adapter.test_connection(request.tenant_id)
+            if isinstance(connection, dict):
+                if connection.get("status") != "ok":
+                    raise ERPAdapterError(
+                        str(connection.get("status", "connection_failed")),
+                        str(connection.get("message", "ERP connection test failed.")),
+                        connection,
+                    )
+                details = connection
+            else:
+                details = {
+                    "connected": bool(connection),
+                    "mode": getattr(adapter, "get_mode", lambda: "mock")(),
+                }
             return ERPSyncResult(
                 adapter_type=adapter_type,
                 operation=request.operation,
                 status=ERPSyncStatus.SUCCESS,
                 records_processed=1,
-                details={"connected": True},
+                details=details,
             )
 
         if request.operation == ERPOperation.SYNC_VENDORS:
@@ -318,6 +339,18 @@ class ERPConnectorAgent(BaseAgent[ERPSyncRequest, ERPSyncResult]):
                 metadata={"adapter_type": result.adapter_type, "operation": result.operation},
             )
         )
+
+    def _default_adapters(self) -> dict[ERPAdapterType, ERPAdapterProtocol]:
+        priority_adapter: ERPAdapterProtocol
+        if settings.priority_erp_mode == "real":
+            priority_adapter = PriorityODataAdapter(settings)
+        else:
+            priority_adapter = MockPriorityERPAdapter()
+        return {
+            ERPAdapterType.PRIORITY: priority_adapter,
+            ERPAdapterType.ODOO: MockOdooERPAdapter(),
+            ERPAdapterType.ZOHO_BOOKS: MockZohoBooksAdapter(),
+        }
 
     def _record_failure(self, request: ERPSyncRequest, result: ERPSyncResult, exc: Exception) -> None:
         self.repository.store_erp_sync_log(

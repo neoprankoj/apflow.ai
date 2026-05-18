@@ -791,6 +791,8 @@ class ERPVendorRecord(APFlowModel):
     name: str
     tax_id: str | None = None
     bank_account_hash: str | None = None
+    email: str | None = None
+    payment_terms: str | None = None
 
 
 class ERPPurchaseOrderRecord(APFlowModel):

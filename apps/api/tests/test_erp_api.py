@@ -1,3 +1,4 @@
+from app.core.config import settings
 from fastapi.testclient import TestClient
 
 from main import create_app
@@ -83,3 +84,21 @@ def test_erp_sync_logs_endpoint_returns_tenant_logs():
 
     assert response.status_code == 200
     assert len(response.json()) >= 1
+
+
+def test_erp_test_connection_returns_safe_real_priority_status(monkeypatch):
+    monkeypatch.setattr(settings, "priority_erp_mode", "real")
+    monkeypatch.setattr(settings, "priority_erp_base_url", "")
+    monkeypatch.setattr(settings, "priority_erp_username", "")
+    monkeypatch.setattr(settings, "priority_erp_password", "")
+    monkeypatch.setattr(settings, "priority_erp_api_key", "")
+    client = TestClient(create_app())
+
+    response = client.post(
+        "/erp/test-connection",
+        json={"tenant_id": _tenant(), "adapter_type": "priority"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "failed"
+    assert response.json()["details"]["error_code"] == "missing_credentials"
