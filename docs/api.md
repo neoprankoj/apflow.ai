@@ -152,7 +152,7 @@ Upload returns tenant-scoped document metadata plus a storage reference:
 
 It runs OCR extraction and then continues through the existing full pipeline. If a corrected human review task exists for the uploaded document, corrected fields are applied before validation and approval routing. The response contains the uploaded document, extraction result, full pipeline result, review status, and workflow status.
 
-ERP endpoints use mock adapters only. A minimal ERP request is:
+ERP endpoints default to mock adapters. Priority also exposes an experimental real-connector foundation when `PRIORITY_ERP_MODE=real`. In that mode, `POST /erp/test-connection` returns safe diagnostics in `details`, while sync/export calls return `mapping_required` until tenant-specific Priority mappings are configured. A minimal ERP request is:
 
 ```json
 {
