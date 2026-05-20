@@ -804,6 +804,27 @@ class PriorityMappingValidationResult(APFlowModel):
     summary: dict[str, Any] = Field(default_factory=dict)
 
 
+class PrioritySyncPreviewRequest(APFlowModel):
+    tenant_id: UUID
+    kind: str = "vendors"
+    limit: int = Field(default=10, ge=1, le=50)
+    sample_records: list[dict[str, Any]] | None = None
+
+
+class PrioritySyncPreviewResponse(APFlowModel):
+    status: str
+    kind: str
+    mode: str
+    source: str
+    mapping_status: str
+    records_previewed: int = 0
+    raw_records: list[dict[str, Any]] = Field(default_factory=list)
+    mapped_records: list[dict[str, Any]] = Field(default_factory=list)
+    errors: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    message: str
+
+
 class ERPSyncRequest(APFlowModel):
     tenant_id: UUID
     operation: ERPOperation = ERPOperation.TEST_CONNECTION

@@ -1,6 +1,6 @@
 "use client";
 
-import { Braces, RefreshCw, Save, ShieldAlert, Wand2 } from "lucide-react";
+import { Braces, Database, RefreshCw, Save, ShieldAlert, Wand2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader } from "../components/ui/card";
@@ -10,8 +10,12 @@ import { StatusBadge } from "../components/ui/status-badge";
 import {
   ApiRequestError,
   getPriorityMapping,
+  previewPriorityPurchaseOrderSync,
+  previewPriorityVendorSync,
   savePriorityMapping,
   type PriorityMapping,
+  type PrioritySyncPreviewKind,
+  type PrioritySyncPreviewResponse,
   type PriorityMappingValidationResult,
   validatePriorityMapping
 } from "./frontend-api";
@@ -60,6 +64,7 @@ type PriorityMappingAdminProps = {
   accessToken: string | null;
   apiBaseUrl: string | null;
   canConfigureErp: boolean;
+  canRunSyncPreview: boolean;
   priorityMode: string;
   tenantId: string | null;
 };
@@ -68,6 +73,7 @@ export function PriorityMappingAdmin({
   accessToken,
   apiBaseUrl,
   canConfigureErp,
+  canRunSyncPreview,
   priorityMode,
   tenantId
 }: PriorityMappingAdminProps) {
@@ -75,7 +81,10 @@ export function PriorityMappingAdmin({
   const [currentMapping, setCurrentMapping] = useState<PriorityMapping | null>(null);
   const [validation, setValidation] = useState<PriorityMappingValidationResult | null>(null);
   const [status, setStatus] = useState<"idle" | "loading" | "validating" | "saving">("idle");
+  const [previewStatus, setPreviewStatus] = useState<"idle" | "loading">("idle");
+  const [preview, setPreview] = useState<PrioritySyncPreviewResponse | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [previewMessage, setPreviewMessage] = useState<string | null>(null);
   const [localJsonError, setLocalJsonError] = useState<string | null>(null);
 
   const isReady = Boolean(apiBaseUrl && accessToken && tenantId);
@@ -166,6 +175,25 @@ export function PriorityMappingAdmin({
       }
     } finally {
       setStatus("idle");
+    }
+  }
+
+  async function handlePreview(kind: PrioritySyncPreviewKind) {
+    if (!apiBaseUrl || !accessToken || !tenantId || !canRunSyncPreview) return;
+    setPreviewStatus("loading");
+    setPreviewMessage(null);
+    try {
+      const result =
+        kind === "vendors"
+          ? await previewPriorityVendorSync(apiBaseUrl, accessToken, tenantId)
+          : await previewPriorityPurchaseOrderSync(apiBaseUrl, accessToken, tenantId);
+      setPreview(result);
+      setPreviewMessage(result.message);
+    } catch (error) {
+      setPreview(null);
+      setPreviewMessage(error instanceof Error ? error.message : "Priority sync preview failed.");
+    } finally {
+      setPreviewStatus("idle");
     }
   }
 
@@ -266,6 +294,15 @@ export function PriorityMappingAdmin({
 
               {validation ? <ValidationSummary validation={validation} /> : null}
 
+              <SyncDryRun
+                canRunSyncPreview={canRunSyncPreview}
+                isReady={isReady}
+                onPreview={handlePreview}
+                preview={preview}
+                previewMessage={previewMessage}
+                previewStatus={previewStatus}
+              />
+
               <div className="flex flex-wrap gap-2">
                 <Button
                   disabled={!isReady || status !== "idle"}
@@ -304,6 +341,142 @@ export function PriorityMappingAdmin({
         </CardContent>
       </Card>
     </section>
+  );
+}
+
+function SyncDryRun({
+  canRunSyncPreview,
+  isReady,
+  onPreview,
+  preview,
+  previewMessage,
+  previewStatus
+}: {
+  canRunSyncPreview: boolean;
+  isReady: boolean;
+  onPreview: (kind: PrioritySyncPreviewKind) => void;
+  preview: PrioritySyncPreviewResponse | null;
+  previewMessage: string | null;
+  previewStatus: "idle" | "loading";
+}) {
+  const isVendorPreview = preview?.kind === "vendors";
+  return (
+    <div className="space-y-4 rounded-md border border-border bg-slate-50 p-4">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            <Database className="h-4 w-4 text-primary" />
+            <h4 className="font-semibold">Sync Dry Run</h4>
+          </div>
+          <p className="mt-1 text-sm text-muted">
+            Preview how saved Priority mappings transform vendor and purchase-order records. Dry run only:
+            no records are imported and no ERP data is changed.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            disabled={!isReady || !canRunSyncPreview || previewStatus !== "idle"}
+            onClick={() => onPreview("vendors")}
+            variant="secondary"
+          >
+            Preview Vendor Sync
+          </Button>
+          <Button
+            disabled={!isReady || !canRunSyncPreview || previewStatus !== "idle"}
+            onClick={() => onPreview("purchase_orders")}
+            variant="secondary"
+          >
+            Preview Purchase Orders
+          </Button>
+        </div>
+      </div>
+
+      {!canRunSyncPreview ? (
+        <div className="rounded-md border border-border bg-white px-4 py-3 text-sm text-muted">
+          You do not have permission to run ERP sync previews.
+        </div>
+      ) : null}
+
+      {previewStatus === "loading" ? (
+        <div className="space-y-2">
+          <LoadingSkeleton className="h-8 w-full" />
+          <LoadingSkeleton className="h-24 w-full" />
+        </div>
+      ) : null}
+
+      {previewMessage ? (
+        <div className="rounded-md border border-border bg-white px-4 py-3 text-sm text-muted">
+          {previewMessage}
+        </div>
+      ) : null}
+
+      {preview ? (
+        <div className="space-y-4">
+          <div className="flex flex-wrap gap-2">
+            <StatusBadge status={preview.status} />
+            <StatusBadge status={`source: ${preview.source}`} />
+            <StatusBadge status={`mode: ${preview.mode}`} />
+            <StatusBadge status={`mapping: ${preview.mapping_status}`} />
+            <StatusBadge status={`${preview.records_previewed} rows`} />
+          </div>
+          {preview.errors.length ? <ValidationList label="Preview errors" items={preview.errors} tone="danger" /> : null}
+          {preview.warnings.length ? <ValidationList label="Preview warnings" items={preview.warnings} tone="warning" /> : null}
+          {preview.status === "preview_ready" ? (
+            <PreviewTable
+              columns={
+                isVendorPreview
+                  ? ["external_id", "name", "tax_id", "email", "payment_terms"]
+                  : ["po_number", "vendor_external_id", "status", "total_amount", "currency"]
+              }
+              records={preview.mapped_records}
+            />
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function PreviewTable({
+  columns,
+  records
+}: {
+  columns: string[];
+  records: Record<string, unknown>[];
+}) {
+  if (!records.length) {
+    return (
+      <EmptyState
+        description="Run a dry-run preview after saving a mapping to inspect transformed records."
+        title="No preview rows"
+      />
+    );
+  }
+  return (
+    <div className="overflow-x-auto rounded-md border border-border bg-white">
+      <table className="min-w-full divide-y divide-border text-sm">
+        <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-muted">
+          <tr>
+            {columns.map((column) => (
+              <th className="px-3 py-2 font-medium" key={column}>
+                {labelFor(column)}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border">
+          {records.map((record, index) => (
+            <tr className="hover:bg-slate-50" key={`${record.external_id ?? record.po_number ?? index}`}>
+              {columns.map((column) => (
+                <td className="px-3 py-2 text-foreground" key={column}>
+                  {formatValue(record[column])}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -358,4 +531,17 @@ function Detail({ label, value }: { label: string; value: string }) {
 
 function formatJson(value: unknown) {
   return JSON.stringify(value, null, 2);
+}
+
+function labelFor(value: string) {
+  return value
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function formatValue(value: unknown) {
+  if (value === null || value === undefined || value === "") return "—";
+  if (typeof value === "number") return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  return String(value);
 }

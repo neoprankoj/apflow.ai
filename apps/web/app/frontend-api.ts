@@ -45,6 +45,22 @@ export type PriorityMappingValidationResult = {
   summary: Record<string, unknown>;
 };
 
+export type PrioritySyncPreviewKind = "vendors" | "purchase_orders";
+
+export type PrioritySyncPreviewResponse = {
+  status: string;
+  kind: PrioritySyncPreviewKind;
+  mode: string;
+  source: string;
+  mapping_status: string;
+  records_previewed: number;
+  raw_records: Record<string, unknown>[];
+  mapped_records: Record<string, unknown>[];
+  errors: string[];
+  warnings: string[];
+  message: string;
+};
+
 export function getApiBaseUrl() {
   const value = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
   if (!value) return null;
@@ -147,6 +163,30 @@ export function savePriorityMapping(
     body: JSON.stringify({ tenant_id: tenantId, mapping }),
     action: "Save Priority mapping"
   });
+}
+
+export function previewPrioritySync(
+  apiBaseUrl: string,
+  token: string,
+  tenantId: string,
+  kind: PrioritySyncPreviewKind,
+  limit = 10
+) {
+  return apiFetch<PrioritySyncPreviewResponse>(apiBaseUrl, "/erp/priority/sync-preview", {
+    method: "POST",
+    token,
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ tenant_id: tenantId, kind, limit }),
+    action: kind === "vendors" ? "Preview Priority vendor sync" : "Preview Priority purchase order sync"
+  });
+}
+
+export function previewPriorityVendorSync(apiBaseUrl: string, token: string, tenantId: string) {
+  return previewPrioritySync(apiBaseUrl, token, tenantId, "vendors");
+}
+
+export function previewPriorityPurchaseOrderSync(apiBaseUrl: string, token: string, tenantId: string) {
+  return previewPrioritySync(apiBaseUrl, token, tenantId, "purchase_orders");
 }
 
 async function readResponseDetail(response: Response) {
