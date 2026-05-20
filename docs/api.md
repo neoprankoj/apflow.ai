@@ -160,6 +160,9 @@ ERP endpoints default to mock adapters. Priority also exposes an experimental re
 - `POST /erp/priority/sync-preview`
 - `POST /erp/priority/sync-preview/vendors`
 - `POST /erp/priority/sync-preview/purchase-orders`
+- `POST /erp/priority/import-plan`
+- `POST /erp/priority/import-plan/vendors`
+- `POST /erp/priority/import-plan/purchase-orders`
 
 Validation is structural unless live Priority metadata is available. Priority sync preview is read-only and imports no records; mock mode uses deterministic sample Priority-like rows while real mode may use a read-only Priority OData fetch when configured. Vendor and PO sync return `mapping_required` until the relevant tenant mapping exists. Real invoice export builds a payload preview and returns `write_disabled` while `PRIORITY_ERP_ENABLE_WRITES=false`. A minimal ERP request is:
 
@@ -181,6 +184,18 @@ Example Priority sync preview request:
 ```
 
 Preview responses include status, source (`sample` or `priority`), mapping status, limited raw records, mapped records, warnings, and the message `No data was imported.` Viewers cannot run previews when auth is enabled.
+
+Example Priority import plan request:
+
+```json
+{
+  "tenant_id": "11111111-1111-1111-1111-111111111111",
+  "kind": "purchase_orders",
+  "limit": 10
+}
+```
+
+Import plan responses compare the mapped preview rows against existing APFlow vendors or purchase orders and return `would_create`, `would_update`, `would_skip`, and `would_conflict` counts and items. This is planning only: no APFlow records are imported, no Priority records are changed, and no sync/audit events are created for the preview. Viewers cannot generate import plans when auth is enabled.
 
 Example Priority mapping payload:
 

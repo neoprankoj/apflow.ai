@@ -784,6 +784,12 @@ class SQLAlchemyAPRepository:
         )
         return row.external_id if row else None
 
+    def list_external_vendor_ids(self, tenant_id: UUID) -> dict[UUID, str]:
+        return self._list_external_reference_ids(tenant_id, "vendor")
+
+    def list_external_purchase_order_ids(self, tenant_id: UUID) -> dict[UUID, str]:
+        return self._list_external_reference_ids(tenant_id, "purchase_order")
+
     def store_review_task(self, task: HumanReviewTask) -> HumanReviewTask:
         self._ensure_tenant(task.tenant_id)
         row = dbm.HumanReviewTask(
@@ -919,6 +925,17 @@ class SQLAlchemyAPRepository:
         else:
             row.external_id = external_id
         self.session.commit()
+
+    def _list_external_reference_ids(self, tenant_id: UUID, entity_type: str) -> dict[UUID, str]:
+        config = self.get_erp_connection_config(tenant_id)
+        rows = self.session.scalars(
+            select(dbm.ERPExternalReference).where(
+                dbm.ERPExternalReference.tenant_id == tenant_id,
+                dbm.ERPExternalReference.entity_type == entity_type,
+                dbm.ERPExternalReference.adapter_type == str(config.adapter_type),
+            )
+        ).all()
+        return {row.entity_id: row.external_id for row in rows}
 
     def _ensure_tenant(self, tenant_id: UUID) -> None:
         if self.session.get(dbm.Tenant, tenant_id) is None:

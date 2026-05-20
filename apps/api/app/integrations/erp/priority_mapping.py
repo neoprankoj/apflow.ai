@@ -1,10 +1,13 @@
 from collections import Counter
 from datetime import UTC, datetime
+from decimal import Decimal
 from typing import Any
 
 from app.core.schemas import (
     CanonicalInvoice,
     PriorityEntityMapping,
+    PriorityImportPlanItem,
+    PriorityImportPlanResponse,
     PriorityMappingConfig,
     PriorityMappingValidationResult,
     PrioritySyncPreviewResponse,
@@ -265,6 +268,54 @@ def map_priority_purchase_order_record(
     return _map_preview_record("purchase_orders", raw_record, mapping, 1)
 
 
+def build_vendor_import_plan(
+    mapped_records: list[dict[str, Any]],
+    existing_vendors: list[Any],
+    external_vendor_ids: dict[Any, str] | None = None,
+    *,
+    kind: str = "vendors",
+    mode: str = "mock",
+    source: str = "sample",
+    inherited_warnings: list[str] | None = None,
+) -> PriorityImportPlanResponse:
+    external_vendor_ids = external_vendor_ids or {}
+    items = [
+        _vendor_import_plan_item(mapped, existing_vendors, external_vendor_ids)
+        for mapped in mapped_records
+    ]
+    return _plan_response(
+        kind=kind,
+        mode=mode,
+        source=source,
+        items=items,
+        warnings=inherited_warnings or [],
+    )
+
+
+def build_purchase_order_import_plan(
+    mapped_records: list[dict[str, Any]],
+    existing_purchase_orders: list[Any],
+    external_purchase_order_ids: dict[Any, str] | None = None,
+    *,
+    kind: str = "purchase_orders",
+    mode: str = "mock",
+    source: str = "sample",
+    inherited_warnings: list[str] | None = None,
+) -> PriorityImportPlanResponse:
+    external_purchase_order_ids = external_purchase_order_ids or {}
+    items = [
+        _purchase_order_import_plan_item(mapped, existing_purchase_orders, external_purchase_order_ids)
+        for mapped in mapped_records
+    ]
+    return _plan_response(
+        kind=kind,
+        mode=mode,
+        source=source,
+        items=items,
+        warnings=inherited_warnings or [],
+    )
+
+
 def _validate_entity_mapping(
     section_name: str,
     mapping: PriorityEntityMapping,
@@ -419,7 +470,7 @@ def _field_value(raw_record: dict[str, Any], field_name: str) -> Any:
 
 
 def _safe_number(value: Any) -> float | int | str:
-    if isinstance(value, int | float):
+    if isinstance(value, int | float | Decimal):
         return value
     if isinstance(value, str):
         stripped = value.replace(",", "").strip()
@@ -428,3 +479,225 @@ def _safe_number(value: Any) -> float | int | str:
         except ValueError:
             return value
     return value
+
+
+def _vendor_import_plan_item(
+    mapped: dict[str, Any],
+    existing_vendors: list[Any],
+    external_vendor_ids: dict[Any, str],
+) -> PriorityImportPlanItem:
+    external_id = _string_or_none(mapped.get("external_id"))
+    matches = _vendor_matches(mapped, existing_vendors, external_vendor_ids)
+    if len(matches) > 1:
+        return PriorityImportPlanItem(
+            action="would_conflict",
+            reason="Multiple existing vendors could match this Priority record.",
+            mapped_record=mapped,
+            matched_existing_id=None,
+            diff=None,
+            warnings=["Review matching fields before enabling import."],
+        )
+    if not matches:
+        return PriorityImportPlanItem(
+            action="would_create",
+            reason=(
+                f"No existing vendor matched external_id {external_id}."
+                if external_id
+                else "No existing vendor matched this record."
+            ),
+            mapped_record=mapped,
+        )
+
+    existing = matches[0]
+    diff = _vendor_diff(mapped, existing)
+    existing_id = str(getattr(existing, "vendor_id"))
+    if diff:
+        return PriorityImportPlanItem(
+            action="would_update",
+            reason="Existing vendor matched, but mapped fields differ.",
+            mapped_record=mapped,
+            matched_existing_id=existing_id,
+            diff=diff,
+        )
+    return PriorityImportPlanItem(
+        action="would_skip",
+        reason="Existing vendor already matches mapped fields.",
+        mapped_record=mapped,
+        matched_existing_id=existing_id,
+        diff=None,
+    )
+
+
+def _purchase_order_import_plan_item(
+    mapped: dict[str, Any],
+    existing_purchase_orders: list[Any],
+    external_purchase_order_ids: dict[Any, str],
+) -> PriorityImportPlanItem:
+    external_id = _string_or_none(mapped.get("external_id"))
+    po_number = _string_or_none(mapped.get("po_number"))
+    matches = _purchase_order_matches(mapped, existing_purchase_orders, external_purchase_order_ids)
+    if len(matches) > 1:
+        return PriorityImportPlanItem(
+            action="would_conflict",
+            reason="Multiple existing purchase orders could match this Priority record.",
+            mapped_record=mapped,
+            matched_existing_id=None,
+            diff=None,
+            warnings=["Review PO number and external ID before enabling import."],
+        )
+    if not matches:
+        return PriorityImportPlanItem(
+            action="would_create",
+            reason=(
+                f"No existing purchase order matched {po_number or external_id}."
+                if po_number or external_id
+                else "No existing purchase order matched this record."
+            ),
+            mapped_record=mapped,
+        )
+
+    existing = matches[0]
+    diff = _purchase_order_diff(mapped, existing)
+    existing_id = str(getattr(existing, "purchase_order_id"))
+    if diff:
+        return PriorityImportPlanItem(
+            action="would_update",
+            reason="Existing purchase order matched, but mapped fields differ.",
+            mapped_record=mapped,
+            matched_existing_id=existing_id,
+            diff=diff,
+        )
+    return PriorityImportPlanItem(
+        action="would_skip",
+        reason="Existing purchase order already matches mapped fields.",
+        mapped_record=mapped,
+        matched_existing_id=existing_id,
+        diff=None,
+    )
+
+
+def _plan_response(
+    *,
+    kind: str,
+    mode: str,
+    source: str,
+    items: list[PriorityImportPlanItem],
+    warnings: list[str],
+) -> PriorityImportPlanResponse:
+    summary = {
+        "would_create": 0,
+        "would_update": 0,
+        "would_skip": 0,
+        "would_conflict": 0,
+    }
+    for item in items:
+        summary[item.action] = summary.get(item.action, 0) + 1
+    return PriorityImportPlanResponse(
+        status="plan_ready",
+        kind=kind,
+        mode=mode,
+        source=source,
+        records_planned=len(items),
+        summary=summary,
+        items=items,
+        warnings=warnings,
+        errors=[],
+        message="Import plan generated. No data was imported.",
+    )
+
+
+def _vendor_matches(
+    mapped: dict[str, Any],
+    existing_vendors: list[Any],
+    external_vendor_ids: dict[Any, str],
+) -> list[Any]:
+    external_id = _normalize(mapped.get("external_id"))
+    if external_id:
+        external_matches = [
+            vendor
+            for vendor in existing_vendors
+            if _normalize(external_vendor_ids.get(getattr(vendor, "vendor_id"))) == external_id
+        ]
+        if external_matches:
+            return external_matches
+
+    possible_matches = []
+    tax_id = _normalize(mapped.get("tax_id"))
+    name = _normalize(mapped.get("name"))
+    for vendor in existing_vendors:
+        vendor_tax_id = _normalize(getattr(vendor, "tax_id", None))
+        vendor_name = _normalize(getattr(vendor, "name", None))
+        if tax_id and vendor_tax_id == tax_id:
+            possible_matches.append(vendor)
+            continue
+        if name and vendor_name == name:
+            possible_matches.append(vendor)
+    return possible_matches
+
+
+def _purchase_order_matches(
+    mapped: dict[str, Any],
+    existing_purchase_orders: list[Any],
+    external_purchase_order_ids: dict[Any, str],
+) -> list[Any]:
+    external_id = _normalize(mapped.get("external_id"))
+    if external_id:
+        external_matches = [
+            po
+            for po in existing_purchase_orders
+            if _normalize(external_purchase_order_ids.get(getattr(po, "purchase_order_id"))) == external_id
+        ]
+        if external_matches:
+            return external_matches
+
+    po_number = _normalize(mapped.get("po_number"))
+    if not po_number:
+        return []
+    return [
+        po
+        for po in existing_purchase_orders
+        if _normalize(getattr(po, "po_number", None)) == po_number
+    ]
+
+
+def _vendor_diff(mapped: dict[str, Any], existing: Any) -> dict[str, Any] | None:
+    diff = _field_diff("name", mapped.get("name"), getattr(existing, "name", None))
+    tax_diff = _field_diff("tax_id", mapped.get("tax_id"), getattr(existing, "tax_id", None))
+    diff.update(tax_diff)
+    return diff or None
+
+
+def _purchase_order_diff(mapped: dict[str, Any], existing: Any) -> dict[str, Any] | None:
+    diff: dict[str, Any] = {}
+    for field_name in ("po_number", "currency", "status"):
+        diff.update(_field_diff(field_name, mapped.get(field_name), getattr(existing, field_name, None)))
+    diff.update(_field_diff("total_amount", mapped.get("total_amount"), getattr(existing, "total_amount", None)))
+    return diff or None
+
+
+def _field_diff(field_name: str, incoming: Any, existing: Any) -> dict[str, Any]:
+    if _compare_value(incoming) == _compare_value(existing):
+        return {}
+    return {
+        field_name: {
+            "existing": existing,
+            "incoming": incoming,
+        }
+    }
+
+
+def _compare_value(value: Any) -> str:
+    if isinstance(value, int | float | Decimal):
+        return f"{float(value):.4f}"
+    return _normalize(value)
+
+
+def _normalize(value: Any) -> str:
+    if value is None:
+        return ""
+    return str(value).strip().casefold()
+
+
+def _string_or_none(value: Any) -> str | None:
+    normalized = str(value).strip() if value is not None else ""
+    return normalized or None

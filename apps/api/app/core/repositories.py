@@ -569,6 +569,22 @@ class InMemoryAPRepository:
             raise KeyError("invoice is outside tenant scope")
         return self.invoice_external_ids.get(invoice_id)
 
+    def list_external_vendor_ids(self, tenant_id: UUID) -> dict[UUID, str]:
+        vendor_ids = {record.vendor_id for record in self.list_vendors(tenant_id)}
+        return {
+            vendor_id: external_id
+            for vendor_id, external_id in self.vendor_external_ids.items()
+            if vendor_id in vendor_ids
+        }
+
+    def list_external_purchase_order_ids(self, tenant_id: UUID) -> dict[UUID, str]:
+        purchase_order_ids = {record.purchase_order_id for record in self.list_purchase_orders(tenant_id)}
+        return {
+            purchase_order_id: external_id
+            for purchase_order_id, external_id in self.po_external_ids.items()
+            if purchase_order_id in purchase_order_ids
+        }
+
     def link_external_vendor_id(self, tenant_id: UUID, vendor_id: UUID, external_id: str) -> None:
         if not any(record.vendor_id == vendor_id for record in self.list_vendors(tenant_id)):
             raise KeyError("vendor is outside tenant scope")

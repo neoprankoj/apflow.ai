@@ -63,7 +63,9 @@ Use this script for a private staging demo. Keep the presenter flow deterministi
 5. Save only after explaining that customer-specific Priority entity names must be verified first.
 6. Click `Preview Vendor Sync` and show the mapped vendor rows.
 7. Click `Preview Purchase Orders` and show the mapped PO rows.
-8. Call out that this is a dry run: no records were imported and no ERP data was changed.
+8. Click `Generate Vendor Import Plan` and show which rows would be created, updated, skipped, or flagged as conflicts.
+9. Click `Generate Purchase Order Import Plan` and show the same plan categories for POs.
+10. Call out that both dry run and import plan are preview-only: no records were imported and no ERP data was changed.
 
 ## H. Demo Path 7 - Approval Inbox
 

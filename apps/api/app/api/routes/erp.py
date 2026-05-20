@@ -13,6 +13,8 @@ from app.core.schemas import (
     ERPSyncRequest,
     ERPSyncResult,
     Permission,
+    PriorityImportPlanRequest,
+    PriorityImportPlanResponse,
     PrioritySyncPreviewRequest,
     PrioritySyncPreviewResponse,
     PriorityMappingValidationRequest,
@@ -21,7 +23,9 @@ from app.core.schemas import (
 from app.integrations.erp.base import ERPAdapterError
 from app.integrations.erp.priority import PriorityODataAdapter
 from app.integrations.erp.priority_mapping import (
+    build_purchase_order_import_plan,
     build_priority_sync_preview,
+    build_vendor_import_plan,
     priority_mapping_from_config,
     priority_sample_records,
     validate_priority_mapping_config,
@@ -103,6 +107,88 @@ def preview_priority_sync(
     context: CurrentUserContext = Depends(require_permission(Permission.ERP_SYNC)),
 ) -> PrioritySyncPreviewResponse:
     _enforce_body_tenant(request.tenant_id, context)
+    return _build_priority_preview(request, erp_agent)
+
+
+@router.post("/priority/import-plan", response_model=PriorityImportPlanResponse)
+def plan_priority_import(
+    request: PriorityImportPlanRequest,
+    erp_agent: ERPConnectorAgent = Depends(get_erp_connector_agent),
+    context: CurrentUserContext = Depends(require_permission(Permission.ERP_SYNC)),
+) -> PriorityImportPlanResponse:
+    _enforce_body_tenant(request.tenant_id, context)
+    preview = _build_priority_preview(
+        PrioritySyncPreviewRequest(
+            tenant_id=request.tenant_id,
+            kind=request.kind,
+            limit=request.limit,
+            sample_records=request.sample_records,
+        ),
+        erp_agent,
+    )
+    if preview.status in {"mapping_required", "invalid_mapping"}:
+        return PriorityImportPlanResponse(
+            status=preview.status,
+            kind=preview.kind,
+            mode=preview.mode,
+            source=preview.source,
+            records_planned=0,
+            summary={
+                "would_create": 0,
+                "would_update": 0,
+                "would_skip": 0,
+                "would_conflict": 0,
+            },
+            items=[],
+            warnings=preview.warnings,
+            errors=preview.errors,
+            message=preview.message,
+        )
+    if preview.kind == "vendors":
+        return build_vendor_import_plan(
+            preview.mapped_records,
+            erp_agent.repository.list_vendors(request.tenant_id),
+            erp_agent.repository.list_external_vendor_ids(request.tenant_id),
+            kind=preview.kind,
+            mode=preview.mode,
+            source=preview.source,
+            inherited_warnings=preview.warnings,
+        )
+    return build_purchase_order_import_plan(
+        preview.mapped_records,
+        erp_agent.repository.list_purchase_orders(request.tenant_id),
+        erp_agent.repository.list_external_purchase_order_ids(request.tenant_id),
+        kind=preview.kind,
+        mode=preview.mode,
+        source=preview.source,
+        inherited_warnings=preview.warnings,
+    )
+
+
+@router.post("/priority/import-plan/vendors", response_model=PriorityImportPlanResponse)
+def plan_priority_vendor_import(
+    request: PriorityImportPlanRequest,
+    erp_agent: ERPConnectorAgent = Depends(get_erp_connector_agent),
+    context: CurrentUserContext = Depends(require_permission(Permission.ERP_SYNC)),
+) -> PriorityImportPlanResponse:
+    request.kind = "vendors"
+    return plan_priority_import(request, erp_agent, context)
+
+
+@router.post("/priority/import-plan/purchase-orders", response_model=PriorityImportPlanResponse)
+def plan_priority_purchase_order_import(
+    request: PriorityImportPlanRequest,
+    erp_agent: ERPConnectorAgent = Depends(get_erp_connector_agent),
+    context: CurrentUserContext = Depends(require_permission(Permission.ERP_SYNC)),
+) -> PriorityImportPlanResponse:
+    request.kind = "purchase_orders"
+    return plan_priority_import(request, erp_agent, context)
+
+
+def _build_priority_preview(
+    request: PrioritySyncPreviewRequest,
+    erp_agent: ERPConnectorAgent,
+) -> PrioritySyncPreviewResponse:
     try:
         kind = _normalize_preview_kind(request.kind)
     except ValueError as exc:
