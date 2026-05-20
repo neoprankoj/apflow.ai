@@ -83,6 +83,25 @@ export type PriorityImportPlanResponse = {
   message: string;
 };
 
+export type PriorityImportResultItem = {
+  external_id?: string | null;
+  action_requested: string;
+  result: "created" | "updated" | "skipped" | "conflict" | "blocked" | "failed" | string;
+  apflow_record_id?: string | null;
+  reason: string;
+  warnings: string[];
+};
+
+export type PriorityImportResult = {
+  status: string;
+  kind: PrioritySyncPreviewKind;
+  summary: Record<string, number>;
+  items: PriorityImportResultItem[];
+  warnings: string[];
+  errors: string[];
+  message: string;
+};
+
 export function getApiBaseUrl() {
   const value = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
   if (!value) return null;
@@ -233,6 +252,32 @@ export function generatePriorityVendorImportPlan(apiBaseUrl: string, token: stri
 
 export function generatePriorityPurchaseOrderImportPlan(apiBaseUrl: string, token: string, tenantId: string) {
   return generatePriorityImportPlan(apiBaseUrl, token, tenantId, "purchase_orders");
+}
+
+export function importPriorityRecords(
+  apiBaseUrl: string,
+  token: string,
+  tenantId: string,
+  kind: PrioritySyncPreviewKind,
+  selectedExternalIds: string[],
+  confirmation: string,
+  allowCreates: boolean,
+  allowUpdates: boolean
+) {
+  return apiFetch<PriorityImportResult>(apiBaseUrl, "/erp/priority/import", {
+    method: "POST",
+    token,
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      tenant_id: tenantId,
+      kind,
+      selected_external_ids: selectedExternalIds,
+      confirmation,
+      allow_creates: allowCreates,
+      allow_updates: allowUpdates
+    }),
+    action: kind === "vendors" ? "Import selected Priority vendors" : "Import selected Priority purchase orders"
+  });
 }
 
 async function readResponseDetail(response: Response) {

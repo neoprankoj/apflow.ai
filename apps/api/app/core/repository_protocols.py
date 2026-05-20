@@ -123,6 +123,27 @@ class APRepository(
         vendor_id: UUID | None = None,
     ) -> VendorRecord: ...
 
+    def update_vendor(
+        self,
+        tenant_id: UUID,
+        vendor_id: UUID,
+        *,
+        name: str | None = None,
+        tax_id: str | None = None,
+    ) -> VendorRecord: ...
+
     def list_vendors(self, tenant_id: UUID) -> list[VendorRecord]: ...
+
+    def update_purchase_order(
+        self,
+        tenant_id: UUID,
+        purchase_order_id: UUID,
+        *,
+        po_number: str | None = None,
+        vendor_id: UUID | None = None,
+        total_amount: float | None = None,
+        currency: str | None = None,
+        status: str | None = None,
+    ) -> PurchaseOrderOutput: ...
 
     def ensure_phase3_fixtures(self, tenant_id: UUID) -> None: ...

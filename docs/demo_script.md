@@ -65,7 +65,10 @@ Use this script for a private staging demo. Keep the presenter flow deterministi
 7. Click `Preview Purchase Orders` and show the mapped PO rows.
 8. Click `Generate Vendor Import Plan` and show which rows would be created, updated, skipped, or flagged as conflicts.
 9. Click `Generate Purchase Order Import Plan` and show the same plan categories for POs.
-10. Call out that both dry run and import plan are preview-only: no records were imported and no ERP data was changed.
+10. Select one `would_create` vendor row, type `IMPORT_SELECTED`, and import it into APFlow.
+11. Generate the PO import plan again, select a PO that references the imported vendor, type `IMPORT_SELECTED`, and import it.
+12. Show the controlled import result and explain that APFlow records changed but Priority data did not.
+13. Open `Audit Trail` and show the Priority import events.
 
 ## H. Demo Path 7 - Approval Inbox
 

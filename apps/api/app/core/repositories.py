@@ -392,6 +392,23 @@ class InMemoryAPRepository:
     def list_vendors(self, tenant_id: UUID) -> list[VendorRecord]:
         return [record for record in self.vendors.values() if record.tenant_id == tenant_id]
 
+    def update_vendor(
+        self,
+        tenant_id: UUID,
+        vendor_id: UUID,
+        *,
+        name: str | None = None,
+        tax_id: str | None = None,
+    ) -> VendorRecord:
+        record = self.vendors[vendor_id]
+        if record.tenant_id != tenant_id:
+            raise KeyError("vendor is outside tenant scope")
+        if name not in (None, ""):
+            record.name = name
+        if tax_id not in (None, ""):
+            record.tax_id = tax_id
+        return record
+
     def add_purchase_order(
         self,
         tenant_id: UUID,
@@ -428,6 +445,33 @@ class InMemoryAPRepository:
             for record in self.purchase_orders.values()
             if record.output.tenant_id == tenant_id
         ]
+
+    def update_purchase_order(
+        self,
+        tenant_id: UUID,
+        purchase_order_id: UUID,
+        *,
+        po_number: str | None = None,
+        vendor_id: UUID | None = None,
+        total_amount: float | None = None,
+        currency: str | None = None,
+        status: str | None = None,
+    ) -> PurchaseOrderOutput:
+        record = self.purchase_orders[purchase_order_id]
+        output = record.output
+        if output.tenant_id != tenant_id:
+            raise KeyError("purchase order is outside tenant scope")
+        if po_number not in (None, ""):
+            output.po_number = po_number
+        if vendor_id is not None:
+            output.vendor_id = vendor_id
+        if total_amount is not None:
+            output.total_amount = total_amount
+        if currency not in (None, ""):
+            output.currency = currency
+        if status not in (None, ""):
+            output.status = status
+        return output
 
     def set_approval_policy(self, policy: ApprovalPolicy) -> None:
         self.approval_policies[policy.tenant_id] = ApprovalPolicyRecord(policy=policy)
