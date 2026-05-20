@@ -1,4 +1,5 @@
 from collections.abc import Iterator
+from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
@@ -154,6 +155,125 @@ def test_priority_mapping_validation_endpoint_returns_structural_warning(auth_en
     assert response.status_code == 200
     assert response.json()["status"] == "partial"
     assert "validated structurally only" in response.json()["warnings"][-1]
+
+
+def test_priority_vendor_preview_requires_mapping(auth_enabled):
+    client = TestClient(create_app())
+    owner = _register(client, "priority-preview-missing@example.com")
+
+    response = client.post(
+        "/erp/priority/sync-preview",
+        json={"tenant_id": owner["tenant"]["id"], "kind": "vendors"},
+        headers=_headers(owner["access_token"]),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "mapping_required"
+    assert response.json()["records_previewed"] == 0
+
+
+def test_priority_vendor_preview_maps_sample_without_import(auth_enabled):
+    client = TestClient(create_app())
+    owner = _register(client, "priority-preview-vendors@example.com")
+    client.put(
+        "/erp/priority/mapping",
+        json=_mapping_payload(owner["tenant"]["id"]),
+        headers=_headers(owner["access_token"]),
+    )
+    repository = dependencies.get_in_memory_repository()
+
+    response = client.post(
+        "/erp/priority/sync-preview/vendors",
+        json={"tenant_id": owner["tenant"]["id"]},
+        headers=_headers(owner["access_token"]),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "preview_ready"
+    assert body["source"] == "sample"
+    assert body["mapped_records"][0]["external_id"] == "SUP-1001"
+    assert body["mapped_records"][0]["name"] == "Demo Office Supplies Ltd."
+    assert repository.list_vendors(UUID(owner["tenant"]["id"])) == []
+    assert "secret" not in str(body).lower()
+
+
+def test_priority_purchase_order_preview_maps_sample_without_import(auth_enabled):
+    client = TestClient(create_app())
+    owner = _register(client, "priority-preview-pos@example.com")
+    client.put(
+        "/erp/priority/mapping",
+        json=_mapping_payload(owner["tenant"]["id"]),
+        headers=_headers(owner["access_token"]),
+    )
+    repository = dependencies.get_in_memory_repository()
+
+    response = client.post(
+        "/erp/priority/sync-preview/purchase-orders",
+        json={"tenant_id": owner["tenant"]["id"]},
+        headers=_headers(owner["access_token"]),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "preview_ready"
+    assert body["kind"] == "purchase_orders"
+    assert body["mapped_records"][0]["po_number"] == "PO-240001"
+    assert body["mapped_records"][0]["total_amount"] == 1170.0
+    assert repository.list_purchase_orders(UUID(owner["tenant"]["id"])) == []
+
+
+def test_priority_preview_missing_raw_fields_warns(auth_enabled):
+    client = TestClient(create_app())
+    owner = _register(client, "priority-preview-warnings@example.com")
+    client.put(
+        "/erp/priority/mapping",
+        json=_mapping_payload(owner["tenant"]["id"]),
+        headers=_headers(owner["access_token"]),
+    )
+
+    response = client.post(
+        "/erp/priority/sync-preview",
+        json={
+            "tenant_id": owner["tenant"]["id"],
+            "kind": "vendors",
+            "sample_records": [{"SUPNAME": "SUP-MISSING"}],
+        },
+        headers=_headers(owner["access_token"]),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "preview_ready"
+    assert any("SUPDES" in warning for warning in body["warnings"])
+    assert body["mapped_records"][0]["name"] is None
+
+
+def test_viewer_cannot_run_priority_preview(auth_enabled):
+    client = TestClient(create_app())
+    owner = _register(client, "priority-preview-owner@example.com")
+    client.post(
+        "/admin/users",
+        json={
+            "email": "priority-preview-viewer@example.com",
+            "full_name": "Viewer",
+            "password": "password-123",
+            "role": "viewer",
+        },
+        headers=_headers(owner["access_token"]),
+    )
+    login = client.post(
+        "/auth/login",
+        json={"email": "priority-preview-viewer@example.com", "password": "password-123"},
+    )
+
+    response = client.post(
+        "/erp/priority/sync-preview",
+        json={"tenant_id": owner["tenant"]["id"], "kind": "vendors"},
+        headers=_headers(login.json()["access_token"]),
+    )
+
+    assert response.status_code == 403
 
 
 def _clear_dependency_caches() -> None:

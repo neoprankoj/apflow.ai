@@ -119,7 +119,7 @@ class PriorityODataAdapter:
             )
         return [
             self._vendor_record(tenant_id, row, mapping)
-            for row in self._fetch_entity_rows(mapping.entity_name)
+            for row in self.fetch_entity_rows(mapping.entity_name)
         ]
 
     def sync_purchase_orders(self, tenant_id: UUID) -> list[ERPPurchaseOrderRecord]:
@@ -131,7 +131,7 @@ class PriorityODataAdapter:
             )
         return [
             self._purchase_order_record(tenant_id, row, mapping)
-            for row in self._fetch_entity_rows(mapping.entity_name)
+            for row in self.fetch_entity_rows(mapping.entity_name)
         ]
 
     def export_invoice(self, tenant_id: UUID, invoice_id: UUID) -> ERPInvoiceExportResult:
@@ -227,7 +227,7 @@ class PriorityODataAdapter:
     def _password(self) -> str:
         return self.settings.priority_erp_password or self.settings.priority_erp_api_key
 
-    def _fetch_entity_rows(self, entity_name: str) -> list[dict[str, Any]]:
+    def fetch_entity_rows(self, entity_name: str, limit: int = 50) -> list[dict[str, Any]]:
         if not self.is_configured():
             raise ERPAdapterError(
                 "missing_credentials",
@@ -238,7 +238,7 @@ class PriorityODataAdapter:
             with self._client() as client:
                 response = client.get(
                     f"{self.service_root_url()}/{entity_name}",
-                    params={"$top": 50},
+                    params={"$top": limit},
                 )
         except httpx.RequestError as exc:
             raise ERPAdapterError(

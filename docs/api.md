@@ -157,8 +157,11 @@ ERP endpoints default to mock adapters. Priority also exposes an experimental re
 - `GET /erp/priority/mapping?tenant_id={uuid}`
 - `PUT /erp/priority/mapping`
 - `POST /erp/priority/validate-mapping`
+- `POST /erp/priority/sync-preview`
+- `POST /erp/priority/sync-preview/vendors`
+- `POST /erp/priority/sync-preview/purchase-orders`
 
-Validation is structural unless live Priority metadata is available. Vendor and PO sync return `mapping_required` until the relevant tenant mapping exists. Real invoice export builds a payload preview and returns `write_disabled` while `PRIORITY_ERP_ENABLE_WRITES=false`. A minimal ERP request is:
+Validation is structural unless live Priority metadata is available. Priority sync preview is read-only and imports no records; mock mode uses deterministic sample Priority-like rows while real mode may use a read-only Priority OData fetch when configured. Vendor and PO sync return `mapping_required` until the relevant tenant mapping exists. Real invoice export builds a payload preview and returns `write_disabled` while `PRIORITY_ERP_ENABLE_WRITES=false`. A minimal ERP request is:
 
 ```json
 {
@@ -166,6 +169,18 @@ Validation is structural unless live Priority metadata is available. Vendor and 
   "adapter_type": "priority"
 }
 ```
+
+Example Priority sync preview request:
+
+```json
+{
+  "tenant_id": "11111111-1111-1111-1111-111111111111",
+  "kind": "vendors",
+  "limit": 10
+}
+```
+
+Preview responses include status, source (`sample` or `priority`), mapping status, limited raw records, mapped records, warnings, and the message `No data was imported.` Viewers cannot run previews when auth is enabled.
 
 Example Priority mapping payload:
 

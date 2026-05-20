@@ -220,6 +220,9 @@ For safe staging edits, use the dashboard `Admin` section:
 3. Validate before saving.
 4. Treat the sample as a template only; verify every entity and field against the customer's Priority environment.
 5. Confirm the UI still shows mock mode and writes disabled unless operations explicitly changes those runtime settings.
+6. Use `Preview Vendor Sync` and `Preview Purchase Orders` to inspect mapped sample rows before enabling any real import path.
+
+Priority sync preview is dry-run only. It does not import vendors or purchase orders into APFlow and does not write to Priority. In mock mode, the preview uses deterministic synthetic Priority-like records. In real mode, configured credentials can be used for a read-only limited OData fetch, but writes remain disabled unless explicitly enabled later.
 
 ## OCR And Human Review
 

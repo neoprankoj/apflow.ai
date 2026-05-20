@@ -45,6 +45,9 @@ Use this short checklist before merging frontend UI changes.
 - [ ] Priority Mapping Admin loads the current tenant mapping safely.
 - [ ] Invalid mapping JSON shows a local validation message before any save attempt.
 - [ ] View-only users can read the mapping but cannot edit or save it.
+- [ ] Priority Vendor Sync preview shows mapped vendor sample rows without importing data.
+- [ ] Priority PO Sync preview shows mapped purchase-order sample rows without importing data.
+- [ ] Users without ERP sync/config permission cannot run sync previews.
 
 ## Audit Trail
 
