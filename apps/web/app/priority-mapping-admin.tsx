@@ -9,10 +9,13 @@ import { LoadingSkeleton } from "../components/ui/loading-skeleton";
 import { StatusBadge } from "../components/ui/status-badge";
 import {
   ApiRequestError,
+  generatePriorityPurchaseOrderImportPlan,
+  generatePriorityVendorImportPlan,
   getPriorityMapping,
   previewPriorityPurchaseOrderSync,
   previewPriorityVendorSync,
   savePriorityMapping,
+  type PriorityImportPlanResponse,
   type PriorityMapping,
   type PrioritySyncPreviewKind,
   type PrioritySyncPreviewResponse,
@@ -83,8 +86,11 @@ export function PriorityMappingAdmin({
   const [status, setStatus] = useState<"idle" | "loading" | "validating" | "saving">("idle");
   const [previewStatus, setPreviewStatus] = useState<"idle" | "loading">("idle");
   const [preview, setPreview] = useState<PrioritySyncPreviewResponse | null>(null);
+  const [planStatus, setPlanStatus] = useState<"idle" | "loading">("idle");
+  const [importPlan, setImportPlan] = useState<PriorityImportPlanResponse | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [previewMessage, setPreviewMessage] = useState<string | null>(null);
+  const [planMessage, setPlanMessage] = useState<string | null>(null);
   const [localJsonError, setLocalJsonError] = useState<string | null>(null);
 
   const isReady = Boolean(apiBaseUrl && accessToken && tenantId);
@@ -197,6 +203,25 @@ export function PriorityMappingAdmin({
     }
   }
 
+  async function handleImportPlan(kind: PrioritySyncPreviewKind) {
+    if (!apiBaseUrl || !accessToken || !tenantId || !canRunSyncPreview) return;
+    setPlanStatus("loading");
+    setPlanMessage(null);
+    try {
+      const result =
+        kind === "vendors"
+          ? await generatePriorityVendorImportPlan(apiBaseUrl, accessToken, tenantId)
+          : await generatePriorityPurchaseOrderImportPlan(apiBaseUrl, accessToken, tenantId);
+      setImportPlan(result);
+      setPlanMessage(result.message);
+    } catch (error) {
+      setImportPlan(null);
+      setPlanMessage(error instanceof Error ? error.message : "Priority import plan failed.");
+    } finally {
+      setPlanStatus("idle");
+    }
+  }
+
   function loadSample() {
     setEditorValue(formatJson(SAMPLE_MAPPING));
     setValidation(null);
@@ -297,7 +322,11 @@ export function PriorityMappingAdmin({
               <SyncDryRun
                 canRunSyncPreview={canRunSyncPreview}
                 isReady={isReady}
+                onImportPlan={handleImportPlan}
                 onPreview={handlePreview}
+                importPlan={importPlan}
+                planMessage={planMessage}
+                planStatus={planStatus}
                 preview={preview}
                 previewMessage={previewMessage}
                 previewStatus={previewStatus}
@@ -346,15 +375,23 @@ export function PriorityMappingAdmin({
 
 function SyncDryRun({
   canRunSyncPreview,
+  importPlan,
   isReady,
+  onImportPlan,
   onPreview,
+  planMessage,
+  planStatus,
   preview,
   previewMessage,
   previewStatus
 }: {
   canRunSyncPreview: boolean;
+  importPlan: PriorityImportPlanResponse | null;
   isReady: boolean;
+  onImportPlan: (kind: PrioritySyncPreviewKind) => void;
   onPreview: (kind: PrioritySyncPreviewKind) => void;
+  planMessage: string | null;
+  planStatus: "idle" | "loading";
   preview: PrioritySyncPreviewResponse | null;
   previewMessage: string | null;
   previewStatus: "idle" | "loading";
@@ -433,6 +470,71 @@ function SyncDryRun({
           ) : null}
         </div>
       ) : null}
+
+      <div className="space-y-4 rounded-md border border-border bg-white p-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h4 className="font-semibold">Import Plan</h4>
+            <p className="mt-1 text-sm text-muted">
+              Compare mapped Priority rows against APFlow data before any import path is enabled.
+              Planning only: no records are imported into APFlow and no ERP data is changed.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              disabled={!isReady || !canRunSyncPreview || planStatus !== "idle"}
+              onClick={() => onImportPlan("vendors")}
+              variant="secondary"
+            >
+              Generate Vendor Import Plan
+            </Button>
+            <Button
+              disabled={!isReady || !canRunSyncPreview || planStatus !== "idle"}
+              onClick={() => onImportPlan("purchase_orders")}
+              variant="secondary"
+            >
+              Generate Purchase Order Import Plan
+            </Button>
+          </div>
+        </div>
+
+        {planStatus === "loading" ? (
+          <div className="space-y-2">
+            <LoadingSkeleton className="h-8 w-full" />
+            <LoadingSkeleton className="h-24 w-full" />
+          </div>
+        ) : null}
+
+        {planMessage ? (
+          <div className="rounded-md border border-border bg-slate-50 px-4 py-3 text-sm text-muted">
+            {planMessage}
+          </div>
+        ) : null}
+
+        {importPlan ? (
+          <div className="space-y-4">
+            <div className="flex flex-wrap gap-2">
+              <StatusBadge status={importPlan.status} />
+              <StatusBadge status={`source: ${importPlan.source}`} />
+              <StatusBadge status={`mode: ${importPlan.mode}`} />
+              <StatusBadge status={`${importPlan.records_planned} planned`} />
+            </div>
+            <PlanSummary summary={importPlan.summary} />
+            {importPlan.errors.length ? <ValidationList label="Plan errors" items={importPlan.errors} tone="danger" /> : null}
+            {importPlan.warnings.length ? <ValidationList label="Plan warnings" items={importPlan.warnings} tone="warning" /> : null}
+            {importPlan.status === "plan_ready" ? (
+              <ImportPlanTable
+                columns={
+                  importPlan.kind === "vendors"
+                    ? ["action", "external_id", "name", "matched_existing_id", "reason", "warnings"]
+                    : ["action", "po_number", "vendor_external_id", "total_amount", "matched_existing_id", "reason", "warnings"]
+                }
+                items={importPlan.items}
+              />
+            ) : null}
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -478,6 +580,71 @@ function PreviewTable({
       </table>
     </div>
   );
+}
+
+function PlanSummary({ summary }: { summary: Record<string, number> }) {
+  const entries = ["would_create", "would_update", "would_skip", "would_conflict"];
+  return (
+    <div className="grid gap-2 text-sm sm:grid-cols-4">
+      {entries.map((key) => (
+        <div className="rounded-md border border-border bg-slate-50 p-3" key={key}>
+          <p className="text-xs uppercase tracking-wide text-muted">{labelFor(key)}</p>
+          <p className="mt-1 text-lg font-semibold">{summary[key] ?? 0}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ImportPlanTable({
+  columns,
+  items
+}: {
+  columns: string[];
+  items: PriorityImportPlanResponse["items"];
+}) {
+  if (!items.length) {
+    return (
+      <EmptyState
+        description="Generate an import plan after saving a mapping to compare mapped rows with APFlow records."
+        title="No planned rows"
+      />
+    );
+  }
+  return (
+    <div className="overflow-x-auto rounded-md border border-border bg-white">
+      <table className="min-w-full divide-y divide-border text-sm">
+        <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-muted">
+          <tr>
+            {columns.map((column) => (
+              <th className="px-3 py-2 font-medium" key={column}>
+                {labelFor(column)}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border">
+          {items.map((item, index) => (
+            <tr className="hover:bg-slate-50" key={`${item.action}-${item.mapped_record.external_id ?? index}`}>
+              {columns.map((column) => (
+                <td className="px-3 py-2 align-top text-foreground" key={column}>
+                  {renderPlanCell(item, column)}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function renderPlanCell(item: PriorityImportPlanResponse["items"][number], column: string) {
+  if (column === "action") return <StatusBadge status={item.action} />;
+  if (column === "matched_existing_id") return item.matched_existing_id ? shortId(item.matched_existing_id) : "—";
+  if (column === "reason") return <span className="max-w-sm text-muted">{item.reason}</span>;
+  if (column === "warnings") return item.warnings.length ? item.warnings.join("; ") : "—";
+  return formatValue(item.mapped_record[column]);
 }
 
 function ValidationSummary({ validation }: { validation: PriorityMappingValidationResult }) {
@@ -544,4 +711,8 @@ function formatValue(value: unknown) {
   if (value === null || value === undefined || value === "") return "—";
   if (typeof value === "number") return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
   return String(value);
+}
+
+function shortId(value: string) {
+  return value.length > 8 ? value.slice(0, 8) : value;
 }

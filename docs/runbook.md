@@ -221,8 +221,11 @@ For safe staging edits, use the dashboard `Admin` section:
 4. Treat the sample as a template only; verify every entity and field against the customer's Priority environment.
 5. Confirm the UI still shows mock mode and writes disabled unless operations explicitly changes those runtime settings.
 6. Use `Preview Vendor Sync` and `Preview Purchase Orders` to inspect mapped sample rows before enabling any real import path.
+7. Use `Generate Vendor Import Plan` and `Generate Purchase Order Import Plan` to compare mapped rows with existing APFlow records before any import is enabled.
 
 Priority sync preview is dry-run only. It does not import vendors or purchase orders into APFlow and does not write to Priority. In mock mode, the preview uses deterministic synthetic Priority-like records. In real mode, configured credentials can be used for a read-only limited OData fetch, but writes remain disabled unless explicitly enabled later.
+
+Priority import plans are also preview-only. They reuse the saved mapping and dry-run records, then classify each row as `would_create`, `would_update`, `would_skip`, or `would_conflict` against existing tenant vendors and purchase orders. A conflict means matching was ambiguous and should be resolved before enabling a future import. The import-plan endpoints do not create vendors, purchase orders, ERP records, or audit events.
 
 ## OCR And Human Review
 

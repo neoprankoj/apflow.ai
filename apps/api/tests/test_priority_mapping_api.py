@@ -276,6 +276,257 @@ def test_viewer_cannot_run_priority_preview(auth_enabled):
     assert response.status_code == 403
 
 
+def test_priority_vendor_import_plan_requires_mapping(auth_enabled):
+    client = TestClient(create_app())
+    owner = _register(client, "priority-plan-missing@example.com")
+
+    response = client.post(
+        "/erp/priority/import-plan",
+        json={"tenant_id": owner["tenant"]["id"], "kind": "vendors"},
+        headers=_headers(owner["access_token"]),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "mapping_required"
+    assert response.json()["records_planned"] == 0
+
+
+def test_priority_purchase_order_import_plan_requires_mapping(auth_enabled):
+    client = TestClient(create_app())
+    owner = _register(client, "priority-plan-missing-pos@example.com")
+
+    response = client.post(
+        "/erp/priority/import-plan",
+        json={"tenant_id": owner["tenant"]["id"], "kind": "purchase_orders"},
+        headers=_headers(owner["access_token"]),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "mapping_required"
+    assert response.json()["records_planned"] == 0
+
+
+def test_priority_vendor_import_plan_creates_without_existing_records(auth_enabled):
+    client = TestClient(create_app())
+    owner = _register(client, "priority-plan-create@example.com")
+    tenant_id = UUID(owner["tenant"]["id"])
+    client.put(
+        "/erp/priority/mapping",
+        json=_mapping_payload(owner["tenant"]["id"]),
+        headers=_headers(owner["access_token"]),
+    )
+    repository = dependencies.get_in_memory_repository()
+
+    response = client.post(
+        "/erp/priority/import-plan/vendors",
+        json={"tenant_id": owner["tenant"]["id"]},
+        headers=_headers(owner["access_token"]),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "plan_ready"
+    assert body["summary"]["would_create"] == 2
+    assert body["items"][0]["action"] == "would_create"
+    assert repository.list_vendors(tenant_id) == []
+    assert "secret" not in str(body).lower()
+
+
+def test_priority_vendor_import_plan_skips_same_existing_vendor(auth_enabled):
+    client = TestClient(create_app())
+    owner = _register(client, "priority-plan-skip@example.com")
+    tenant_id = UUID(owner["tenant"]["id"])
+    client.put(
+        "/erp/priority/mapping",
+        json=_mapping_payload(owner["tenant"]["id"]),
+        headers=_headers(owner["access_token"]),
+    )
+    repository = dependencies.get_in_memory_repository()
+    vendor = repository.add_vendor(
+        tenant_id=tenant_id,
+        name="Demo Office Supplies Ltd.",
+        tax_id="DEMO-TAX-999999999",
+    )
+    repository.link_external_vendor_id(tenant_id, vendor.vendor_id, "SUP-1001")
+
+    response = client.post(
+        "/erp/priority/import-plan/vendors",
+        json={"tenant_id": owner["tenant"]["id"], "limit": 1},
+        headers=_headers(owner["access_token"]),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["items"][0]["action"] == "would_skip"
+    assert body["items"][0]["matched_existing_id"] == str(vendor.vendor_id)
+    assert len(repository.list_vendors(tenant_id)) == 1
+
+
+def test_priority_vendor_import_plan_updates_changed_existing_vendor(auth_enabled):
+    client = TestClient(create_app())
+    owner = _register(client, "priority-plan-update@example.com")
+    tenant_id = UUID(owner["tenant"]["id"])
+    client.put(
+        "/erp/priority/mapping",
+        json=_mapping_payload(owner["tenant"]["id"]),
+        headers=_headers(owner["access_token"]),
+    )
+    repository = dependencies.get_in_memory_repository()
+    vendor = repository.add_vendor(tenant_id=tenant_id, name="Old Supplier Name", tax_id="OLD-TAX")
+    repository.link_external_vendor_id(tenant_id, vendor.vendor_id, "SUP-1001")
+
+    response = client.post(
+        "/erp/priority/import-plan/vendors",
+        json={"tenant_id": owner["tenant"]["id"], "limit": 1},
+        headers=_headers(owner["access_token"]),
+    )
+
+    assert response.status_code == 200
+    item = response.json()["items"][0]
+    assert item["action"] == "would_update"
+    assert "name" in item["diff"]
+    assert len(repository.list_vendors(tenant_id)) == 1
+
+
+def test_priority_vendor_import_plan_flags_ambiguous_vendor_matches(auth_enabled):
+    client = TestClient(create_app())
+    owner = _register(client, "priority-plan-conflict@example.com")
+    tenant_id = UUID(owner["tenant"]["id"])
+    client.put(
+        "/erp/priority/mapping",
+        json=_mapping_payload(owner["tenant"]["id"]),
+        headers=_headers(owner["access_token"]),
+    )
+    repository = dependencies.get_in_memory_repository()
+    repository.add_vendor(tenant_id=tenant_id, name="Candidate A", tax_id="DEMO-TAX-999999999")
+    repository.add_vendor(tenant_id=tenant_id, name="Candidate B", tax_id="DEMO-TAX-999999999")
+
+    response = client.post(
+        "/erp/priority/import-plan/vendors",
+        json={"tenant_id": owner["tenant"]["id"], "limit": 1},
+        headers=_headers(owner["access_token"]),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["items"][0]["action"] == "would_conflict"
+    assert len(repository.list_vendors(tenant_id)) == 2
+
+
+def test_priority_purchase_order_import_plan_creates_without_existing_records(auth_enabled):
+    client = TestClient(create_app())
+    owner = _register(client, "priority-plan-po-create@example.com")
+    tenant_id = UUID(owner["tenant"]["id"])
+    client.put(
+        "/erp/priority/mapping",
+        json=_mapping_payload(owner["tenant"]["id"]),
+        headers=_headers(owner["access_token"]),
+    )
+    repository = dependencies.get_in_memory_repository()
+
+    response = client.post(
+        "/erp/priority/import-plan/purchase-orders",
+        json={"tenant_id": owner["tenant"]["id"]},
+        headers=_headers(owner["access_token"]),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["summary"]["would_create"] == 2
+    assert body["items"][0]["action"] == "would_create"
+    assert repository.list_purchase_orders(tenant_id) == []
+
+
+def test_priority_purchase_order_import_plan_skips_same_existing_po(auth_enabled):
+    client = TestClient(create_app())
+    owner = _register(client, "priority-plan-po-skip@example.com")
+    tenant_id = UUID(owner["tenant"]["id"])
+    client.put(
+        "/erp/priority/mapping",
+        json=_mapping_payload(owner["tenant"]["id"]),
+        headers=_headers(owner["access_token"]),
+    )
+    repository = dependencies.get_in_memory_repository()
+    vendor = repository.add_vendor(tenant_id=tenant_id, name="Demo Office Supplies Ltd.")
+    po = repository.add_purchase_order(
+        tenant_id=tenant_id,
+        po_number="PO-240001",
+        vendor_id=vendor.vendor_id,
+        total_amount=1170.0,
+        currency="USD",
+    )
+    repository.link_external_purchase_order_id(tenant_id, po.purchase_order_id, "PO-240001")
+
+    response = client.post(
+        "/erp/priority/import-plan/purchase-orders",
+        json={"tenant_id": owner["tenant"]["id"], "limit": 1},
+        headers=_headers(owner["access_token"]),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["items"][0]["action"] == "would_skip"
+    assert len(repository.list_purchase_orders(tenant_id)) == 1
+
+
+def test_priority_purchase_order_import_plan_updates_changed_existing_po(auth_enabled):
+    client = TestClient(create_app())
+    owner = _register(client, "priority-plan-po-update@example.com")
+    tenant_id = UUID(owner["tenant"]["id"])
+    client.put(
+        "/erp/priority/mapping",
+        json=_mapping_payload(owner["tenant"]["id"]),
+        headers=_headers(owner["access_token"]),
+    )
+    repository = dependencies.get_in_memory_repository()
+    vendor = repository.add_vendor(tenant_id=tenant_id, name="Demo Office Supplies Ltd.")
+    po = repository.add_purchase_order(
+        tenant_id=tenant_id,
+        po_number="PO-240001",
+        vendor_id=vendor.vendor_id,
+        total_amount=999.0,
+        currency="USD",
+    )
+    repository.link_external_purchase_order_id(tenant_id, po.purchase_order_id, "PO-240001")
+
+    response = client.post(
+        "/erp/priority/import-plan/purchase-orders",
+        json={"tenant_id": owner["tenant"]["id"], "limit": 1},
+        headers=_headers(owner["access_token"]),
+    )
+
+    assert response.status_code == 200
+    item = response.json()["items"][0]
+    assert item["action"] == "would_update"
+    assert "total_amount" in item["diff"]
+    assert len(repository.list_purchase_orders(tenant_id)) == 1
+
+
+def test_viewer_cannot_generate_priority_import_plan(auth_enabled):
+    client = TestClient(create_app())
+    owner = _register(client, "priority-plan-owner@example.com")
+    client.post(
+        "/admin/users",
+        json={
+            "email": "priority-plan-viewer@example.com",
+            "full_name": "Viewer",
+            "password": "password-123",
+            "role": "viewer",
+        },
+        headers=_headers(owner["access_token"]),
+    )
+    login = client.post(
+        "/auth/login",
+        json={"email": "priority-plan-viewer@example.com", "password": "password-123"},
+    )
+
+    response = client.post(
+        "/erp/priority/import-plan",
+        json={"tenant_id": owner["tenant"]["id"], "kind": "vendors"},
+        headers=_headers(login.json()["access_token"]),
+    )
+
+    assert response.status_code == 403
+
+
 def _clear_dependency_caches() -> None:
     for provider in (
         dependencies.get_repository,

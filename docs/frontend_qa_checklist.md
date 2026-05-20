@@ -47,6 +47,9 @@ Use this short checklist before merging frontend UI changes.
 - [ ] View-only users can read the mapping but cannot edit or save it.
 - [ ] Priority Vendor Sync preview shows mapped vendor sample rows without importing data.
 - [ ] Priority PO Sync preview shows mapped purchase-order sample rows without importing data.
+- [ ] Priority Vendor Import Plan shows create/update/skip/conflict counts without importing data.
+- [ ] Priority PO Import Plan shows create/update/skip/conflict counts without importing data.
+- [ ] Import plan conflict and warning text is visible and does not imply records were changed.
 - [ ] Users without ERP sync/config permission cannot run sync previews.
 
 ## Audit Trail

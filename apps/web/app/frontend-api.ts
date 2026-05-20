@@ -61,6 +61,28 @@ export type PrioritySyncPreviewResponse = {
   message: string;
 };
 
+export type PriorityImportPlanItem = {
+  action: "would_create" | "would_update" | "would_skip" | "would_conflict" | string;
+  reason: string;
+  mapped_record: Record<string, unknown>;
+  matched_existing_id?: string | null;
+  diff?: Record<string, unknown> | null;
+  warnings: string[];
+};
+
+export type PriorityImportPlanResponse = {
+  status: string;
+  kind: PrioritySyncPreviewKind;
+  mode: string;
+  source: string;
+  records_planned: number;
+  summary: Record<string, number>;
+  items: PriorityImportPlanItem[];
+  warnings: string[];
+  errors: string[];
+  message: string;
+};
+
 export function getApiBaseUrl() {
   const value = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
   if (!value) return null;
@@ -187,6 +209,30 @@ export function previewPriorityVendorSync(apiBaseUrl: string, token: string, ten
 
 export function previewPriorityPurchaseOrderSync(apiBaseUrl: string, token: string, tenantId: string) {
   return previewPrioritySync(apiBaseUrl, token, tenantId, "purchase_orders");
+}
+
+export function generatePriorityImportPlan(
+  apiBaseUrl: string,
+  token: string,
+  tenantId: string,
+  kind: PrioritySyncPreviewKind,
+  limit = 10
+) {
+  return apiFetch<PriorityImportPlanResponse>(apiBaseUrl, "/erp/priority/import-plan", {
+    method: "POST",
+    token,
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ tenant_id: tenantId, kind, limit }),
+    action: kind === "vendors" ? "Generate Priority vendor import plan" : "Generate Priority purchase order import plan"
+  });
+}
+
+export function generatePriorityVendorImportPlan(apiBaseUrl: string, token: string, tenantId: string) {
+  return generatePriorityImportPlan(apiBaseUrl, token, tenantId, "vendors");
+}
+
+export function generatePriorityPurchaseOrderImportPlan(apiBaseUrl: string, token: string, tenantId: string) {
+  return generatePriorityImportPlan(apiBaseUrl, token, tenantId, "purchase_orders");
 }
 
 async function readResponseDetail(response: Response) {
