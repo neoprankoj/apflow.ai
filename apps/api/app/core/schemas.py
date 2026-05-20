@@ -854,6 +854,35 @@ class PriorityImportPlanResponse(APFlowModel):
     message: str
 
 
+class PriorityImportRequest(APFlowModel):
+    tenant_id: UUID
+    kind: str = "vendors"
+    selected_external_ids: list[str] = Field(default_factory=list)
+    confirmation: str
+    allow_updates: bool = False
+    allow_creates: bool = True
+    limit: int = Field(default=10, ge=1, le=50)
+
+
+class PriorityImportResultItem(APFlowModel):
+    external_id: str | None = None
+    action_requested: str
+    result: str
+    apflow_record_id: str | None = None
+    reason: str
+    warnings: list[str] = Field(default_factory=list)
+
+
+class PriorityImportResult(APFlowModel):
+    status: str
+    kind: str
+    summary: dict[str, int] = Field(default_factory=dict)
+    items: list[PriorityImportResultItem] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    errors: list[str] = Field(default_factory=list)
+    message: str
+
+
 class ERPSyncRequest(APFlowModel):
     tenant_id: UUID
     operation: ERPOperation = ERPOperation.TEST_CONNECTION

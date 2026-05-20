@@ -3,9 +3,12 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.agents.data.erp_connector_agent import ERPConnectorAgent
-from app.api.dependencies import get_erp_connector_agent, require_permission, resolve_tenant_id
+from app.agents.observability.audit_logging_agent import AuditLoggingAgent
+from app.api.dependencies import get_audit_agent, get_erp_connector_agent, require_permission, resolve_tenant_id
 from app.core.config import settings
 from app.core.schemas import (
+    ActorType,
+    AuditEventInput,
     CurrentUserContext,
     ERPConnectionConfig,
     ERPOperation,
@@ -13,6 +16,9 @@ from app.core.schemas import (
     ERPSyncRequest,
     ERPSyncResult,
     Permission,
+    PriorityImportRequest,
+    PriorityImportResult,
+    PriorityImportResultItem,
     PriorityImportPlanRequest,
     PriorityImportPlanResponse,
     PrioritySyncPreviewRequest,
@@ -185,6 +191,101 @@ def plan_priority_purchase_order_import(
     return plan_priority_import(request, erp_agent, context)
 
 
+@router.post("/priority/import", response_model=PriorityImportResult)
+def import_priority_records(
+    request: PriorityImportRequest,
+    erp_agent: ERPConnectorAgent = Depends(get_erp_connector_agent),
+    audit_agent: AuditLoggingAgent = Depends(get_audit_agent),
+    context: CurrentUserContext = Depends(require_permission(Permission.ERP_SYNC)),
+) -> PriorityImportResult:
+    _enforce_body_tenant(request.tenant_id, context)
+    if request.confirmation != "IMPORT_SELECTED":
+        raise HTTPException(status_code=400, detail="Type IMPORT_SELECTED to import selected records into APFlow.")
+    selected_external_ids = _dedupe_selected_external_ids(request.selected_external_ids)
+    if not selected_external_ids:
+        raise HTTPException(status_code=400, detail="Select at least one Priority external ID to import.")
+
+    plan = plan_priority_import(
+        PriorityImportPlanRequest(
+            tenant_id=request.tenant_id,
+            kind=request.kind,
+            limit=request.limit,
+        ),
+        erp_agent,
+        context,
+    )
+    if plan.status != "plan_ready":
+        return PriorityImportResult(
+            status=plan.status,
+            kind=plan.kind,
+            summary=_empty_import_summary(),
+            items=[],
+            warnings=plan.warnings,
+            errors=plan.errors,
+            message=plan.message,
+        )
+
+    _record_priority_import_event(
+        audit_agent,
+        request,
+        context,
+        action="priority.import_started",
+        entity_type="tenant",
+        entity_id=request.tenant_id,
+        metadata={
+            "kind": plan.kind,
+            "selected_external_ids": selected_external_ids,
+            "allow_creates": request.allow_creates,
+            "allow_updates": request.allow_updates,
+            "source": plan.source,
+            "priority_data_changed": False,
+        },
+    )
+
+    if plan.kind == "vendors":
+        result = _import_priority_vendors(request, plan, selected_external_ids, erp_agent, audit_agent, context)
+    else:
+        result = _import_priority_purchase_orders(request, plan, selected_external_ids, erp_agent, audit_agent, context)
+
+    _record_priority_import_event(
+        audit_agent,
+        request,
+        context,
+        action="priority.import_completed",
+        entity_type="tenant",
+        entity_id=request.tenant_id,
+        metadata={
+            "kind": result.kind,
+            "status": result.status,
+            "summary": result.summary,
+            "priority_data_changed": False,
+        },
+    )
+    return result
+
+
+@router.post("/priority/import/vendors", response_model=PriorityImportResult)
+def import_priority_vendors(
+    request: PriorityImportRequest,
+    erp_agent: ERPConnectorAgent = Depends(get_erp_connector_agent),
+    audit_agent: AuditLoggingAgent = Depends(get_audit_agent),
+    context: CurrentUserContext = Depends(require_permission(Permission.ERP_SYNC)),
+) -> PriorityImportResult:
+    request.kind = "vendors"
+    return import_priority_records(request, erp_agent, audit_agent, context)
+
+
+@router.post("/priority/import/purchase-orders", response_model=PriorityImportResult)
+def import_priority_purchase_orders(
+    request: PriorityImportRequest,
+    erp_agent: ERPConnectorAgent = Depends(get_erp_connector_agent),
+    audit_agent: AuditLoggingAgent = Depends(get_audit_agent),
+    context: CurrentUserContext = Depends(require_permission(Permission.ERP_SYNC)),
+) -> PriorityImportResult:
+    request.kind = "purchase_orders"
+    return import_priority_records(request, erp_agent, audit_agent, context)
+
+
 def _build_priority_preview(
     request: PrioritySyncPreviewRequest,
     erp_agent: ERPConnectorAgent,
@@ -341,3 +442,374 @@ def _normalize_preview_kind(kind: str) -> str:
     if normalized in {"purchase_order", "purchase_orders", "po", "pos"}:
         return "purchase_orders"
     raise ValueError("Priority sync preview kind must be vendors or purchase_orders.")
+
+
+def _import_priority_vendors(
+    request: PriorityImportRequest,
+    plan: PriorityImportPlanResponse,
+    selected_external_ids: list[str],
+    erp_agent: ERPConnectorAgent,
+    audit_agent: AuditLoggingAgent,
+    context: CurrentUserContext,
+) -> PriorityImportResult:
+    plan_items = _plan_items_by_external_id(plan)
+    result_items: list[PriorityImportResultItem] = []
+    for external_id in selected_external_ids:
+        item = plan_items.get(external_id)
+        if item is None:
+            result_items.append(_missing_selection_result(external_id))
+            continue
+        result = _import_priority_vendor_item(request, item, erp_agent, audit_agent, context)
+        result_items.append(result)
+    return _priority_import_response("vendors", result_items)
+
+
+def _import_priority_vendor_item(
+    request: PriorityImportRequest,
+    item,
+    erp_agent: ERPConnectorAgent,
+    audit_agent: AuditLoggingAgent,
+    context: CurrentUserContext,
+) -> PriorityImportResultItem:
+    external_id = _string_or_none(item.mapped_record.get("external_id"))
+    action = item.action
+    if action == "would_conflict":
+        result = _blocked_result(external_id, action, "conflict", "Conflicts are never imported.", item.warnings)
+        _record_item_event(audit_agent, request, context, "priority.vendor_import_conflict", result)
+        return result
+    if action == "would_skip":
+        return PriorityImportResultItem(
+            external_id=external_id,
+            action_requested=action,
+            result="skipped",
+            apflow_record_id=item.matched_existing_id,
+            reason="Existing vendor already matches mapped fields.",
+            warnings=item.warnings,
+        )
+    if action == "would_create":
+        if not request.allow_creates:
+            return _blocked_result(external_id, action, "blocked", "Creates were not enabled.", item.warnings)
+        name = _string_or_none(item.mapped_record.get("name"))
+        if not name:
+            return _blocked_result(external_id, action, "blocked", "Vendor name is required before import.", item.warnings)
+        vendor = erp_agent.repository.add_vendor(
+            tenant_id=request.tenant_id,
+            name=name,
+            tax_id=_string_or_none(item.mapped_record.get("tax_id")),
+        )
+        if external_id:
+            erp_agent.repository.link_external_vendor_id(request.tenant_id, vendor.vendor_id, external_id)
+        result = PriorityImportResultItem(
+            external_id=external_id,
+            action_requested=action,
+            result="created",
+            apflow_record_id=str(vendor.vendor_id),
+            reason="Vendor imported into APFlow. No Priority data was changed.",
+            warnings=_unsupported_vendor_field_warnings(item.mapped_record),
+        )
+        _record_item_event(audit_agent, request, context, "priority.vendor_created", result)
+        return result
+    if action == "would_update":
+        if not request.allow_updates:
+            return _blocked_result(external_id, action, "blocked", "Updates were not enabled.", item.warnings)
+        if item.matched_existing_id is None:
+            return _blocked_result(external_id, action, "blocked", "Matched vendor ID is missing.", item.warnings)
+        vendor = erp_agent.repository.update_vendor(
+            request.tenant_id,
+            UUID(item.matched_existing_id),
+            name=_string_or_none(item.mapped_record.get("name")),
+            tax_id=_string_or_none(item.mapped_record.get("tax_id")),
+        )
+        if external_id:
+            erp_agent.repository.link_external_vendor_id(request.tenant_id, vendor.vendor_id, external_id)
+        result = PriorityImportResultItem(
+            external_id=external_id,
+            action_requested=action,
+            result="updated",
+            apflow_record_id=str(vendor.vendor_id),
+            reason="Vendor updated in APFlow. No Priority data was changed.",
+            warnings=_unsupported_vendor_field_warnings(item.mapped_record),
+        )
+        _record_item_event(audit_agent, request, context, "priority.vendor_updated", result)
+        return result
+    return _blocked_result(external_id, action, "blocked", "This import-plan action is not importable.", item.warnings)
+
+
+def _import_priority_purchase_orders(
+    request: PriorityImportRequest,
+    plan: PriorityImportPlanResponse,
+    selected_external_ids: list[str],
+    erp_agent: ERPConnectorAgent,
+    audit_agent: AuditLoggingAgent,
+    context: CurrentUserContext,
+) -> PriorityImportResult:
+    plan_items = _plan_items_by_external_id(plan)
+    result_items: list[PriorityImportResultItem] = []
+    for external_id in selected_external_ids:
+        item = plan_items.get(external_id)
+        if item is None:
+            result_items.append(_missing_selection_result(external_id))
+            continue
+        result = _import_priority_purchase_order_item(request, item, erp_agent, audit_agent, context)
+        result_items.append(result)
+    return _priority_import_response("purchase_orders", result_items)
+
+
+def _import_priority_purchase_order_item(
+    request: PriorityImportRequest,
+    item,
+    erp_agent: ERPConnectorAgent,
+    audit_agent: AuditLoggingAgent,
+    context: CurrentUserContext,
+) -> PriorityImportResultItem:
+    external_id = _string_or_none(item.mapped_record.get("external_id"))
+    action = item.action
+    if action == "would_conflict":
+        result = _blocked_result(external_id, action, "conflict", "Conflicts are never imported.", item.warnings)
+        _record_item_event(audit_agent, request, context, "priority.purchase_order_import_conflict", result)
+        return result
+    if action == "would_skip":
+        return PriorityImportResultItem(
+            external_id=external_id,
+            action_requested=action,
+            result="skipped",
+            apflow_record_id=item.matched_existing_id,
+            reason="Existing purchase order already matches mapped fields.",
+            warnings=item.warnings,
+        )
+    vendor_id, vendor_warning = _resolve_vendor_id_for_po(request.tenant_id, item.mapped_record, erp_agent)
+    if vendor_id is None:
+        result = _blocked_result(
+            external_id,
+            action,
+            "blocked",
+            vendor_warning or "Vendor must be imported before purchase orders.",
+            item.warnings,
+        )
+        _record_item_event(audit_agent, request, context, "priority.purchase_order_import_blocked", result)
+        return result
+    if action == "would_create":
+        if not request.allow_creates:
+            return _blocked_result(external_id, action, "blocked", "Creates were not enabled.", item.warnings)
+        po_number = _string_or_none(item.mapped_record.get("po_number"))
+        total_amount = _float_or_none(item.mapped_record.get("total_amount"))
+        if not po_number or total_amount is None:
+            return _blocked_result(
+                external_id,
+                action,
+                "blocked",
+                "PO number and numeric amount are required before import.",
+                item.warnings,
+            )
+        po = erp_agent.repository.add_purchase_order(
+            tenant_id=request.tenant_id,
+            po_number=po_number,
+            vendor_id=vendor_id,
+            total_amount=total_amount,
+            currency=_string_or_none(item.mapped_record.get("currency")) or "USD",
+        )
+        status = _string_or_none(item.mapped_record.get("status"))
+        if status:
+            po = erp_agent.repository.update_purchase_order(request.tenant_id, po.purchase_order_id, status=status)
+        if external_id:
+            erp_agent.repository.link_external_purchase_order_id(request.tenant_id, po.purchase_order_id, external_id)
+        result = PriorityImportResultItem(
+            external_id=external_id,
+            action_requested=action,
+            result="created",
+            apflow_record_id=str(po.purchase_order_id),
+            reason="Purchase order imported into APFlow. No Priority data was changed.",
+            warnings=item.warnings,
+        )
+        _record_item_event(audit_agent, request, context, "priority.purchase_order_created", result)
+        return result
+    if action == "would_update":
+        if not request.allow_updates:
+            return _blocked_result(external_id, action, "blocked", "Updates were not enabled.", item.warnings)
+        if item.matched_existing_id is None:
+            return _blocked_result(external_id, action, "blocked", "Matched purchase order ID is missing.", item.warnings)
+        po = erp_agent.repository.update_purchase_order(
+            request.tenant_id,
+            UUID(item.matched_existing_id),
+            po_number=_string_or_none(item.mapped_record.get("po_number")),
+            vendor_id=vendor_id,
+            total_amount=_float_or_none(item.mapped_record.get("total_amount")),
+            currency=_string_or_none(item.mapped_record.get("currency")),
+            status=_string_or_none(item.mapped_record.get("status")),
+        )
+        if external_id:
+            erp_agent.repository.link_external_purchase_order_id(request.tenant_id, po.purchase_order_id, external_id)
+        result = PriorityImportResultItem(
+            external_id=external_id,
+            action_requested=action,
+            result="updated",
+            apflow_record_id=str(po.purchase_order_id),
+            reason="Purchase order updated in APFlow. No Priority data was changed.",
+            warnings=item.warnings,
+        )
+        _record_item_event(audit_agent, request, context, "priority.purchase_order_updated", result)
+        return result
+    return _blocked_result(external_id, action, "blocked", "This import-plan action is not importable.", item.warnings)
+
+
+def _resolve_vendor_id_for_po(tenant_id: UUID, mapped_record: dict, erp_agent: ERPConnectorAgent) -> tuple[UUID | None, str | None]:
+    vendor_external_id = _string_or_none(mapped_record.get("vendor_external_id"))
+    if not vendor_external_id:
+        return None, "Vendor external ID is required before importing purchase orders."
+    external_vendor_ids = erp_agent.repository.list_external_vendor_ids(tenant_id)
+    for vendor_id, external_id in external_vendor_ids.items():
+        if external_id == vendor_external_id:
+            return vendor_id, None
+    return None, f"Vendor {vendor_external_id} must be imported before this purchase order."
+
+
+def _priority_import_response(kind: str, items: list[PriorityImportResultItem]) -> PriorityImportResult:
+    summary = _empty_import_summary()
+    for item in items:
+        summary_key = "conflicts" if item.result == "conflict" else item.result
+        summary[summary_key] = summary.get(summary_key, 0) + 1
+    successful = summary["created"] + summary["updated"] + summary["skipped"]
+    blocked = summary["blocked"] + summary["conflicts"] + summary["failed"]
+    if blocked and successful:
+        status = "partial"
+    elif blocked:
+        status = "blocked"
+    else:
+        status = "imported"
+    return PriorityImportResult(
+        status=status,
+        kind=kind,
+        summary=summary,
+        items=items,
+        message="Selected records were imported into APFlow. No Priority data was changed."
+        if successful
+        else "Selected records were not imported. No Priority data was changed.",
+    )
+
+
+def _plan_items_by_external_id(plan: PriorityImportPlanResponse) -> dict[str, object]:
+    items: dict[str, object] = {}
+    for item in plan.items:
+        external_id = _string_or_none(item.mapped_record.get("external_id"))
+        if external_id:
+            items[external_id] = item
+    return items
+
+
+def _dedupe_selected_external_ids(values: list[str]) -> list[str]:
+    selected: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        normalized = value.strip()
+        if normalized and normalized not in seen:
+            selected.append(normalized)
+            seen.add(normalized)
+    return selected
+
+
+def _empty_import_summary() -> dict[str, int]:
+    return {
+        "created": 0,
+        "updated": 0,
+        "skipped": 0,
+        "conflicts": 0,
+        "blocked": 0,
+        "failed": 0,
+    }
+
+
+def _missing_selection_result(external_id: str) -> PriorityImportResultItem:
+    return PriorityImportResultItem(
+        external_id=external_id,
+        action_requested="not_found",
+        result="failed",
+        reason="Selected external ID was not found in the current server-side import plan.",
+    )
+
+
+def _blocked_result(
+    external_id: str | None,
+    action: str,
+    result: str,
+    reason: str,
+    warnings: list[str] | None = None,
+) -> PriorityImportResultItem:
+    return PriorityImportResultItem(
+        external_id=external_id,
+        action_requested=action,
+        result=result,
+        reason=reason,
+        warnings=warnings or [],
+    )
+
+
+def _record_item_event(
+    audit_agent: AuditLoggingAgent,
+    request: PriorityImportRequest,
+    context: CurrentUserContext,
+    action: str,
+    item: PriorityImportResultItem,
+) -> None:
+    _record_priority_import_event(
+        audit_agent,
+        request,
+        context,
+        action=action,
+        entity_type=request.kind,
+        entity_id=UUID(item.apflow_record_id) if item.apflow_record_id else request.tenant_id,
+        metadata={
+            "external_id": item.external_id,
+            "action_requested": item.action_requested,
+            "result": item.result,
+            "reason": item.reason,
+            "priority_data_changed": False,
+        },
+    )
+
+
+def _record_priority_import_event(
+    audit_agent: AuditLoggingAgent,
+    request: PriorityImportRequest,
+    context: CurrentUserContext,
+    *,
+    action: str,
+    entity_type: str,
+    entity_id: UUID,
+    metadata: dict,
+) -> None:
+    audit_agent.record(
+        AuditEventInput(
+            tenant_id=request.tenant_id,
+            actor_type=ActorType.USER,
+            actor_id=str(context.user.id),
+            action=action,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            metadata={"source": "Priority sync import", **metadata},
+        )
+    )
+
+
+def _unsupported_vendor_field_warnings(mapped_record: dict) -> list[str]:
+    warnings: list[str] = []
+    if mapped_record.get("email"):
+        warnings.append("Vendor email is not stored by the current APFlow vendor model.")
+    if mapped_record.get("payment_terms"):
+        warnings.append("Vendor payment terms are not stored by the current APFlow vendor model.")
+    return warnings
+
+
+def _float_or_none(value) -> float | None:
+    if value in (None, ""):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _string_or_none(value) -> str | None:
+    if value is None:
+        return None
+    normalized = str(value).strip()
+    return normalized or None

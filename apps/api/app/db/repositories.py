@@ -430,6 +430,30 @@ class SQLAlchemyAPRepository:
             for row in rows
         ]
 
+    def update_vendor(
+        self,
+        tenant_id: UUID,
+        vendor_id: UUID,
+        *,
+        name: str | None = None,
+        tax_id: str | None = None,
+    ) -> VendorRecord:
+        row = self.session.get(dbm.Vendor, vendor_id)
+        if row is None or row.tenant_id != tenant_id:
+            raise KeyError("vendor is outside tenant scope")
+        if name not in (None, ""):
+            row.name = name
+        if tax_id not in (None, ""):
+            row.tax_id = tax_id
+        self.session.commit()
+        return VendorRecord(
+            tenant_id=row.tenant_id,
+            vendor_id=row.id,
+            name=row.name,
+            tax_id=row.tax_id,
+            bank_account_hash=row.bank_account_hash,
+        )
+
     def add_purchase_order(
         self,
         tenant_id: UUID,
@@ -484,6 +508,33 @@ class SQLAlchemyAPRepository:
             select(dbm.PurchaseOrder).where(dbm.PurchaseOrder.tenant_id == tenant_id)
         ).all()
         return [self._po_output(row) for row in rows]
+
+    def update_purchase_order(
+        self,
+        tenant_id: UUID,
+        purchase_order_id: UUID,
+        *,
+        po_number: str | None = None,
+        vendor_id: UUID | None = None,
+        total_amount: float | None = None,
+        currency: str | None = None,
+        status: str | None = None,
+    ) -> PurchaseOrderOutput:
+        row = self.session.get(dbm.PurchaseOrder, purchase_order_id)
+        if row is None or row.tenant_id != tenant_id:
+            raise KeyError("purchase order is outside tenant scope")
+        if po_number not in (None, ""):
+            row.po_number = po_number
+        if vendor_id is not None:
+            row.vendor_id = vendor_id
+        if total_amount is not None:
+            row.total_amount = Decimal(str(total_amount))
+        if currency not in (None, ""):
+            row.currency = currency
+        if status not in (None, ""):
+            row.status = status
+        self.session.commit()
+        return self._po_output(row)
 
     def set_approval_policy(self, policy: ApprovalPolicy) -> None:
         self._ensure_tenant(policy.tenant_id)

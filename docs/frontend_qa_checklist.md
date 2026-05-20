@@ -50,6 +50,10 @@ Use this short checklist before merging frontend UI changes.
 - [ ] Priority Vendor Import Plan shows create/update/skip/conflict counts without importing data.
 - [ ] Priority PO Import Plan shows create/update/skip/conflict counts without importing data.
 - [ ] Import plan conflict and warning text is visible and does not imply records were changed.
+- [ ] Controlled import requires selecting rows and typing `IMPORT_SELECTED`.
+- [ ] Vendor controlled import creates or updates only selected APFlow records.
+- [ ] PO controlled import blocks clearly when the referenced vendor has not been imported.
+- [ ] Controlled import result says no Priority data was changed.
 - [ ] Users without ERP sync/config permission cannot run sync previews.
 
 ## Audit Trail

@@ -527,6 +527,403 @@ def test_viewer_cannot_generate_priority_import_plan(auth_enabled):
     assert response.status_code == 403
 
 
+def test_priority_vendor_import_requires_confirmation(auth_enabled):
+    client = TestClient(create_app())
+    owner = _register(client, "priority-import-confirm@example.com")
+    client.put(
+        "/erp/priority/mapping",
+        json=_mapping_payload(owner["tenant"]["id"]),
+        headers=_headers(owner["access_token"]),
+    )
+
+    response = client.post(
+        "/erp/priority/import/vendors",
+        json={
+            "tenant_id": owner["tenant"]["id"],
+            "selected_external_ids": ["SUP-1001"],
+            "confirmation": "IMPORT",
+        },
+        headers=_headers(owner["access_token"]),
+    )
+
+    assert response.status_code == 400
+    assert "IMPORT_SELECTED" in response.json()["detail"]
+
+
+def test_priority_vendor_import_creates_selected_vendor_only(auth_enabled):
+    client = TestClient(create_app())
+    owner = _register(client, "priority-import-vendor-create@example.com")
+    tenant_id = UUID(owner["tenant"]["id"])
+    client.put(
+        "/erp/priority/mapping",
+        json=_mapping_payload(owner["tenant"]["id"]),
+        headers=_headers(owner["access_token"]),
+    )
+    repository = dependencies.get_in_memory_repository()
+
+    response = client.post(
+        "/erp/priority/import/vendors",
+        json={
+            "tenant_id": owner["tenant"]["id"],
+            "selected_external_ids": ["SUP-1001"],
+            "confirmation": "IMPORT_SELECTED",
+        },
+        headers=_headers(owner["access_token"]),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "imported"
+    assert body["summary"]["created"] == 1
+    assert body["items"][0]["result"] == "created"
+    vendors = repository.list_vendors(tenant_id)
+    assert [vendor.name for vendor in vendors] == ["Demo Office Supplies Ltd."]
+    assert repository.list_external_vendor_ids(tenant_id)[vendors[0].vendor_id] == "SUP-1001"
+    assert "secret" not in str(body).lower()
+
+
+def test_priority_vendor_import_blocks_updates_unless_enabled(auth_enabled):
+    client = TestClient(create_app())
+    owner = _register(client, "priority-import-vendor-block-update@example.com")
+    tenant_id = UUID(owner["tenant"]["id"])
+    client.put(
+        "/erp/priority/mapping",
+        json=_mapping_payload(owner["tenant"]["id"]),
+        headers=_headers(owner["access_token"]),
+    )
+    repository = dependencies.get_in_memory_repository()
+    vendor = repository.add_vendor(tenant_id=tenant_id, name="Old Supplier Name", tax_id="OLD-TAX")
+    repository.link_external_vendor_id(tenant_id, vendor.vendor_id, "SUP-1001")
+
+    response = client.post(
+        "/erp/priority/import/vendors",
+        json={
+            "tenant_id": owner["tenant"]["id"],
+            "selected_external_ids": ["SUP-1001"],
+            "confirmation": "IMPORT_SELECTED",
+            "allow_updates": False,
+        },
+        headers=_headers(owner["access_token"]),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "blocked"
+    assert body["summary"]["blocked"] == 1
+    assert repository.list_vendors(tenant_id)[0].name == "Old Supplier Name"
+
+
+def test_priority_vendor_import_updates_when_enabled(auth_enabled):
+    client = TestClient(create_app())
+    owner = _register(client, "priority-import-vendor-update@example.com")
+    tenant_id = UUID(owner["tenant"]["id"])
+    client.put(
+        "/erp/priority/mapping",
+        json=_mapping_payload(owner["tenant"]["id"]),
+        headers=_headers(owner["access_token"]),
+    )
+    repository = dependencies.get_in_memory_repository()
+    vendor = repository.add_vendor(tenant_id=tenant_id, name="Old Supplier Name", tax_id="OLD-TAX")
+    repository.link_external_vendor_id(tenant_id, vendor.vendor_id, "SUP-1001")
+
+    response = client.post(
+        "/erp/priority/import/vendors",
+        json={
+            "tenant_id": owner["tenant"]["id"],
+            "selected_external_ids": ["SUP-1001"],
+            "confirmation": "IMPORT_SELECTED",
+            "allow_updates": True,
+        },
+        headers=_headers(owner["access_token"]),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["summary"]["updated"] == 1
+    updated = repository.list_vendors(tenant_id)[0]
+    assert updated.name == "Demo Office Supplies Ltd."
+    assert updated.tax_id == "DEMO-TAX-999999999"
+    assert any(event.action == "priority.vendor_updated" for event in repository.list_audit_events(tenant_id))
+
+
+def test_priority_vendor_import_skips_unchanged_vendor(auth_enabled):
+    client = TestClient(create_app())
+    owner = _register(client, "priority-import-vendor-skip@example.com")
+    tenant_id = UUID(owner["tenant"]["id"])
+    client.put(
+        "/erp/priority/mapping",
+        json=_mapping_payload(owner["tenant"]["id"]),
+        headers=_headers(owner["access_token"]),
+    )
+    repository = dependencies.get_in_memory_repository()
+    vendor = repository.add_vendor(
+        tenant_id=tenant_id,
+        name="Demo Office Supplies Ltd.",
+        tax_id="DEMO-TAX-999999999",
+    )
+    repository.link_external_vendor_id(tenant_id, vendor.vendor_id, "SUP-1001")
+
+    response = client.post(
+        "/erp/priority/import/vendors",
+        json={
+            "tenant_id": owner["tenant"]["id"],
+            "selected_external_ids": ["SUP-1001"],
+            "confirmation": "IMPORT_SELECTED",
+        },
+        headers=_headers(owner["access_token"]),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["summary"]["skipped"] == 1
+    assert len(repository.list_vendors(tenant_id)) == 1
+
+
+def test_priority_vendor_import_blocks_conflicts(auth_enabled):
+    client = TestClient(create_app())
+    owner = _register(client, "priority-import-vendor-conflict@example.com")
+    tenant_id = UUID(owner["tenant"]["id"])
+    client.put(
+        "/erp/priority/mapping",
+        json=_mapping_payload(owner["tenant"]["id"]),
+        headers=_headers(owner["access_token"]),
+    )
+    repository = dependencies.get_in_memory_repository()
+    repository.add_vendor(tenant_id=tenant_id, name="Candidate A", tax_id="DEMO-TAX-999999999")
+    repository.add_vendor(tenant_id=tenant_id, name="Candidate B", tax_id="DEMO-TAX-999999999")
+
+    response = client.post(
+        "/erp/priority/import/vendors",
+        json={
+            "tenant_id": owner["tenant"]["id"],
+            "selected_external_ids": ["SUP-1001"],
+            "confirmation": "IMPORT_SELECTED",
+        },
+        headers=_headers(owner["access_token"]),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["summary"]["conflicts"] == 1
+    assert len(repository.list_vendors(tenant_id)) == 2
+    assert any(event.action == "priority.vendor_import_conflict" for event in repository.list_audit_events(tenant_id))
+
+
+def test_priority_purchase_order_import_requires_confirmation(auth_enabled):
+    client = TestClient(create_app())
+    owner = _register(client, "priority-import-po-confirm@example.com")
+    client.put(
+        "/erp/priority/mapping",
+        json=_mapping_payload(owner["tenant"]["id"]),
+        headers=_headers(owner["access_token"]),
+    )
+
+    response = client.post(
+        "/erp/priority/import/purchase-orders",
+        json={
+            "tenant_id": owner["tenant"]["id"],
+            "selected_external_ids": ["PO-240001"],
+            "confirmation": "IMPORT",
+        },
+        headers=_headers(owner["access_token"]),
+    )
+
+    assert response.status_code == 400
+
+
+def test_priority_purchase_order_import_blocks_when_vendor_missing(auth_enabled):
+    client = TestClient(create_app())
+    owner = _register(client, "priority-import-po-missing-vendor@example.com")
+    tenant_id = UUID(owner["tenant"]["id"])
+    client.put(
+        "/erp/priority/mapping",
+        json=_mapping_payload(owner["tenant"]["id"]),
+        headers=_headers(owner["access_token"]),
+    )
+    repository = dependencies.get_in_memory_repository()
+
+    response = client.post(
+        "/erp/priority/import/purchase-orders",
+        json={
+            "tenant_id": owner["tenant"]["id"],
+            "selected_external_ids": ["PO-240001"],
+            "confirmation": "IMPORT_SELECTED",
+        },
+        headers=_headers(owner["access_token"]),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "blocked"
+    assert body["summary"]["blocked"] == 1
+    assert repository.list_purchase_orders(tenant_id) == []
+
+
+def test_priority_purchase_order_import_creates_selected_po(auth_enabled):
+    client = TestClient(create_app())
+    owner = _register(client, "priority-import-po-create@example.com")
+    tenant_id = UUID(owner["tenant"]["id"])
+    client.put(
+        "/erp/priority/mapping",
+        json=_mapping_payload(owner["tenant"]["id"]),
+        headers=_headers(owner["access_token"]),
+    )
+    repository = dependencies.get_in_memory_repository()
+    vendor = repository.add_vendor(tenant_id=tenant_id, name="Demo Office Supplies Ltd.")
+    repository.link_external_vendor_id(tenant_id, vendor.vendor_id, "SUP-1001")
+
+    response = client.post(
+        "/erp/priority/import/purchase-orders",
+        json={
+            "tenant_id": owner["tenant"]["id"],
+            "selected_external_ids": ["PO-240001"],
+            "confirmation": "IMPORT_SELECTED",
+        },
+        headers=_headers(owner["access_token"]),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["summary"]["created"] == 1
+    assert len(repository.list_purchase_orders(tenant_id)) == 1
+    po = repository.list_purchase_orders(tenant_id)[0]
+    assert po.po_number == "PO-240001"
+    assert po.status == "Open"
+    assert repository.list_external_purchase_order_ids(tenant_id)[po.purchase_order_id] == "PO-240001"
+    assert any(event.action == "priority.purchase_order_created" for event in repository.list_audit_events(tenant_id))
+
+
+def test_priority_purchase_order_import_does_not_create_unselected_po(auth_enabled):
+    client = TestClient(create_app())
+    owner = _register(client, "priority-import-po-selected@example.com")
+    tenant_id = UUID(owner["tenant"]["id"])
+    client.put(
+        "/erp/priority/mapping",
+        json=_mapping_payload(owner["tenant"]["id"]),
+        headers=_headers(owner["access_token"]),
+    )
+    repository = dependencies.get_in_memory_repository()
+    vendor = repository.add_vendor(tenant_id=tenant_id, name="Demo Facilities Services Ltd.")
+    repository.link_external_vendor_id(tenant_id, vendor.vendor_id, "SUP-1002")
+
+    response = client.post(
+        "/erp/priority/import/purchase-orders",
+        json={
+            "tenant_id": owner["tenant"]["id"],
+            "selected_external_ids": ["PO-240002"],
+            "confirmation": "IMPORT_SELECTED",
+        },
+        headers=_headers(owner["access_token"]),
+    )
+
+    assert response.status_code == 200
+    pos = repository.list_purchase_orders(tenant_id)
+    assert [po.po_number for po in pos] == ["PO-240002"]
+
+
+def test_priority_purchase_order_import_update_respects_allow_updates(auth_enabled):
+    client = TestClient(create_app())
+    owner = _register(client, "priority-import-po-update@example.com")
+    tenant_id = UUID(owner["tenant"]["id"])
+    client.put(
+        "/erp/priority/mapping",
+        json=_mapping_payload(owner["tenant"]["id"]),
+        headers=_headers(owner["access_token"]),
+    )
+    repository = dependencies.get_in_memory_repository()
+    vendor = repository.add_vendor(tenant_id=tenant_id, name="Demo Office Supplies Ltd.")
+    repository.link_external_vendor_id(tenant_id, vendor.vendor_id, "SUP-1001")
+    po = repository.add_purchase_order(
+        tenant_id=tenant_id,
+        po_number="PO-240001",
+        vendor_id=vendor.vendor_id,
+        total_amount=999.0,
+        currency="USD",
+    )
+    repository.link_external_purchase_order_id(tenant_id, po.purchase_order_id, "PO-240001")
+
+    blocked = client.post(
+        "/erp/priority/import/purchase-orders",
+        json={
+            "tenant_id": owner["tenant"]["id"],
+            "selected_external_ids": ["PO-240001"],
+            "confirmation": "IMPORT_SELECTED",
+            "allow_updates": False,
+        },
+        headers=_headers(owner["access_token"]),
+    )
+    updated = client.post(
+        "/erp/priority/import/purchase-orders",
+        json={
+            "tenant_id": owner["tenant"]["id"],
+            "selected_external_ids": ["PO-240001"],
+            "confirmation": "IMPORT_SELECTED",
+            "allow_updates": True,
+        },
+        headers=_headers(owner["access_token"]),
+    )
+
+    assert blocked.status_code == 200
+    assert blocked.json()["summary"]["blocked"] == 1
+    assert updated.status_code == 200
+    assert updated.json()["summary"]["updated"] == 1
+    assert repository.list_purchase_orders(tenant_id)[0].total_amount == 1170.0
+
+
+def test_viewer_cannot_import_priority_records(auth_enabled):
+    client = TestClient(create_app())
+    owner = _register(client, "priority-import-owner@example.com")
+    client.post(
+        "/admin/users",
+        json={
+            "email": "priority-import-viewer@example.com",
+            "full_name": "Viewer",
+            "password": "password-123",
+            "role": "viewer",
+        },
+        headers=_headers(owner["access_token"]),
+    )
+    login = client.post(
+        "/auth/login",
+        json={"email": "priority-import-viewer@example.com", "password": "password-123"},
+    )
+
+    response = client.post(
+        "/erp/priority/import",
+        json={
+            "tenant_id": owner["tenant"]["id"],
+            "kind": "vendors",
+            "selected_external_ids": ["SUP-1001"],
+            "confirmation": "IMPORT_SELECTED",
+        },
+        headers=_headers(login.json()["access_token"]),
+    )
+
+    assert response.status_code == 403
+
+
+def test_priority_import_is_tenant_scoped(auth_enabled):
+    client = TestClient(create_app())
+    owner_a = _register(client, "priority-import-tenant-a@example.com")
+    owner_b = _register(client, "priority-import-tenant-b@example.com")
+    client.put(
+        "/erp/priority/mapping",
+        json=_mapping_payload(owner_a["tenant"]["id"]),
+        headers=_headers(owner_a["access_token"]),
+    )
+
+    response = client.post(
+        "/erp/priority/import",
+        json={
+            "tenant_id": owner_a["tenant"]["id"],
+            "kind": "vendors",
+            "selected_external_ids": ["SUP-1001"],
+            "confirmation": "IMPORT_SELECTED",
+        },
+        headers=_headers(owner_b["access_token"]),
+    )
+
+    assert response.status_code == 403
+
+
 def _clear_dependency_caches() -> None:
     for provider in (
         dependencies.get_repository,

@@ -163,6 +163,9 @@ ERP endpoints default to mock adapters. Priority also exposes an experimental re
 - `POST /erp/priority/import-plan`
 - `POST /erp/priority/import-plan/vendors`
 - `POST /erp/priority/import-plan/purchase-orders`
+- `POST /erp/priority/import`
+- `POST /erp/priority/import/vendors`
+- `POST /erp/priority/import/purchase-orders`
 
 Validation is structural unless live Priority metadata is available. Priority sync preview is read-only and imports no records; mock mode uses deterministic sample Priority-like rows while real mode may use a read-only Priority OData fetch when configured. Vendor and PO sync return `mapping_required` until the relevant tenant mapping exists. Real invoice export builds a payload preview and returns `write_disabled` while `PRIORITY_ERP_ENABLE_WRITES=false`. A minimal ERP request is:
 
@@ -196,6 +199,21 @@ Example Priority import plan request:
 ```
 
 Import plan responses compare the mapped preview rows against existing APFlow vendors or purchase orders and return `would_create`, `would_update`, `would_skip`, and `would_conflict` counts and items. This is planning only: no APFlow records are imported, no Priority records are changed, and no sync/audit events are created for the preview. Viewers cannot generate import plans when auth is enabled.
+
+Example controlled Priority import request:
+
+```json
+{
+  "tenant_id": "11111111-1111-1111-1111-111111111111",
+  "kind": "vendors",
+  "selected_external_ids": ["SUP-1001"],
+  "confirmation": "IMPORT_SELECTED",
+  "allow_creates": true,
+  "allow_updates": false
+}
+```
+
+Controlled import regenerates the server-side plan, imports only selected `would_create` or `would_update` rows into APFlow, and never writes to Priority. Conflicts are blocked, unchanged rows are skipped, and updates require `allow_updates=true`. Purchase-order imports require the referenced vendor external ID to already be linked in APFlow, so vendor import should usually run first. Successful and blocked imports create tenant-scoped audit events.
 
 Example Priority mapping payload:
 

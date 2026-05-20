@@ -12,10 +12,12 @@ import {
   generatePriorityPurchaseOrderImportPlan,
   generatePriorityVendorImportPlan,
   getPriorityMapping,
+  importPriorityRecords,
   previewPriorityPurchaseOrderSync,
   previewPriorityVendorSync,
   savePriorityMapping,
   type PriorityImportPlanResponse,
+  type PriorityImportResult,
   type PriorityMapping,
   type PrioritySyncPreviewKind,
   type PrioritySyncPreviewResponse,
@@ -88,9 +90,12 @@ export function PriorityMappingAdmin({
   const [preview, setPreview] = useState<PrioritySyncPreviewResponse | null>(null);
   const [planStatus, setPlanStatus] = useState<"idle" | "loading">("idle");
   const [importPlan, setImportPlan] = useState<PriorityImportPlanResponse | null>(null);
+  const [controlledImportStatus, setControlledImportStatus] = useState<"idle" | "loading">("idle");
+  const [controlledImportResult, setControlledImportResult] = useState<PriorityImportResult | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [previewMessage, setPreviewMessage] = useState<string | null>(null);
   const [planMessage, setPlanMessage] = useState<string | null>(null);
+  const [controlledImportMessage, setControlledImportMessage] = useState<string | null>(null);
   const [localJsonError, setLocalJsonError] = useState<string | null>(null);
 
   const isReady = Boolean(apiBaseUrl && accessToken && tenantId);
@@ -213,12 +218,44 @@ export function PriorityMappingAdmin({
           ? await generatePriorityVendorImportPlan(apiBaseUrl, accessToken, tenantId)
           : await generatePriorityPurchaseOrderImportPlan(apiBaseUrl, accessToken, tenantId);
       setImportPlan(result);
+      setControlledImportResult(null);
       setPlanMessage(result.message);
     } catch (error) {
       setImportPlan(null);
       setPlanMessage(error instanceof Error ? error.message : "Priority import plan failed.");
     } finally {
       setPlanStatus("idle");
+    }
+  }
+
+  async function handleControlledImport(
+    kind: PrioritySyncPreviewKind,
+    selectedExternalIds: string[],
+    confirmation: string,
+    allowCreates: boolean,
+    allowUpdates: boolean
+  ) {
+    if (!apiBaseUrl || !accessToken || !tenantId || !canRunSyncPreview) return;
+    setControlledImportStatus("loading");
+    setControlledImportMessage(null);
+    try {
+      const result = await importPriorityRecords(
+        apiBaseUrl,
+        accessToken,
+        tenantId,
+        kind,
+        selectedExternalIds,
+        confirmation,
+        allowCreates,
+        allowUpdates
+      );
+      setControlledImportResult(result);
+      setControlledImportMessage(result.message);
+    } catch (error) {
+      setControlledImportResult(null);
+      setControlledImportMessage(error instanceof Error ? error.message : "Priority controlled import failed.");
+    } finally {
+      setControlledImportStatus("idle");
     }
   }
 
@@ -321,7 +358,11 @@ export function PriorityMappingAdmin({
 
               <SyncDryRun
                 canRunSyncPreview={canRunSyncPreview}
+                controlledImportMessage={controlledImportMessage}
+                controlledImportResult={controlledImportResult}
+                controlledImportStatus={controlledImportStatus}
                 isReady={isReady}
+                onControlledImport={handleControlledImport}
                 onImportPlan={handleImportPlan}
                 onPreview={handlePreview}
                 importPlan={importPlan}
@@ -375,8 +416,12 @@ export function PriorityMappingAdmin({
 
 function SyncDryRun({
   canRunSyncPreview,
+  controlledImportMessage,
+  controlledImportResult,
+  controlledImportStatus,
   importPlan,
   isReady,
+  onControlledImport,
   onImportPlan,
   onPreview,
   planMessage,
@@ -386,8 +431,18 @@ function SyncDryRun({
   previewStatus
 }: {
   canRunSyncPreview: boolean;
+  controlledImportMessage: string | null;
+  controlledImportResult: PriorityImportResult | null;
+  controlledImportStatus: "idle" | "loading";
   importPlan: PriorityImportPlanResponse | null;
   isReady: boolean;
+  onControlledImport: (
+    kind: PrioritySyncPreviewKind,
+    selectedExternalIds: string[],
+    confirmation: string,
+    allowCreates: boolean,
+    allowUpdates: boolean
+  ) => void;
   onImportPlan: (kind: PrioritySyncPreviewKind) => void;
   onPreview: (kind: PrioritySyncPreviewKind) => void;
   planMessage: string | null;
@@ -397,6 +452,38 @@ function SyncDryRun({
   previewStatus: "idle" | "loading";
 }) {
   const isVendorPreview = preview?.kind === "vendors";
+  const [selectedExternalIds, setSelectedExternalIds] = useState<string[]>([]);
+  const [confirmation, setConfirmation] = useState("");
+  const [allowCreates, setAllowCreates] = useState(true);
+  const [allowUpdates, setAllowUpdates] = useState(false);
+  const selectedItems = useMemo(
+    () =>
+      (importPlan?.items ?? []).filter((item) =>
+        selectedExternalIds.includes(String(item.mapped_record.external_id ?? ""))
+      ),
+    [importPlan, selectedExternalIds]
+  );
+  const selectedCreates = selectedItems.filter((item) => item.action === "would_create").length;
+  const selectedUpdates = selectedItems.filter((item) => item.action === "would_update").length;
+
+  useEffect(() => {
+    setSelectedExternalIds([]);
+    setConfirmation("");
+  }, [importPlan]);
+
+  function toggleSelectedExternalId(externalId: string) {
+    setSelectedExternalIds((current) =>
+      current.includes(externalId)
+        ? current.filter((value) => value !== externalId)
+        : [...current, externalId]
+    );
+  }
+
+  function runControlledImport() {
+    if (!importPlan) return;
+    onControlledImport(importPlan.kind, selectedExternalIds, confirmation, allowCreates, allowUpdates);
+  }
+
   return (
     <div className="space-y-4 rounded-md border border-border bg-slate-50 p-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -523,14 +610,34 @@ function SyncDryRun({
             {importPlan.errors.length ? <ValidationList label="Plan errors" items={importPlan.errors} tone="danger" /> : null}
             {importPlan.warnings.length ? <ValidationList label="Plan warnings" items={importPlan.warnings} tone="warning" /> : null}
             {importPlan.status === "plan_ready" ? (
-              <ImportPlanTable
-                columns={
-                  importPlan.kind === "vendors"
-                    ? ["action", "external_id", "name", "matched_existing_id", "reason", "warnings"]
-                    : ["action", "po_number", "vendor_external_id", "total_amount", "matched_existing_id", "reason", "warnings"]
-                }
-                items={importPlan.items}
-              />
+              <>
+                <ImportPlanTable
+                  columns={
+                    importPlan.kind === "vendors"
+                      ? ["select", "action", "external_id", "name", "matched_existing_id", "reason", "warnings"]
+                      : ["select", "action", "po_number", "vendor_external_id", "total_amount", "matched_existing_id", "reason", "warnings"]
+                  }
+                  items={importPlan.items}
+                  onToggleSelected={toggleSelectedExternalId}
+                  selectedExternalIds={selectedExternalIds}
+                />
+                <ControlledImportControls
+                  allowCreates={allowCreates}
+                  allowUpdates={allowUpdates}
+                  confirmation={confirmation}
+                  controlledImportMessage={controlledImportMessage}
+                  controlledImportResult={controlledImportResult}
+                  controlledImportStatus={controlledImportStatus}
+                  disabled={!isReady || !canRunSyncPreview || controlledImportStatus !== "idle"}
+                  onAllowCreatesChange={setAllowCreates}
+                  onAllowUpdatesChange={setAllowUpdates}
+                  onConfirmationChange={setConfirmation}
+                  onImport={runControlledImport}
+                  selectedCount={selectedExternalIds.length}
+                  selectedCreates={selectedCreates}
+                  selectedUpdates={selectedUpdates}
+                />
+              </>
             ) : null}
           </div>
         ) : null}
@@ -598,10 +705,14 @@ function PlanSummary({ summary }: { summary: Record<string, number> }) {
 
 function ImportPlanTable({
   columns,
-  items
+  items,
+  onToggleSelected,
+  selectedExternalIds
 }: {
   columns: string[];
   items: PriorityImportPlanResponse["items"];
+  onToggleSelected: (externalId: string) => void;
+  selectedExternalIds: string[];
 }) {
   if (!items.length) {
     return (
@@ -628,7 +739,7 @@ function ImportPlanTable({
             <tr className="hover:bg-slate-50" key={`${item.action}-${item.mapped_record.external_id ?? index}`}>
               {columns.map((column) => (
                 <td className="px-3 py-2 align-top text-foreground" key={column}>
-                  {renderPlanCell(item, column)}
+                  {renderPlanCell(item, column, selectedExternalIds, onToggleSelected)}
                 </td>
               ))}
             </tr>
@@ -639,12 +750,148 @@ function ImportPlanTable({
   );
 }
 
-function renderPlanCell(item: PriorityImportPlanResponse["items"][number], column: string) {
+function renderPlanCell(
+  item: PriorityImportPlanResponse["items"][number],
+  column: string,
+  selectedExternalIds: string[],
+  onToggleSelected: (externalId: string) => void
+) {
+  const externalId = String(item.mapped_record.external_id ?? "");
+  const importable = item.action === "would_create" || item.action === "would_update";
+  if (column === "select") {
+    return (
+      <input
+        aria-label={`Select ${externalId || "Priority row"}`}
+        checked={Boolean(externalId && selectedExternalIds.includes(externalId))}
+        className="h-4 w-4 rounded border-border text-primary"
+        disabled={!externalId || !importable}
+        onChange={() => onToggleSelected(externalId)}
+        type="checkbox"
+      />
+    );
+  }
   if (column === "action") return <StatusBadge status={item.action} />;
-  if (column === "matched_existing_id") return item.matched_existing_id ? shortId(item.matched_existing_id) : "—";
+  if (column === "matched_existing_id") return item.matched_existing_id ? shortId(item.matched_existing_id) : "-";
   if (column === "reason") return <span className="max-w-sm text-muted">{item.reason}</span>;
-  if (column === "warnings") return item.warnings.length ? item.warnings.join("; ") : "—";
+  if (column === "warnings") return item.warnings.length ? item.warnings.join("; ") : "-";
   return formatValue(item.mapped_record[column]);
+}
+
+function ControlledImportControls({
+  allowCreates,
+  allowUpdates,
+  confirmation,
+  controlledImportMessage,
+  controlledImportResult,
+  controlledImportStatus,
+  disabled,
+  onAllowCreatesChange,
+  onAllowUpdatesChange,
+  onConfirmationChange,
+  onImport,
+  selectedCount,
+  selectedCreates,
+  selectedUpdates
+}: {
+  allowCreates: boolean;
+  allowUpdates: boolean;
+  confirmation: string;
+  controlledImportMessage: string | null;
+  controlledImportResult: PriorityImportResult | null;
+  controlledImportStatus: "idle" | "loading";
+  disabled: boolean;
+  onAllowCreatesChange: (value: boolean) => void;
+  onAllowUpdatesChange: (value: boolean) => void;
+  onConfirmationChange: (value: string) => void;
+  onImport: () => void;
+  selectedCount: number;
+  selectedCreates: number;
+  selectedUpdates: number;
+}) {
+  const canImport = !disabled && selectedCount > 0 && confirmation === "IMPORT_SELECTED";
+  return (
+    <div className="space-y-4 rounded-md border border-border bg-slate-50 p-4">
+      <div>
+        <h5 className="font-semibold">Controlled Import</h5>
+        <p className="mt-1 text-sm text-muted">
+          Imports selected records into APFlow only. No data is written to Priority. Conflicts are never imported,
+          and updates require explicit enablement.
+        </p>
+      </div>
+      <div className="grid gap-3 text-sm md:grid-cols-3">
+        <Detail label="Selected rows" value={String(selectedCount)} />
+        <Detail label="Creates selected" value={String(selectedCreates)} />
+        <Detail label="Updates selected" value={String(selectedUpdates)} />
+      </div>
+      <div className="flex flex-wrap gap-4 text-sm">
+        <label className="flex items-center gap-2">
+          <input checked={allowCreates} onChange={(event) => onAllowCreatesChange(event.target.checked)} type="checkbox" />
+          Allow creates
+        </label>
+        <label className="flex items-center gap-2">
+          <input checked={allowUpdates} onChange={(event) => onAllowUpdatesChange(event.target.checked)} type="checkbox" />
+          Allow updates
+        </label>
+      </div>
+      <label className="block text-sm">
+        <span className="font-medium">Type IMPORT_SELECTED to enable import</span>
+        <input
+          className="mt-2 w-full rounded-md border border-border px-3 py-2"
+          onChange={(event) => onConfirmationChange(event.target.value)}
+          placeholder="IMPORT_SELECTED"
+          value={confirmation}
+        />
+      </label>
+      <Button disabled={!canImport} onClick={onImport} variant="primary">
+        {controlledImportStatus === "loading" ? "Importing..." : "Import Selected"}
+      </Button>
+      {controlledImportMessage ? (
+        <div className="rounded-md border border-border bg-white px-4 py-3 text-sm text-muted">
+          {controlledImportMessage}
+        </div>
+      ) : null}
+      {controlledImportResult ? <ControlledImportResult result={controlledImportResult} /> : null}
+    </div>
+  );
+}
+
+function ControlledImportResult({ result }: { result: PriorityImportResult }) {
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap gap-2">
+        <StatusBadge status={result.status} />
+        {Object.entries(result.summary).map(([key, value]) => (
+          <StatusBadge key={key} status={`${labelFor(key)}: ${value}`} />
+        ))}
+      </div>
+      {result.errors.length ? <ValidationList label="Import errors" items={result.errors} tone="danger" /> : null}
+      {result.warnings.length ? <ValidationList label="Import warnings" items={result.warnings} tone="warning" /> : null}
+      <div className="overflow-x-auto rounded-md border border-border bg-white">
+        <table className="min-w-full divide-y divide-border text-sm">
+          <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-muted">
+            <tr>
+              {["result", "external_id", "apflow_record_id", "reason", "warnings"].map((column) => (
+                <th className="px-3 py-2 font-medium" key={column}>
+                  {labelFor(column)}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {result.items.map((item, index) => (
+              <tr className="hover:bg-slate-50" key={`${item.external_id ?? "item"}-${index}`}>
+                <td className="px-3 py-2 align-top"><StatusBadge status={item.result} /></td>
+                <td className="px-3 py-2 align-top">{item.external_id ?? "-"}</td>
+                <td className="px-3 py-2 align-top">{item.apflow_record_id ? shortId(item.apflow_record_id) : "-"}</td>
+                <td className="px-3 py-2 align-top text-muted">{item.reason}</td>
+                <td className="px-3 py-2 align-top">{item.warnings.length ? item.warnings.join("; ") : "-"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
 }
 
 function ValidationSummary({ validation }: { validation: PriorityMappingValidationResult }) {
@@ -708,7 +955,7 @@ function labelFor(value: string) {
 }
 
 function formatValue(value: unknown) {
-  if (value === null || value === undefined || value === "") return "—";
+  if (value === null || value === undefined || value === "") return "-";
   if (typeof value === "number") return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
   return String(value);
 }
