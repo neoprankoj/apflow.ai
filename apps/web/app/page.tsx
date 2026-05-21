@@ -37,6 +37,7 @@ import {
   setStoredToken
 } from "./frontend-api";
 import { ApprovalInbox } from "./approval-inbox";
+import { APWorkflowGuide } from "./ap-workflow-guide";
 import { AuditTimeline, type AuditEvent } from "./audit-timeline";
 import { InvoiceUploadPanel } from "./invoice-upload-panel";
 import { PriorityMappingAdmin } from "./priority-mapping-admin";
@@ -480,6 +481,12 @@ export default function Dashboard() {
     const task = latestApprovalByInvoice.get(invoice.invoice_id);
     return Boolean(task && ["blocked", "on_hold", "rejected"].includes(task.status));
   });
+  const approvalReadyCount = approvals.filter((task) =>
+    ["approved", "auto_approved", "approval_ready"].includes(task.status)
+  ).length;
+  const exportedCount =
+    auditEvents.filter((event) => (event.action ?? "").toLowerCase().includes("export")).length +
+    workflows.filter((workflow) => workflow.state.toLowerCase().includes("export")).length;
   const urgentInvoices = buildUrgentInvoices(invoices, latestApprovalByInvoice, notifications);
   const activityItems = recentNotifications.length
     ? recentNotifications.map((event) => ({
@@ -503,6 +510,7 @@ export default function Dashboard() {
       : "mock";
   const navItems = [
     { id: "overview", label: "Overview" },
+    { id: "workflow-guide", label: "Workflow Guide" },
     { id: "audit-trail", label: "Audit Trail" },
     { id: "upload-invoice", label: "Upload Invoice" },
     { id: "ocr-review", label: "OCR Review" },
@@ -819,6 +827,22 @@ export default function Dashboard() {
             </div>
           ) : null}
 
+          <APWorkflowGuide
+            approvalReadyCount={approvalReadyCount}
+            auditEventCount={auditEvents.length}
+            blockedCount={blockedInvoices.length}
+            exportedCount={exportedCount}
+            invoiceCount={invoices.length}
+            isSignedIn={isSignedIn}
+            onDemoLogin={demoLogin}
+            onNavigate={scrollToSection}
+            openReviewCount={openReviewTasks.length}
+            pendingApprovalCount={pendingApprovals.length}
+            priorityMappingConfigured={null}
+            priorityMode={priorityMode}
+            workflowCount={workflows.length}
+          />
+
           <section className="scroll-mt-6 space-y-5" id="overview">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
               <SectionHeading
@@ -1133,13 +1157,16 @@ export default function Dashboard() {
             </Card>
           </section>
 
-      <Card>
+      <Card className="scroll-mt-6" id="vendor-portal-preview">
         <CardContent className="grid gap-5 lg:grid-cols-[280px_1fr_320px]">
           <div>
             <div className="mb-3 flex items-center gap-2">
               <ShieldCheck className="h-4 w-4 text-primary" />
               <h2 className="text-base font-semibold">Vendor Portal</h2>
             </div>
+            <p className="mb-3 text-sm text-muted">
+              Preview the supplier-safe status vendors can see after an invoice is processed.
+            </p>
             <Button disabled={!vendorAccess} variant="secondary">
               Demo vendor session
             </Button>
@@ -1167,7 +1194,9 @@ export default function Dashboard() {
                 ))
               ) : (
                 <div className="px-4 py-6 text-sm text-muted">
-                  {isSignedIn ? "No vendor-visible invoices." : "Sign in before loading vendor-safe invoices."}
+                  {isSignedIn
+                    ? "Vendor-safe invoices will appear after invoices are processed or previewed."
+                    : "Sign in before loading vendor-safe invoices."}
                 </div>
               )}
             </div>

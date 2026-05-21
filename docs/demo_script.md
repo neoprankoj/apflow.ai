@@ -22,8 +22,10 @@ Use this script for a private staging demo. Keep the presenter flow deterministi
 1. Open the dashboard.
 2. Click `Demo login`.
 3. Show the tenant session, current user, and `owner` role.
-4. Show the dashboard sections: overview, upload, OCR review, approvals, ERP export, vendor portal preview, admin.
-5. If starting from a clean seed, show zero operational counts and an empty review queue.
+4. Show `AP Workflow Guide` and `Next recommended action`.
+5. Explain the main workflow: Upload -> OCR -> Review -> Process -> Approve -> Export -> Audit.
+6. Show the dashboard sections: overview, workflow guide, upload, OCR review, approval inbox, ERP export, vendor portal preview, audit trail, admin.
+7. If starting from a clean seed, show zero operational counts and an empty review queue.
 
 ## C. Demo Path 2 - Invoice Upload And OCR
 
@@ -31,6 +33,7 @@ Use this script for a private staging demo. Keep the presenter flow deterministi
 2. Click `Extract`.
 3. Show the selected OCR provider and configured state.
 4. Explain confidence, required fields, parsed text preview, and provider diagnostics.
+5. Point out that the Workflow Guide moves the AP manager toward review, approval, export, or audit.
 
 ## D. Demo Path 3 - Review-Required Invoice
 
@@ -38,6 +41,7 @@ Use this script for a private staging demo. Keep the presenter flow deterministi
 2. Show weak or missing required fields.
 3. Explain that `review_required` is a safe workflow outcome, not a crash.
 4. Show the manual correction inputs.
+5. After saving corrections, confirm the message says to run `Process` again.
 
 ## E. Demo Path 4 - Manual Correction And Processing
 
@@ -46,6 +50,7 @@ Use this script for a private staging demo. Keep the presenter flow deterministi
 3. Click `Process`.
 4. Show the workflow timeline moving through validation, duplicate detection, PO matching, risk scoring, and approval routing.
 5. Call out the specific result if PO matching, validation, or approval policy changes the final state.
+6. If the result is blocked, use the `Next recommended action` to move to Approval Inbox.
 
 ## F. Demo Path 5 - ERP Export
 
@@ -53,6 +58,7 @@ Use this script for a private staging demo. Keep the presenter flow deterministi
 2. Click `Export to Mock ERP`.
 3. Show the external invoice ID and sync result.
 4. Explain that the adapter pattern is live now and real ERP adapters are the next integration step.
+5. Open Audit Trail to verify the export event.
 
 ## G. Demo Path 6 - Priority Mapping Admin
 
@@ -97,7 +103,14 @@ Use this script for a private staging demo. Keep the presenter flow deterministi
 3. Use the filters to isolate approval, review, and ERP activity.
 4. Explain that the timeline proves what happened without exposing raw technical logs to the presenter.
 
-## K. Demo Cleanup
+## K. Demo Path 10 - AP Manager Demo Checklist
+
+1. Expand the `Demo checklist` in the AP Workflow Guide.
+2. Walk through each checklist item as a presenter rehearsal path.
+3. Confirm key action messages point to the next step and to Audit Trail proof.
+4. Confirm Priority connector copy separates dry run, import plan, controlled import, and imported records.
+
+## L. Demo Cleanup
 
 1. Enable `ALLOW_DEMO_RESET=true` only when needed on private staging.
 2. Use the dashboard reset action or `POST /admin/demo/reset`.

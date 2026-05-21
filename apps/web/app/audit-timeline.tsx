@@ -178,7 +178,7 @@ export function AuditTimeline({
             </ol>
           ) : (
             <EmptyState
-              description="Invoice, review, approval, vendor, and ERP activity will appear here once work begins."
+              description="Workflow activity will appear here after upload, review, approval, export, or Priority import actions."
               title="No activity recorded"
             />
           )}
