@@ -54,6 +54,9 @@ Use this short checklist before merging frontend UI changes.
 - [ ] Vendor controlled import creates or updates only selected APFlow records.
 - [ ] PO controlled import blocks clearly when the referenced vendor has not been imported.
 - [ ] Controlled import result says no Priority data was changed.
+- [ ] Imported Vendors shows Priority source, external ID, APFlow ID, and last import result after vendor import.
+- [ ] Imported Purchase Orders shows Priority source, PO number, vendor external ID, APFlow ID, and last import result after PO import.
+- [ ] Sync Dry Run, Import Plan, Controlled Import, and Imported Records are visually distinct and cannot be confused.
 - [ ] Users without ERP sync/config permission cannot run sync previews.
 
 ## Audit Trail

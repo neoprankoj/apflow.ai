@@ -16,6 +16,9 @@ from app.core.schemas import (
     ERPSyncRequest,
     ERPSyncResult,
     Permission,
+    PriorityImportedPurchaseOrderRecord,
+    PriorityImportedRecordsResponse,
+    PriorityImportedVendorRecord,
     PriorityImportRequest,
     PriorityImportResult,
     PriorityImportResultItem,
@@ -284,6 +287,61 @@ def import_priority_purchase_orders(
 ) -> PriorityImportResult:
     request.kind = "purchase_orders"
     return import_priority_records(request, erp_agent, audit_agent, context)
+
+
+@router.get("/priority/imported/vendors", response_model=PriorityImportedRecordsResponse)
+def list_priority_imported_vendors(
+    tenant_id: UUID = Depends(resolve_tenant_id),
+    erp_agent: ERPConnectorAgent = Depends(get_erp_connector_agent),
+    _context: CurrentUserContext = Depends(require_permission(Permission.ERP_READ)),
+) -> PriorityImportedRecordsResponse:
+    external_ids = erp_agent.repository.list_external_vendor_ids(tenant_id)
+    import_events = _latest_priority_import_events(tenant_id, erp_agent, "vendor")
+    records = [
+        PriorityImportedVendorRecord(
+            apflow_vendor_id=vendor.vendor_id,
+            external_id=external_ids.get(vendor.vendor_id),
+            name=vendor.name,
+            tax_id=vendor.tax_id,
+            imported_from_priority=vendor.vendor_id in external_ids,
+            last_imported_at=_event_recorded_at(import_events.get(vendor.vendor_id)),
+            last_import_action=_event_result(import_events.get(vendor.vendor_id)),
+        )
+        for vendor in erp_agent.repository.list_vendors(tenant_id)
+    ]
+    records.sort(key=lambda record: (not record.imported_from_priority, record.name.lower()))
+    return PriorityImportedRecordsResponse(tenant_id=tenant_id, kind="vendors", records=records)
+
+
+@router.get("/priority/imported/purchase-orders", response_model=PriorityImportedRecordsResponse)
+def list_priority_imported_purchase_orders(
+    tenant_id: UUID = Depends(resolve_tenant_id),
+    erp_agent: ERPConnectorAgent = Depends(get_erp_connector_agent),
+    _context: CurrentUserContext = Depends(require_permission(Permission.ERP_READ)),
+) -> PriorityImportedRecordsResponse:
+    external_ids = erp_agent.repository.list_external_purchase_order_ids(tenant_id)
+    vendor_external_ids = erp_agent.repository.list_external_vendor_ids(tenant_id)
+    import_events = _latest_priority_import_events(tenant_id, erp_agent, "purchase_order")
+    records = []
+    for po in erp_agent.repository.list_purchase_orders(tenant_id):
+        event = import_events.get(po.purchase_order_id)
+        records.append(
+            PriorityImportedPurchaseOrderRecord(
+                apflow_purchase_order_id=po.purchase_order_id,
+                po_number=po.po_number,
+                external_id=external_ids.get(po.purchase_order_id),
+                vendor_id=po.vendor_id,
+                vendor_external_id=vendor_external_ids.get(po.vendor_id),
+                status=po.status,
+                total_amount=po.total_amount,
+                currency=po.currency,
+                imported_from_priority=po.purchase_order_id in external_ids,
+                last_imported_at=_event_recorded_at(event),
+                last_import_action=_event_result(event),
+            )
+        )
+    records.sort(key=lambda record: (not record.imported_from_priority, record.po_number.lower()))
+    return PriorityImportedRecordsResponse(tenant_id=tenant_id, kind="purchase_orders", records=records)
 
 
 def _build_priority_preview(
@@ -788,6 +846,39 @@ def _record_priority_import_event(
             metadata={"source": "Priority sync import", **metadata},
         )
     )
+
+
+def _latest_priority_import_events(tenant_id: UUID, erp_agent: ERPConnectorAgent, entity_label: str) -> dict[UUID, object]:
+    events: dict[UUID, object] = {}
+    action_prefix = f"priority.{entity_label}_"
+    for event in erp_agent.repository.list_audit_events(tenant_id):
+        if not event.action.startswith(action_prefix):
+            continue
+        if not event.action.endswith(("_created", "_updated")):
+            continue
+        previous = events.get(event.entity_id)
+        if previous is None or event.recorded_at > previous.recorded_at:
+            events[event.entity_id] = event
+    return events
+
+
+def _event_recorded_at(event: object | None):
+    return getattr(event, "recorded_at", None) if event is not None else None
+
+
+def _event_result(event: object | None) -> str | None:
+    if event is None:
+        return None
+    metadata = getattr(event, "metadata", {}) or {}
+    result = metadata.get("result")
+    if result:
+        return str(result)
+    action = getattr(event, "action", "")
+    if action.startswith("priority.vendor_"):
+        return action.removeprefix("priority.vendor_")
+    if action.startswith("priority.purchase_order_"):
+        return action.removeprefix("priority.purchase_order_")
+    return None
 
 
 def _unsupported_vendor_field_warnings(mapped_record: dict) -> list[str]:

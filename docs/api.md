@@ -215,6 +215,13 @@ Example controlled Priority import request:
 
 Controlled import regenerates the server-side plan, imports only selected `would_create` or `would_update` rows into APFlow, and never writes to Priority. Conflicts are blocked, unchanged rows are skipped, and updates require `allow_updates=true`. Purchase-order imports require the referenced vendor external ID to already be linked in APFlow, so vendor import should usually run first. Successful and blocked imports create tenant-scoped audit events.
 
+Imported Priority records can be inspected without calling Priority or mutating APFlow:
+
+- `GET /erp/priority/imported/vendors?tenant_id={uuid}`
+- `GET /erp/priority/imported/purchase-orders?tenant_id={uuid}`
+
+These read-only endpoints require `erp:read`, enforce tenant scope, and return APFlow IDs, Priority external IDs, source adapter, import flag, and best-effort last import action/timestamp derived from external references and audit events. Records without Priority external references are returned safely with `imported_from_priority=false`.
+
 Example Priority mapping payload:
 
 ```json

@@ -883,6 +883,42 @@ class PriorityImportResult(APFlowModel):
     message: str
 
 
+class PriorityImportedVendorRecord(APFlowModel):
+    apflow_vendor_id: UUID
+    external_id: str | None = None
+    name: str
+    tax_id: str | None = None
+    email: str | None = None
+    payment_terms: str | None = None
+    source_adapter: str = "priority"
+    imported_from_priority: bool = False
+    last_imported_at: datetime | None = None
+    last_import_action: str | None = None
+    external_reference_id: UUID | None = None
+
+
+class PriorityImportedPurchaseOrderRecord(APFlowModel):
+    apflow_purchase_order_id: UUID
+    po_number: str
+    external_id: str | None = None
+    vendor_id: UUID | None = None
+    vendor_external_id: str | None = None
+    status: str
+    total_amount: float
+    currency: str
+    source_adapter: str = "priority"
+    imported_from_priority: bool = False
+    last_imported_at: datetime | None = None
+    last_import_action: str | None = None
+    external_reference_id: UUID | None = None
+
+
+class PriorityImportedRecordsResponse(APFlowModel):
+    tenant_id: UUID
+    kind: str
+    records: list[PriorityImportedVendorRecord | PriorityImportedPurchaseOrderRecord] = Field(default_factory=list)
+
+
 class ERPSyncRequest(APFlowModel):
     tenant_id: UUID
     operation: ERPOperation = ERPOperation.TEST_CONNECTION

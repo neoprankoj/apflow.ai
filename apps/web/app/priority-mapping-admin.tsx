@@ -11,6 +11,8 @@ import {
   ApiRequestError,
   generatePriorityPurchaseOrderImportPlan,
   generatePriorityVendorImportPlan,
+  getPriorityImportedPurchaseOrders,
+  getPriorityImportedVendors,
   getPriorityMapping,
   importPriorityRecords,
   previewPriorityPurchaseOrderSync,
@@ -18,6 +20,8 @@ import {
   savePriorityMapping,
   type PriorityImportPlanResponse,
   type PriorityImportResult,
+  type PriorityImportedPurchaseOrderRecord,
+  type PriorityImportedVendorRecord,
   type PriorityMapping,
   type PrioritySyncPreviewKind,
   type PrioritySyncPreviewResponse,
@@ -92,10 +96,14 @@ export function PriorityMappingAdmin({
   const [importPlan, setImportPlan] = useState<PriorityImportPlanResponse | null>(null);
   const [controlledImportStatus, setControlledImportStatus] = useState<"idle" | "loading">("idle");
   const [controlledImportResult, setControlledImportResult] = useState<PriorityImportResult | null>(null);
+  const [importedRecordsStatus, setImportedRecordsStatus] = useState<"idle" | "loading">("idle");
+  const [importedVendors, setImportedVendors] = useState<PriorityImportedVendorRecord[]>([]);
+  const [importedPurchaseOrders, setImportedPurchaseOrders] = useState<PriorityImportedPurchaseOrderRecord[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [previewMessage, setPreviewMessage] = useState<string | null>(null);
   const [planMessage, setPlanMessage] = useState<string | null>(null);
   const [controlledImportMessage, setControlledImportMessage] = useState<string | null>(null);
+  const [importedRecordsMessage, setImportedRecordsMessage] = useState<string | null>(null);
   const [localJsonError, setLocalJsonError] = useState<string | null>(null);
 
   const isReady = Boolean(apiBaseUrl && accessToken && tenantId);
@@ -138,6 +146,28 @@ export function PriorityMappingAdmin({
   useEffect(() => {
     void loadMapping();
   }, [loadMapping]);
+
+  const loadImportedRecords = useCallback(async () => {
+    if (!apiBaseUrl || !accessToken || !tenantId) return;
+    setImportedRecordsStatus("loading");
+    setImportedRecordsMessage(null);
+    try {
+      const [vendorResponse, poResponse] = await Promise.all([
+        getPriorityImportedVendors(apiBaseUrl, accessToken, tenantId),
+        getPriorityImportedPurchaseOrders(apiBaseUrl, accessToken, tenantId)
+      ]);
+      setImportedVendors(vendorResponse.records);
+      setImportedPurchaseOrders(poResponse.records);
+    } catch (error) {
+      setImportedRecordsMessage(error instanceof Error ? error.message : "Imported Priority records failed to load.");
+    } finally {
+      setImportedRecordsStatus("idle");
+    }
+  }, [accessToken, apiBaseUrl, tenantId]);
+
+  useEffect(() => {
+    void loadImportedRecords();
+  }, [loadImportedRecords]);
 
   function parseEditorValue() {
     try {
@@ -251,6 +281,7 @@ export function PriorityMappingAdmin({
       );
       setControlledImportResult(result);
       setControlledImportMessage(result.message);
+      await loadImportedRecords();
     } catch (error) {
       setControlledImportResult(null);
       setControlledImportMessage(error instanceof Error ? error.message : "Priority controlled import failed.");
@@ -371,6 +402,15 @@ export function PriorityMappingAdmin({
                 preview={preview}
                 previewMessage={previewMessage}
                 previewStatus={previewStatus}
+              />
+
+              <ImportedRecordsSection
+                importedPurchaseOrders={importedPurchaseOrders}
+                importedRecordsMessage={importedRecordsMessage}
+                importedRecordsStatus={importedRecordsStatus}
+                importedVendors={importedVendors}
+                isReady={isReady}
+                onReload={loadImportedRecords}
               />
 
               <div className="flex flex-wrap gap-2">
@@ -642,6 +682,173 @@ function SyncDryRun({
           </div>
         ) : null}
       </div>
+    </div>
+  );
+}
+
+function ImportedRecordsSection({
+  importedPurchaseOrders,
+  importedRecordsMessage,
+  importedRecordsStatus,
+  importedVendors,
+  isReady,
+  onReload
+}: {
+  importedPurchaseOrders: PriorityImportedPurchaseOrderRecord[];
+  importedRecordsMessage: string | null;
+  importedRecordsStatus: "idle" | "loading";
+  importedVendors: PriorityImportedVendorRecord[];
+  isReady: boolean;
+  onReload: () => void;
+}) {
+  return (
+    <div className="space-y-4 rounded-md border border-border bg-white p-4">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            <Database className="h-4 w-4 text-primary" />
+            <h4 className="font-semibold">Imported Records</h4>
+          </div>
+          <p className="mt-1 max-w-3xl text-sm text-muted">
+            Confirm which Priority-sourced vendors and purchase orders now exist in APFlow. Sync dry run and
+            import plans are preview-only; controlled import writes selected rows into APFlow only.
+          </p>
+          <p className="mt-2 text-xs text-muted">Use the Audit Trail section to review detailed import events.</p>
+        </div>
+        <Button
+          disabled={!isReady || importedRecordsStatus !== "idle"}
+          onClick={onReload}
+          variant="secondary"
+        >
+          <RefreshCw className="h-4 w-4" />
+          Reload imported records
+        </Button>
+      </div>
+
+      {importedRecordsStatus === "loading" ? (
+        <div className="grid gap-3 lg:grid-cols-2">
+          <LoadingSkeleton className="h-32 w-full" />
+          <LoadingSkeleton className="h-32 w-full" />
+        </div>
+      ) : null}
+
+      {importedRecordsMessage ? (
+        <div className="rounded-md border border-border bg-slate-50 px-4 py-3 text-sm text-muted">
+          {importedRecordsMessage}
+        </div>
+      ) : null}
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <ImportedVendorsTable records={importedVendors} />
+        <ImportedPurchaseOrdersTable records={importedPurchaseOrders} />
+      </div>
+    </div>
+  );
+}
+
+function ImportedVendorsTable({ records }: { records: PriorityImportedVendorRecord[] }) {
+  const importedRecords = records.filter((record) => record.imported_from_priority);
+  if (!importedRecords.length) {
+    return (
+      <EmptyState
+        description="Import selected vendor rows to see Priority external IDs and APFlow vendor IDs here."
+        icon={Database}
+        title="No imported vendors"
+      />
+    );
+  }
+  return (
+    <div className="overflow-x-auto rounded-md border border-border bg-white">
+      <div className="border-b border-border px-3 py-2">
+        <h5 className="font-semibold">Imported Vendors</h5>
+      </div>
+      <table className="min-w-full divide-y divide-border text-sm">
+        <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-muted">
+          <tr>
+            {["source", "external_id", "name", "tax_id", "email", "payment_terms", "apflow_id", "last_import"].map(
+              (column) => (
+                <th className="px-3 py-2 font-medium" key={column}>
+                  {labelFor(column)}
+                </th>
+              )
+            )}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border">
+          {importedRecords.map((record) => (
+            <tr className="hover:bg-slate-50" key={record.apflow_vendor_id}>
+              <td className="px-3 py-2 align-top"><StatusBadge status="Priority" /></td>
+              <td className="px-3 py-2 align-top">{record.external_id ?? "-"}</td>
+              <td className="px-3 py-2 align-top font-medium">{record.name}</td>
+              <td className="px-3 py-2 align-top">{record.tax_id ?? "-"}</td>
+              <td className="px-3 py-2 align-top">{record.email ?? "-"}</td>
+              <td className="px-3 py-2 align-top">{record.payment_terms ?? "-"}</td>
+              <td className="px-3 py-2 align-top">{shortId(record.apflow_vendor_id)}</td>
+              <td className="px-3 py-2 align-top">
+                <ImportActionCell action={record.last_import_action} timestamp={record.last_imported_at} />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ImportedPurchaseOrdersTable({ records }: { records: PriorityImportedPurchaseOrderRecord[] }) {
+  const importedRecords = records.filter((record) => record.imported_from_priority);
+  if (!importedRecords.length) {
+    return (
+      <EmptyState
+        description="Import selected purchase-order rows after importing their vendors to verify APFlow PO IDs here."
+        icon={Database}
+        title="No imported purchase orders"
+      />
+    );
+  }
+  return (
+    <div className="overflow-x-auto rounded-md border border-border bg-white">
+      <div className="border-b border-border px-3 py-2">
+        <h5 className="font-semibold">Imported Purchase Orders</h5>
+      </div>
+      <table className="min-w-full divide-y divide-border text-sm">
+        <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-muted">
+          <tr>
+            {["source", "po_number", "vendor_external_id", "status", "amount", "currency", "apflow_id", "last_import"].map(
+              (column) => (
+                <th className="px-3 py-2 font-medium" key={column}>
+                  {labelFor(column)}
+                </th>
+              )
+            )}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border">
+          {importedRecords.map((record) => (
+            <tr className="hover:bg-slate-50" key={record.apflow_purchase_order_id}>
+              <td className="px-3 py-2 align-top"><StatusBadge status="Priority" /></td>
+              <td className="px-3 py-2 align-top font-medium">{record.po_number}</td>
+              <td className="px-3 py-2 align-top">{record.vendor_external_id ?? "-"}</td>
+              <td className="px-3 py-2 align-top"><StatusBadge status={record.status} /></td>
+              <td className="px-3 py-2 align-top">{formatMoney(record.total_amount, record.currency)}</td>
+              <td className="px-3 py-2 align-top">{record.currency}</td>
+              <td className="px-3 py-2 align-top">{shortId(record.apflow_purchase_order_id)}</td>
+              <td className="px-3 py-2 align-top">
+                <ImportActionCell action={record.last_import_action} timestamp={record.last_imported_at} />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ImportActionCell({ action, timestamp }: { action?: string | null; timestamp?: string | null }) {
+  return (
+    <div className="space-y-1">
+      {action ? <StatusBadge status={action} /> : <span className="text-muted">-</span>}
+      {timestamp ? <p className="text-xs text-muted">{formatDateTime(timestamp)}</p> : null}
     </div>
   );
 }
@@ -958,6 +1165,25 @@ function formatValue(value: unknown) {
   if (value === null || value === undefined || value === "") return "-";
   if (typeof value === "number") return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
   return String(value);
+}
+
+function formatMoney(value: number, currency: string) {
+  return new Intl.NumberFormat("en-US", {
+    currency: currency || "USD",
+    style: "currency"
+  }).format(value);
+}
+
+function formatDateTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString(undefined, {
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    month: "short",
+    year: "numeric"
+  });
 }
 
 function shortId(value: string) {
