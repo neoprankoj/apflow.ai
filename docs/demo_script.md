@@ -110,7 +110,17 @@ Use this script for a private staging demo. Keep the presenter flow deterministi
 3. Confirm key action messages point to the next step and to Audit Trail proof.
 4. Confirm Priority connector copy separates dry run, import plan, controlled import, and imported records.
 
-## L. Demo Cleanup
+## L. AP User Acceptance Pass
+
+1. Start from the top of the dashboard and confirm the AP manager can identify the next recommended action.
+2. Confirm upload, OCR, review, process, approval, ERP export, and Audit Trail use consistent finance-friendly labels.
+3. Trigger one safe success path and confirm the message explains what happened and where to verify it.
+4. Trigger or show one blocked path and confirm the message explains what the user should do next.
+5. In Priority Mapping Admin, confirm each section states whether it is preview-only, APFlow-only, or Priority-safe.
+6. Confirm imported vendors and purchase orders are visible after controlled import.
+7. Confirm no Priority data is changed during sample preview, import plan, controlled import, or readiness checks.
+
+## M. Demo Cleanup
 
 1. Enable `ALLOW_DEMO_RESET=true` only when needed on private staging.
 2. Use the dashboard reset action or `POST /admin/demo/reset`.

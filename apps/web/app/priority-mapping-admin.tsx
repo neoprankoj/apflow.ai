@@ -307,7 +307,9 @@ export function PriorityMappingAdmin({
         allowUpdates
       );
       setControlledImportResult(result);
-      setControlledImportMessage(`${result.message} View Imported Records below and Audit Trail for proof. No Priority data was changed.`);
+      setControlledImportMessage(
+        "Selected records were imported into APFlow only. No Priority data was changed. Review Imported Records below and Audit Trail for proof."
+      );
       await loadImportedRecords();
     } catch (error) {
       setControlledImportResult(null);
@@ -376,8 +378,8 @@ export function PriorityMappingAdmin({
           />
 
           <div className="grid gap-3 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-slate-700">
-            <p>Mock Priority remains the active staging mode unless `PRIORITY_ERP_MODE` is changed.</p>
-            <p>Real Priority writes are disabled unless `PRIORITY_ERP_ENABLE_WRITES=true`.</p>
+            <p>Mock Priority remains the active staging mode unless PRIORITY_ERP_MODE is changed.</p>
+            <p>Real Priority writes are disabled unless PRIORITY_ERP_ENABLE_WRITES=true.</p>
             <p>Validate mappings before enabling any real sync/export. Do not paste credentials into this JSON.</p>
           </div>
 
@@ -385,7 +387,7 @@ export function PriorityMappingAdmin({
             {[
               ["1", "Readiness", "Check real config. GET-only drill, no data changes."],
               ["2", "Mapping + validation", "Edit JSON and validate before any preview."],
-              ["3", "Dry run + plan", "Preview mapped rows and plan create/update/skip/conflict. No imports."],
+              ["3", "Sync dry run + import plan", "Preview mapped rows and plan create/update/skip/conflict. No imports."],
               ["4", "Controlled import", "Selected rows write into APFlow only. No Priority data is changed."]
             ].map(([step, title, description]) => (
               <div className="rounded-md bg-white p-3" key={step}>
@@ -551,7 +553,7 @@ function PriorityReadinessPanel({
             Reload readiness
           </Button>
           <Button disabled={!isReady || readinessStatus !== "idle"} onClick={onRunDrill} variant="secondary">
-            Run remote connection drill
+            Run Read-Only Connection Drill
           </Button>
         </div>
       </div>
@@ -692,7 +694,7 @@ function SyncDryRun({
         <div>
           <div className="flex items-center gap-2">
             <Database className="h-4 w-4 text-primary" />
-            <h4 className="font-semibold">Sync Dry Run</h4>
+            <h4 className="font-semibold">Sync dry run</h4>
           </div>
           <p className="mt-1 text-sm text-muted">
             Preview how saved Priority mappings transform vendor and purchase-order records. Dry run only:
@@ -807,7 +809,7 @@ function SyncDryRun({
           <div>
             <h4 className="font-semibold">Import Plan</h4>
             <p className="mt-1 text-sm text-muted">
-              Compare mapped Priority rows against APFlow data before any import path is enabled.
+              Compare mapped Priority rows against APFlow data before any import action is enabled.
               Planning only: no records are imported into APFlow and no ERP data is changed.
             </p>
           </div>
@@ -955,7 +957,7 @@ function ImportedVendorsTable({ records }: { records: PriorityImportedVendorReco
   if (!importedRecords.length) {
     return (
       <EmptyState
-        description="Import selected vendor rows to see Priority external IDs and APFlow vendor IDs here."
+        description="Imported Priority vendors will appear here after a controlled import. Start with Preview Vendor Sync, generate an import plan, then import selected rows."
         icon={Database}
         title="No imported vendors"
       />
@@ -1004,7 +1006,7 @@ function ImportedPurchaseOrdersTable({ records }: { records: PriorityImportedPur
   if (!importedRecords.length) {
     return (
       <EmptyState
-        description="Import selected purchase-order rows after importing their vendors to verify APFlow PO IDs here."
+        description="Imported Priority purchase orders will appear here after a controlled import. Import the matching vendor first, then run the PO import plan."
         icon={Database}
         title="No imported purchase orders"
       />

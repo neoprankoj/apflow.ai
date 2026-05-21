@@ -20,6 +20,19 @@ Use this short checklist before merging frontend UI changes.
 - [ ] Priority work and recent activity are understandable at a glance.
 - [ ] Audit Trail shows readable activity after invoice actions.
 
+## AP user acceptance
+
+- [ ] A first-time AP manager can identify the next action without developer explanation.
+- [ ] Upload, OCR, review, process, approval, ERP export, and Audit Trail copy uses consistent AP workflow terms.
+- [ ] Success messages explain what happened and where to verify it next.
+- [ ] Blocker messages explain the next user action, not only the internal status.
+- [ ] Review-required invoices tell the user to correct highlighted fields and run Process again.
+- [ ] Blocked invoices point the user toward Approval Inbox.
+- [ ] ERP export messages say whether export is unavailable, ready, or completed.
+- [ ] Priority Admin clearly separates Sync dry run, Import plan, Controlled import, and Imported records.
+- [ ] Priority Admin always says when an action is preview-only, APFlow-only, or Priority-safe.
+- [ ] Imported records are visible after controlled Priority import.
+
 ## Approval Inbox
 
 - [ ] Invoice queue rows are scannable and selected state is clear.

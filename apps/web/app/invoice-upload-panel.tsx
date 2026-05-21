@@ -1053,7 +1053,7 @@ export function InvoiceUploadPanel({
       <section className="grid gap-5 xl:grid-cols-2">
         <div className="scroll-mt-6 rounded-md border border-border bg-white" id="erp-export">
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
-            <h2 className="text-base font-semibold">Mock ERP Export</h2>
+            <h2 className="text-base font-semibold">ERP Mock Export</h2>
             <button
               className="rounded-md border border-border px-3 py-2 text-sm disabled:text-muted"
               disabled={signInRequired || !canExportErp || !erpExportReady || !invoiceId || Boolean(erpResult) || isBusy}
@@ -1061,7 +1061,7 @@ export function InvoiceUploadPanel({
               type="button"
             >
               <Send className="mr-2 inline h-4 w-4" />
-              {activeAction === "export" ? "Exporting..." : "Export to Mock ERP"}
+              {activeAction === "export" ? "Exporting..." : "Export to ERP mock"}
             </button>
           </div>
           <div className="space-y-4 p-4 text-sm">
@@ -1081,7 +1081,7 @@ export function InvoiceUploadPanel({
                   : !canExportErp
                   ? "Your current role cannot export invoices to ERP."
                   : erpExportReady
-                    ? "Invoice is ready for explicit mock ERP export. After export, verify the result in Audit Trail."
+                    ? "Invoice is ready for export to ERP mock. After export, verify the result in Audit Trail."
                     : exportReadinessBlocker(pipeline, reviewStatus, blockerReason)}
               </div>
             )}
@@ -1194,8 +1194,8 @@ function buildDemoSteps(input: {
       label: "Step 6",
       status: input.erpResult ? "completed" : input.erpExportReady ? "active" : "pending",
       description: input.erpResult
-        ? `Exported to ${input.erpResult.external_id ?? "mock ERP"}.`
-        : "Export approval-ready invoices to the mock Priority adapter."
+        ? `Exported to ${input.erpResult.external_id ?? "ERP mock"}.`
+        : "Export approval-ready invoices to the Priority mock adapter."
     },
     {
       label: "Step 7",
@@ -1341,8 +1341,8 @@ function buildTimeline(input: {
       summary: approvalStatus
         ? `Approval status is ${approvalStatus.replaceAll("_", " ")}.`
         : approvalRoute
-          ? `Approval route is ${approvalRoute.replaceAll("_", " ")}.`
-        : "Approval route waits for processing."
+          ? `Approval status is ${approvalRoute.replaceAll("_", " ")}.`
+        : "Approval waits for processing."
     },
     {
       id: "erp_export_ready",
@@ -1369,11 +1369,20 @@ function exportReadinessBlocker(
   blockerReason?: string | null
 ) {
   if (blockerReason) return blockerReason;
-  if (reviewStatus === "review_required") return "Human review must be resolved before ERP export.";
-  if (!pipeline) return "Process an invoice to determine export readiness.";
-  if (pipeline.approval_result?.route === "blocked") return "Approval policy blocked this invoice.";
-  if (pipeline.approval_result?.route) return `Approval route ${pipeline.approval_result.route.replaceAll("_", " ")} is not export-ready.`;
+  if (reviewStatus === "review_required") {
+    return "Review and correct the highlighted fields, then run Process again.";
+  }
+  if (!pipeline) return "Process an invoice to determine whether it is ready for ERP export.";
+  if (pipeline.approval_result?.route === "blocked") {
+    return "Approval policy blocked this invoice. Open Approval Inbox to approve, reject, or hold it.";
+  }
+  if (pipeline.approval_result?.route) {
+    return `Approval status is ${pipeline.approval_result.route.replaceAll("_", " ")} and this invoice is not export-ready.`;
+  }
   if (pipeline.po_match_result?.match_status) {
+    if (pipeline.po_match_result.match_status === "missing_po") {
+      return "No matching purchase order was found. Approve manually or import/sync POs before processing.";
+    }
     return `PO match result is ${pipeline.po_match_result.match_status.replaceAll("_", " ")}.`;
   }
   return "Invoice is not ready for export yet.";
