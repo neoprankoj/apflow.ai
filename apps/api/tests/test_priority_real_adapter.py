@@ -118,6 +118,63 @@ def test_priority_real_adapter_checks_service_root_and_metadata():
     assert "super-secret-password" not in str(result)
 
 
+def test_priority_readiness_service_root_check_uses_get_only():
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, json={"value": [{"name": "SUPPLIERS"}]})
+
+    adapter = PriorityODataAdapter(_real_settings(), client_factory=_client_factory(handler))
+
+    result = adapter.check_service_root()
+
+    assert result["status"] == "ok"
+    assert result["service_collection_count"] == 1
+    assert [request.method for request in requests] == ["GET"]
+
+
+def test_priority_readiness_metadata_check_uses_get_only():
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, text="<edmx />")
+
+    adapter = PriorityODataAdapter(_real_settings(), client_factory=_client_factory(handler))
+
+    result = adapter.check_metadata()
+
+    assert result["status"] == "ok"
+    assert result["metadata_available"] is True
+    assert [request.method for request in requests] == ["GET"]
+    assert requests[0].url.path.endswith("/$metadata")
+
+
+def test_priority_readiness_service_root_timeout_maps_safely():
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.TimeoutException("slow", request=request)
+
+    adapter = PriorityODataAdapter(_real_settings(), client_factory=_client_factory(handler))
+
+    result = adapter.check_service_root()
+
+    assert result["status"] == "timeout"
+    assert "super-secret-password" not in str(result)
+
+
+def test_priority_readiness_metadata_unauthorized_maps_safely():
+    adapter = PriorityODataAdapter(
+        _real_settings(),
+        client_factory=_client_factory(lambda _request: httpx.Response(401)),
+    )
+
+    result = adapter.check_metadata()
+
+    assert result["status"] == "unauthorized"
+    assert "super-secret-password" not in str(result)
+
+
 def test_priority_real_adapter_maps_unauthorized_safely():
     adapter = PriorityODataAdapter(
         _real_settings(),

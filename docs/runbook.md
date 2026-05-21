@@ -218,16 +218,34 @@ Priority entity/form names vary by customer environment. Confirm the tenant's ac
 For safe staging edits, use the dashboard `Admin` section:
 
 1. Open `Priority ERP Mapping`.
-2. Load the current tenant mapping or start from the sample JSON.
-3. Validate before saving.
-4. Treat the sample as a template only; verify every entity and field against the customer's Priority environment.
-5. Confirm the UI still shows mock mode and writes disabled unless operations explicitly changes those runtime settings.
-6. Keep preview source set to `Sample records` for deterministic staging demos.
-7. Use `Preview Vendor Sync` and `Preview Purchase Orders` to inspect mapped sample rows before enabling any real import path.
-8. If real Priority credentials are configured later, switch source to `Real Priority read-only fetch` and confirm the gate is enabled. This path performs GET-only OData reads and does not import or write data.
-9. Use `Generate Vendor Import Plan` and `Generate Purchase Order Import Plan` to compare mapped rows with existing APFlow records before any import is enabled.
-10. Select only the rows you intend to import, type `IMPORT_SELECTED`, and import into APFlow only when the plan is understood.
-11. After import, reload `Imported Records` to verify APFlow vendor/PO IDs, Priority external IDs, source, and last import result.
+2. Review `Priority Real Connection Readiness`; staging should show mock mode, read-only fetch disabled, and writes disabled.
+3. Use `Reload readiness` for local config checks. Use `Run remote connection drill` only after real mode, read-only fetch, base URL, and credentials are configured.
+4. Load the current tenant mapping or start from the sample JSON.
+5. Validate before saving.
+6. Treat the sample as a template only; verify every entity and field against the customer's Priority environment.
+7. Confirm the UI still shows mock mode and writes disabled unless operations explicitly changes those runtime settings.
+8. Keep preview source set to `Sample records` for deterministic staging demos.
+9. Use `Preview Vendor Sync` and `Preview Purchase Orders` to inspect mapped sample rows before enabling any real import path.
+10. If real Priority credentials are configured later, switch source to `Real Priority read-only fetch` and confirm the gate is enabled. This path performs GET-only OData reads and does not import or write data.
+11. Use `Generate Vendor Import Plan` and `Generate Purchase Order Import Plan` to compare mapped rows with existing APFlow records before any import is enabled.
+12. Select only the rows you intend to import, type `IMPORT_SELECTED`, and import into APFlow only when the plan is understood.
+13. After import, reload `Imported Records` to verify APFlow vendor/PO IDs, Priority external IDs, source, and last import result.
+
+Priority real-readiness drill:
+
+1. Confirm a database backup exists before changing staging ERP configuration.
+2. Edit `.env.staging` only on the server; never commit real Priority credentials.
+3. Set `PRIORITY_ERP_MODE=real`.
+4. Set `PRIORITY_ERP_BASE_URL`, `PRIORITY_ERP_USERNAME`, and `PRIORITY_ERP_PASSWORD` or `PRIORITY_ERP_API_KEY`.
+5. Set `PRIORITY_ERP_READ_ONLY_FETCH_ENABLED=true`.
+6. Keep `PRIORITY_ERP_ENABLE_WRITES=false`.
+7. Restart the API.
+8. Run `/ready`.
+9. Open `Priority Real Connection Readiness`.
+10. Run the remote connection drill. It performs GET-only service-root and `$metadata` checks; it does not fetch entity data.
+11. Validate and save tenant mapping.
+12. Run vendor/PO read-only preview with source `Real Priority read-only fetch`.
+13. Set `PRIORITY_ERP_READ_ONLY_FETCH_ENABLED=false` again when testing is complete, then restart the API.
 
 Priority sync preview is dry-run only. It does not import vendors or purchase orders into APFlow and does not write to Priority. In mock mode, the preview uses deterministic synthetic Priority-like records. In real mode, configured credentials can be used for an explicitly requested, GET-only limited OData fetch when `PRIORITY_ERP_READ_ONLY_FETCH_ENABLED=true`. If the gate is disabled or credentials are missing, the dashboard shows a safe status and operators should use sample records.
 

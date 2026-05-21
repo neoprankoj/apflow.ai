@@ -158,6 +158,157 @@ def test_priority_mapping_validation_endpoint_returns_structural_warning(auth_en
     assert "validated structurally only" in response.json()["warnings"][-1]
 
 
+def test_priority_readiness_mock_mode_is_not_ready(auth_enabled):
+    client = TestClient(create_app())
+    owner = _register(client, "priority-readiness-mock@example.com")
+
+    response = client.get(
+        f"/erp/priority/readiness?tenant_id={owner['tenant']['id']}",
+        headers=_headers(owner["access_token"]),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["mode"] == "mock"
+    assert body["status"] == "not_ready"
+    assert body["read_only_fetch_enabled"] is False
+    assert "secret" not in str(body).lower()
+
+
+def test_priority_readiness_real_missing_config_lists_missing_checks(auth_enabled, monkeypatch):
+    monkeypatch.setattr(settings, "priority_erp_mode", "real")
+    monkeypatch.setattr(settings, "priority_erp_read_only_fetch_enabled", False)
+    monkeypatch.setattr(settings, "priority_erp_base_url", "")
+    monkeypatch.setattr(settings, "priority_erp_username", "")
+    monkeypatch.setattr(settings, "priority_erp_password", "")
+    monkeypatch.setattr(settings, "priority_erp_api_key", "")
+    client = TestClient(create_app())
+    owner = _register(client, "priority-readiness-missing@example.com")
+
+    response = client.get(
+        f"/erp/priority/readiness?tenant_id={owner['tenant']['id']}",
+        headers=_headers(owner["access_token"]),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    checks = {check["key"]: check for check in body["checks"]}
+    assert body["status"] == "not_ready"
+    assert checks["base_url"]["status"] == "missing"
+    assert checks["auth"]["status"] == "missing"
+    assert checks["read_only_fetch"]["status"] == "disabled"
+
+
+def test_priority_readiness_remote_drill_mock_mode_blocked(auth_enabled):
+    client = TestClient(create_app())
+    owner = _register(client, "priority-readiness-drill-mock@example.com")
+
+    response = client.get(
+        f"/erp/priority/readiness?tenant_id={owner['tenant']['id']}&check_remote=true",
+        headers=_headers(owner["access_token"]),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "not_ready"
+    assert any(check["key"] == "remote_drill" and check["status"] == "disabled" for check in body["checks"])
+
+
+def test_priority_readiness_remote_drill_missing_credentials_blocked(auth_enabled, monkeypatch):
+    monkeypatch.setattr(settings, "priority_erp_mode", "real")
+    monkeypatch.setattr(settings, "priority_erp_read_only_fetch_enabled", True)
+    monkeypatch.setattr(settings, "priority_erp_base_url", "https://priority.example.test/odata")
+    monkeypatch.setattr(settings, "priority_erp_username", "")
+    monkeypatch.setattr(settings, "priority_erp_password", "")
+    monkeypatch.setattr(settings, "priority_erp_api_key", "")
+    client = TestClient(create_app())
+    owner = _register(client, "priority-readiness-drill-creds@example.com")
+
+    response = client.get(
+        f"/erp/priority/readiness?tenant_id={owner['tenant']['id']}&check_remote=true",
+        headers=_headers(owner["access_token"]),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "not_ready"
+    assert any("username" in error.lower() or "password" in error.lower() for error in body["errors"])
+    assert "secret" not in str(body).lower()
+
+
+def test_priority_readiness_remote_drill_reports_success(auth_enabled, monkeypatch):
+    monkeypatch.setattr(settings, "priority_erp_mode", "real")
+    monkeypatch.setattr(settings, "priority_erp_read_only_fetch_enabled", True)
+    monkeypatch.setattr(settings, "priority_erp_base_url", "https://priority.example.test/odata")
+    monkeypatch.setattr(settings, "priority_erp_username", "api-user")
+    monkeypatch.setattr(settings, "priority_erp_password", "secret-password")
+
+    def fake_service_root(self):
+        return {
+            "status": "ok",
+            "message": "Priority OData service root is reachable.",
+            "base_url_host": "priority.example.test",
+            "metadata_available": False,
+        }
+
+    def fake_metadata(self):
+        return {
+            "status": "ok",
+            "message": "Priority OData metadata endpoint is reachable.",
+            "base_url_host": "priority.example.test",
+            "metadata_available": True,
+        }
+
+    monkeypatch.setattr(PriorityODataAdapter, "check_service_root", fake_service_root)
+    monkeypatch.setattr(PriorityODataAdapter, "check_metadata", fake_metadata)
+    client = TestClient(create_app())
+    owner = _register(client, "priority-readiness-drill-ok@example.com")
+
+    response = client.get(
+        f"/erp/priority/readiness?tenant_id={owner['tenant']['id']}&check_remote=true",
+        headers=_headers(owner["access_token"]),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "ready"
+    assert body["service_root_available"] is True
+    assert body["metadata_available"] is True
+    assert "secret-password" not in str(body)
+
+
+def test_priority_readiness_remote_drill_reports_unauthorized(auth_enabled, monkeypatch):
+    monkeypatch.setattr(settings, "priority_erp_mode", "real")
+    monkeypatch.setattr(settings, "priority_erp_read_only_fetch_enabled", True)
+    monkeypatch.setattr(settings, "priority_erp_base_url", "https://priority.example.test/odata")
+    monkeypatch.setattr(settings, "priority_erp_username", "api-user")
+    monkeypatch.setattr(settings, "priority_erp_password", "secret-password")
+
+    def fake_service_root(self):
+        return {
+            "status": "unauthorized",
+            "message": "Priority rejected the configured credentials.",
+            "base_url_host": "priority.example.test",
+            "metadata_available": False,
+        }
+
+    monkeypatch.setattr(PriorityODataAdapter, "check_service_root", fake_service_root)
+    client = TestClient(create_app())
+    owner = _register(client, "priority-readiness-drill-unauth@example.com")
+
+    response = client.get(
+        f"/erp/priority/readiness?tenant_id={owner['tenant']['id']}&check_remote=true",
+        headers=_headers(owner["access_token"]),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "not_ready"
+    assert body["service_root_available"] is False
+    assert any("rejected" in error for error in body["errors"])
+    assert "secret-password" not in str(body)
+
+
 def test_priority_vendor_preview_requires_mapping(auth_enabled):
     client = TestClient(create_app())
     owner = _register(client, "priority-preview-missing@example.com")

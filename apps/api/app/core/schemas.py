@@ -804,6 +804,33 @@ class PriorityMappingValidationResult(APFlowModel):
     summary: dict[str, Any] = Field(default_factory=dict)
 
 
+class PriorityReadinessCheck(APFlowModel):
+    key: str
+    label: str
+    status: str
+    message: str
+    safe_detail: str | None = None
+
+
+class PriorityReadinessResponse(APFlowModel):
+    status: str
+    mode: str
+    read_only_fetch_enabled: bool
+    writes_enabled: bool
+    base_url_configured: bool
+    company_configured: bool
+    environment_configured: bool
+    auth_configured: bool
+    service_root_checked: bool = False
+    metadata_checked: bool = False
+    service_root_available: bool | None = None
+    metadata_available: bool | None = None
+    checks: list[PriorityReadinessCheck] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    errors: list[str] = Field(default_factory=list)
+    message: str
+
+
 class PrioritySyncPreviewRequest(APFlowModel):
     tenant_id: UUID
     kind: str = "vendors"
