@@ -307,7 +307,7 @@ export function PriorityMappingAdmin({
         allowUpdates
       );
       setControlledImportResult(result);
-      setControlledImportMessage(result.message);
+      setControlledImportMessage(`${result.message} View Imported Records below and Audit Trail for proof. No Priority data was changed.`);
       await loadImportedRecords();
     } catch (error) {
       setControlledImportResult(null);
@@ -379,6 +379,21 @@ export function PriorityMappingAdmin({
             <p>Mock Priority remains the active staging mode unless `PRIORITY_ERP_MODE` is changed.</p>
             <p>Real Priority writes are disabled unless `PRIORITY_ERP_ENABLE_WRITES=true`.</p>
             <p>Validate mappings before enabling any real sync/export. Do not paste credentials into this JSON.</p>
+          </div>
+
+          <div className="grid gap-2 rounded-md border border-border bg-slate-50 p-4 text-sm md:grid-cols-2 xl:grid-cols-4">
+            {[
+              ["1", "Readiness", "Check real config. GET-only drill, no data changes."],
+              ["2", "Mapping + validation", "Edit JSON and validate before any preview."],
+              ["3", "Dry run + plan", "Preview mapped rows and plan create/update/skip/conflict. No imports."],
+              ["4", "Controlled import", "Selected rows write into APFlow only. No Priority data is changed."]
+            ].map(([step, title, description]) => (
+              <div className="rounded-md bg-white p-3" key={step}>
+                <p className="text-xs font-semibold uppercase tracking-wide text-primary">Step {step}</p>
+                <p className="mt-1 font-medium">{title}</p>
+                <p className="mt-1 text-xs text-muted">{description}</p>
+              </div>
+            ))}
           </div>
 
           {!isReady ? (

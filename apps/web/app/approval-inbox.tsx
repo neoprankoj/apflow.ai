@@ -166,7 +166,9 @@ export function ApprovalInbox({
       await onRefresh();
       await loadVendorPreview(selectedItem.invoice.invoice_id);
       setApprovalMessage(
-        `Approval decision saved: ${humanize(result.approval_status)}. ${result.blocker_reason ?? ""}`.trim()
+        `Approval decision saved: ${humanize(result.approval_status)}. ${
+          result.blocker_reason ?? "Open Audit Trail to verify this decision."
+        }`.trim()
       );
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Approval decision failed.");
@@ -195,7 +197,11 @@ export function ApprovalInbox({
       setErpResult(result);
       await onRefresh();
       await loadVendorPreview(selectedItem.invoice.invoice_id);
-      setErpMessage(`Mock ERP export ${result.status}; external ID ${result.external_id ?? "not returned"}.`);
+      setErpMessage(
+        `Invoice exported to mock ERP with status ${result.status}; external ID ${
+          result.external_id ?? "not returned"
+        }. Open Audit Trail to verify the export.`
+      );
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "ERP export failed.");
     } finally {
@@ -213,7 +219,7 @@ export function ApprovalInbox({
         { token: accessToken, action: "Load inbox vendor preview" }
       );
       setVendorPreview(preview);
-      setVendorMessage(`Vendor-safe status refreshed: ${humanize(preview.status)}.`);
+      setVendorMessage(`Vendor-safe status refreshed: ${humanize(preview.status)}. Internal risk details remain hidden.`);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Vendor preview failed.");
     }
@@ -223,7 +229,9 @@ export function ApprovalInbox({
     <section className="scroll-mt-6 space-y-4" id="approval-inbox">
       <div>
         <h2 className="text-lg font-semibold">Approval Inbox</h2>
-        <p className="text-sm text-muted">Review, decide, and export invoices that need AP attention.</p>
+        <p className="text-sm text-muted">
+          Use this queue to decide blocked or pending invoices, then export approval-ready invoices.
+        </p>
       </div>
 
       <Card>
@@ -282,7 +290,7 @@ export function ApprovalInbox({
             ) : (
               <div className="p-4">
                 <EmptyState
-                  description="Try another filter or process a new invoice to populate the review queue."
+                  description="No invoices need this view right now. Try another filter or process a new invoice."
                   title="No invoices match this filter"
                 />
               </div>
@@ -382,7 +390,9 @@ export function ApprovalInbox({
                           </Button>
                         </div>
                       ) : (
-                        <p className="text-sm text-muted">No approval decision is available for this state.</p>
+                        <p className="text-sm text-muted">
+                          No approval decision is available for this state. Approval-ready invoices can move to ERP export.
+                        </p>
                       )}
                       {approvalMessage ? <FeedbackMessage>{approvalMessage}</FeedbackMessage> : null}
                     </div>

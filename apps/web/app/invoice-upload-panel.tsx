@@ -549,7 +549,7 @@ export function InvoiceUploadPanel({
             }
           : current
       );
-      setCorrectionMessage("Corrections saved. Click Process to continue.");
+      setCorrectionMessage("Corrections saved. Run Process again to continue the invoice workflow. You can verify the update in Audit Trail.");
     } catch (error) {
       setCorrectionMessage(error instanceof Error ? error.message : "Correction submission failed.");
     } finally {
@@ -585,6 +585,7 @@ export function InvoiceUploadPanel({
         action: "Load ERP sync logs"
       });
       setErpLogs(logs.slice(-3).reverse());
+      setError(null);
     } catch (error) {
       setStatus("failed");
       setError(error instanceof Error ? error.message : "ERP export failed because the API is unavailable.");
@@ -830,6 +831,7 @@ export function InvoiceUploadPanel({
                 <div className="space-y-1 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
                   <p>Invoice requires human review before approval. Review required is a safe workflow outcome.</p>
                   <p>ERP export is disabled until review is corrected and invoice is approval-ready.</p>
+                  <p>After saving corrections, run Process again to continue the workflow.</p>
                   {blockerReason ? <p>{blockerReason}</p> : null}
                 </div>
               ) : null}
@@ -1079,7 +1081,7 @@ export function InvoiceUploadPanel({
                   : !canExportErp
                   ? "Your current role cannot export invoices to ERP."
                   : erpExportReady
-                    ? "Invoice is ready for explicit mock ERP export."
+                    ? "Invoice is ready for explicit mock ERP export. After export, verify the result in Audit Trail."
                     : exportReadinessBlocker(pipeline, reviewStatus, blockerReason)}
               </div>
             )}

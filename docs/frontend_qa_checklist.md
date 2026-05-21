@@ -12,6 +12,9 @@ Use this short checklist before merging frontend UI changes.
 ## Dashboard
 
 - [ ] Dashboard loads without layout breakage.
+- [ ] AP Workflow Guide appears near the top of the dashboard.
+- [ ] Next Recommended Action is visible and points to the correct section for the current demo state.
+- [ ] Demo checklist expands without covering the main workflow.
 - [ ] KPI cards show readable labels, values, and context text.
 - [ ] Quick actions are visible and work as expected.
 - [ ] Priority work and recent activity are understandable at a glance.
@@ -29,6 +32,7 @@ Use this short checklist before merging frontend UI changes.
 - [ ] Upload, extract, and process actions remain usable.
 - [ ] OCR fields, confidence, and review state render correctly.
 - [ ] Review-required invoices show clear correction guidance.
+- [ ] Correction success message tells the user to run Process again.
 - [ ] Buttons disable appropriately while actions are running.
 
 ## Vendor Preview
@@ -45,6 +49,7 @@ Use this short checklist before merging frontend UI changes.
 - [ ] Priority Mapping Admin loads the current tenant mapping safely.
 - [ ] Priority Real Connection Readiness shows mode, read-only fetch, writes, status, and checklist rows.
 - [ ] Remote connection drill is safely blocked in mock/missing-config staging and says it is GET-only.
+- [ ] Priority Admin explains section order: readiness, mapping, validation, dry run, import plan, controlled import, imported records.
 - [ ] Invalid mapping JSON shows a local validation message before any save attempt.
 - [ ] View-only users can read the mapping but cannot edit or save it.
 - [ ] Priority Vendor Sync preview shows mapped vendor sample rows without importing data.
@@ -58,7 +63,7 @@ Use this short checklist before merging frontend UI changes.
 - [ ] Controlled import requires selecting rows and typing `IMPORT_SELECTED`.
 - [ ] Vendor controlled import creates or updates only selected APFlow records.
 - [ ] PO controlled import blocks clearly when the referenced vendor has not been imported.
-- [ ] Controlled import result says no Priority data was changed.
+- [ ] Controlled import result says APFlow changed but no Priority data was changed.
 - [ ] Imported Vendors shows Priority source, external ID, APFlow ID, and last import result after vendor import.
 - [ ] Imported Purchase Orders shows Priority source, PO number, vendor external ID, APFlow ID, and last import result after PO import.
 - [ ] Sync Dry Run, Import Plan, Controlled Import, and Imported Records are visually distinct and cannot be confused.
