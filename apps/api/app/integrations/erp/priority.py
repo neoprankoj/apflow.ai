@@ -110,6 +110,101 @@ class PriorityODataAdapter:
                 metadata_available=False,
             )
 
+    def check_service_root(self) -> dict[str, Any]:
+        configuration = self._configuration_status()
+        if configuration["status"] != "ok":
+            return configuration
+        try:
+            with self._client() as client:
+                response = client.get(self.service_root_url())
+        except httpx.TimeoutException as exc:
+            return self._connection_result(
+                "timeout",
+                f"Priority service root check timed out: {exc.__class__.__name__}.",
+                metadata_available=False,
+            )
+        except httpx.RequestError as exc:
+            return self._connection_result(
+                "connection_failed",
+                f"Priority service root check failed: {exc.__class__.__name__}.",
+                metadata_available=False,
+            )
+        if response.status_code in {401, 403}:
+            return self._connection_result(
+                "unauthorized",
+                "Priority rejected the configured credentials.",
+                metadata_available=False,
+            )
+        if response.status_code != 200:
+            return self._connection_result(
+                "connection_failed",
+                f"Priority service root returned HTTP {response.status_code}.",
+                metadata_available=False,
+            )
+        try:
+            payload = response.json()
+        except ValueError:
+            return self._connection_result(
+                "invalid_response",
+                "Priority service root did not return JSON.",
+                metadata_available=False,
+            )
+        if not isinstance(payload, dict) or "value" not in payload:
+            return self._connection_result(
+                "invalid_response",
+                "Priority service root response did not include the OData resource list.",
+                metadata_available=False,
+            )
+        return self._connection_result(
+            "ok",
+            "Priority OData service root is reachable.",
+            metadata_available=False,
+            service_collection_count=len(payload.get("value") or []),
+        )
+
+    def check_metadata(self) -> dict[str, Any]:
+        configuration = self._configuration_status()
+        if configuration["status"] != "ok":
+            return configuration
+        try:
+            with self._client() as client:
+                response = client.get(self.metadata_url())
+        except httpx.TimeoutException as exc:
+            return self._connection_result(
+                "timeout",
+                f"Priority metadata check timed out: {exc.__class__.__name__}.",
+                metadata_available=False,
+            )
+        except httpx.RequestError as exc:
+            return self._connection_result(
+                "connection_failed",
+                f"Priority metadata check failed: {exc.__class__.__name__}.",
+                metadata_available=False,
+            )
+        if response.status_code in {401, 403}:
+            return self._connection_result(
+                "unauthorized",
+                "Priority rejected the configured credentials.",
+                metadata_available=False,
+            )
+        if response.status_code == 404:
+            return self._connection_result(
+                "metadata_unavailable",
+                "Priority metadata endpoint was not found.",
+                metadata_available=False,
+            )
+        if response.status_code != 200:
+            return self._connection_result(
+                "connection_failed",
+                f"Priority metadata endpoint returned HTTP {response.status_code}.",
+                metadata_available=False,
+            )
+        return self._connection_result(
+            "ok",
+            "Priority OData metadata endpoint is reachable.",
+            metadata_available=True,
+        )
+
     def sync_vendors(self, tenant_id: UUID) -> list[ERPVendorRecord]:
         mapping = self._entity_mapping("vendors")
         if mapping is None:

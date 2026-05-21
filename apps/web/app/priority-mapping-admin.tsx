@@ -1,6 +1,6 @@
 "use client";
 
-import { Braces, Database, RefreshCw, Save, ShieldAlert, Wand2 } from "lucide-react";
+import { Braces, Database, ListChecks, RefreshCw, Save, ShieldAlert, Wand2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader } from "../components/ui/card";
@@ -14,6 +14,7 @@ import {
   getPriorityImportedPurchaseOrders,
   getPriorityImportedVendors,
   getPriorityMapping,
+  getPriorityReadiness,
   importPriorityRecords,
   previewPriorityPurchaseOrderSync,
   previewPriorityVendorSync,
@@ -23,6 +24,7 @@ import {
   type PriorityImportedPurchaseOrderRecord,
   type PriorityImportedVendorRecord,
   type PriorityMapping,
+  type PriorityReadinessResponse,
   type PrioritySyncPreviewKind,
   type PrioritySyncPreviewSource,
   type PrioritySyncPreviewResponse,
@@ -101,6 +103,9 @@ export function PriorityMappingAdmin({
   const [importedRecordsStatus, setImportedRecordsStatus] = useState<"idle" | "loading">("idle");
   const [importedVendors, setImportedVendors] = useState<PriorityImportedVendorRecord[]>([]);
   const [importedPurchaseOrders, setImportedPurchaseOrders] = useState<PriorityImportedPurchaseOrderRecord[]>([]);
+  const [readiness, setReadiness] = useState<PriorityReadinessResponse | null>(null);
+  const [readinessStatus, setReadinessStatus] = useState<"idle" | "loading" | "drilling">("idle");
+  const [readinessMessage, setReadinessMessage] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [previewMessage, setPreviewMessage] = useState<string | null>(null);
   const [planMessage, setPlanMessage] = useState<string | null>(null);
@@ -148,6 +153,25 @@ export function PriorityMappingAdmin({
   useEffect(() => {
     void loadMapping();
   }, [loadMapping]);
+
+  const loadReadiness = useCallback(async (checkRemote = false) => {
+    if (!apiBaseUrl || !accessToken || !tenantId) return;
+    setReadinessStatus(checkRemote ? "drilling" : "loading");
+    setReadinessMessage(null);
+    try {
+      const response = await getPriorityReadiness(apiBaseUrl, accessToken, tenantId, checkRemote);
+      setReadiness(response);
+      setReadinessMessage(response.message);
+    } catch (error) {
+      setReadinessMessage(error instanceof Error ? error.message : "Priority readiness failed to load.");
+    } finally {
+      setReadinessStatus("idle");
+    }
+  }, [accessToken, apiBaseUrl, tenantId]);
+
+  useEffect(() => {
+    void loadReadiness(false);
+  }, [loadReadiness]);
 
   const loadImportedRecords = useCallback(async () => {
     if (!apiBaseUrl || !accessToken || !tenantId) return;
@@ -342,6 +366,15 @@ export function PriorityMappingAdmin({
             <Detail label="Real writes" value="Disabled by default" />
           </div>
 
+          <PriorityReadinessPanel
+            isReady={isReady}
+            onReload={() => void loadReadiness(false)}
+            onRunDrill={() => void loadReadiness(true)}
+            readiness={readiness}
+            readinessMessage={readinessMessage}
+            readinessStatus={readinessStatus}
+          />
+
           <div className="grid gap-3 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-slate-700">
             <p>Mock Priority remains the active staging mode unless `PRIORITY_ERP_MODE` is changed.</p>
             <p>Real Priority writes are disabled unless `PRIORITY_ERP_ENABLE_WRITES=true`.</p>
@@ -466,6 +499,101 @@ export function PriorityMappingAdmin({
         </CardContent>
       </Card>
     </section>
+  );
+}
+
+function PriorityReadinessPanel({
+  isReady,
+  onReload,
+  onRunDrill,
+  readiness,
+  readinessMessage,
+  readinessStatus
+}: {
+  isReady: boolean;
+  onReload: () => void;
+  onRunDrill: () => void;
+  readiness: PriorityReadinessResponse | null;
+  readinessMessage: string | null;
+  readinessStatus: "idle" | "loading" | "drilling";
+}) {
+  return (
+    <div className="space-y-4 rounded-md border border-border bg-white p-4">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            <ListChecks className="h-4 w-4 text-primary" />
+            <h4 className="font-semibold">Priority Real Connection Readiness</h4>
+          </div>
+          <p className="mt-1 max-w-3xl text-sm text-muted">
+            Confirm what is configured before attempting real Priority read-only previews. The connection drill performs
+            GET-only service-root and metadata checks; it does not import entity data and does not change Priority.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button disabled={!isReady || readinessStatus !== "idle"} onClick={onReload} variant="secondary">
+            <RefreshCw className="h-4 w-4" />
+            Reload readiness
+          </Button>
+          <Button disabled={!isReady || readinessStatus !== "idle"} onClick={onRunDrill} variant="secondary">
+            Run remote connection drill
+          </Button>
+        </div>
+      </div>
+
+      {readinessStatus !== "idle" ? (
+        <div className="space-y-2">
+          <LoadingSkeleton className="h-8 w-full" />
+          <LoadingSkeleton className="h-24 w-full" />
+        </div>
+      ) : null}
+
+      {readinessMessage ? (
+        <div className="rounded-md border border-border bg-slate-50 px-4 py-3 text-sm text-muted">
+          {readinessMessage}
+        </div>
+      ) : null}
+
+      {readiness ? (
+        <div className="space-y-4">
+          <div className="grid gap-3 text-sm md:grid-cols-4">
+            <ReadinessMetric label="Mode" value={readiness.mode} />
+            <ReadinessMetric label="Read-only fetch" value={readiness.read_only_fetch_enabled ? "enabled" : "disabled"} />
+            <ReadinessMetric label="Writes" value={readiness.writes_enabled ? "enabled" : "disabled"} />
+            <ReadinessMetric label="Status" value={readiness.status} />
+          </div>
+          <div className="grid gap-2 md:grid-cols-2">
+            {readiness.checks.map((check) => (
+              <div className="rounded-md border border-border bg-slate-50 p-3 text-sm" key={check.key}>
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <p className="font-medium">{check.label}</p>
+                  <StatusBadge status={check.status} />
+                </div>
+                <p className="mt-1 text-muted">{check.message}</p>
+                {check.safe_detail ? <p className="mt-1 text-xs text-muted">Detail: {check.safe_detail}</p> : null}
+              </div>
+            ))}
+          </div>
+          {readiness.errors.length ? <ValidationList label="Readiness blockers" items={readiness.errors} tone="danger" /> : null}
+          {readiness.warnings.length ? <ValidationList label="Readiness warnings" items={readiness.warnings} tone="warning" /> : null}
+          <div className="rounded-md border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm text-slate-700">
+            Connection drill checks service root and metadata only. No Priority records are created, updated, deleted,
+            or imported. Keep real writes disabled while testing read-only access.
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function ReadinessMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border border-border bg-slate-50 p-3">
+      <p className="text-xs uppercase tracking-wide text-muted">{label}</p>
+      <div className="mt-2">
+        <StatusBadge status={value} />
+      </div>
+    </div>
   );
 }
 
@@ -617,7 +745,8 @@ function SyncDryRun({
       {previewSource === "priority" ? (
         <div className="rounded-md border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm text-slate-700">
           This performs GET-only reads from Priority. No data is imported and no Priority records are created,
-          updated, or deleted. Use sample records until real Priority credentials are configured.
+          updated, or deleted. Use sample records until real Priority credentials are configured. Open Priority Real
+          Connection Readiness above to see what is missing.
         </div>
       ) : null}
 

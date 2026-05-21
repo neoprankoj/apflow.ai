@@ -43,6 +43,8 @@ Use this short checklist before merging frontend UI changes.
 - [ ] Export result and external ID are shown after success.
 - [ ] Blocked or rejected invoices explain why export is unavailable.
 - [ ] Priority Mapping Admin loads the current tenant mapping safely.
+- [ ] Priority Real Connection Readiness shows mode, read-only fetch, writes, status, and checklist rows.
+- [ ] Remote connection drill is safely blocked in mock/missing-config staging and says it is GET-only.
 - [ ] Invalid mapping JSON shows a local validation message before any save attempt.
 - [ ] View-only users can read the mapping but cannot edit or save it.
 - [ ] Priority Vendor Sync preview shows mapped vendor sample rows without importing data.

@@ -1,3 +1,4 @@
+from urllib.parse import urlparse
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -24,6 +25,8 @@ from app.core.schemas import (
     PriorityImportResultItem,
     PriorityImportPlanRequest,
     PriorityImportPlanResponse,
+    PriorityReadinessCheck,
+    PriorityReadinessResponse,
     PrioritySyncPreviewRequest,
     PrioritySyncPreviewResponse,
     PriorityMappingValidationRequest,
@@ -107,6 +110,17 @@ def validate_priority_mapping(
 ) -> PriorityMappingValidationResult:
     _enforce_body_tenant(request.tenant_id, context)
     return validate_priority_mapping_config(request.mapping)
+
+
+@router.get("/priority/readiness", response_model=PriorityReadinessResponse)
+def get_priority_readiness(
+    tenant_id: UUID = Depends(resolve_tenant_id),
+    check_remote: bool = False,
+    erp_agent: ERPConnectorAgent = Depends(get_erp_connector_agent),
+    _context: CurrentUserContext = Depends(require_permission(Permission.ERP_READ)),
+) -> PriorityReadinessResponse:
+    del tenant_id
+    return _build_priority_readiness(erp_agent, check_remote=check_remote)
 
 
 @router.post("/priority/sync-preview", response_model=PrioritySyncPreviewResponse)
@@ -524,6 +538,229 @@ def _normalize_preview_source(source: str) -> str:
     if normalized in {"priority", "real", "odata"}:
         return "priority"
     raise ValueError("Priority sync preview source must be sample or priority.")
+
+
+def _build_priority_readiness(
+    erp_agent: ERPConnectorAgent,
+    *,
+    check_remote: bool,
+) -> PriorityReadinessResponse:
+    mode = settings.priority_erp_mode if settings.priority_erp_mode in {"mock", "real"} else "mock"
+    read_only_enabled = settings.priority_erp_read_only_fetch_enabled
+    writes_enabled = settings.priority_erp_enable_writes
+    base_url_configured = bool(settings.priority_erp_base_url.strip())
+    company_configured = bool(settings.priority_erp_company.strip())
+    environment_configured = bool(settings.priority_erp_environment.strip())
+    auth_configured = bool(settings.priority_erp_username.strip() and _priority_secret_configured())
+    checks = [
+        _readiness_check(
+            "mode",
+            "Priority mode real",
+            "ok" if mode == "real" else "disabled",
+            "Priority real mode is configured." if mode == "real" else "Priority is currently running in mock mode.",
+        ),
+        _readiness_check(
+            "base_url",
+            "Base URL configured",
+            "ok" if base_url_configured else "missing",
+            "Priority base URL is configured." if base_url_configured else "Set PRIORITY_ERP_BASE_URL on the server.",
+            safe_detail=_priority_base_url_host(),
+        ),
+        _readiness_check(
+            "company",
+            "Company configured",
+            "ok" if company_configured else "not_applicable",
+            "Priority company is configured." if company_configured else "Company may be embedded in the Priority OData base URL.",
+        ),
+        _readiness_check(
+            "environment",
+            "Environment configured",
+            "ok" if environment_configured else "not_applicable",
+            "Priority environment is configured." if environment_configured else "Environment may be embedded in the Priority OData base URL.",
+        ),
+        _readiness_check(
+            "auth",
+            "Authentication configured",
+            "ok" if auth_configured else "missing",
+            "Priority username and password/token are configured." if auth_configured else "Set Priority username and password or API key on the server.",
+        ),
+        _readiness_check(
+            "read_only_fetch",
+            "Read-only fetch enabled",
+            "ok" if read_only_enabled else "disabled",
+            "Read-only fetch is enabled." if read_only_enabled else "Set PRIORITY_ERP_READ_ONLY_FETCH_ENABLED=true before real previews.",
+        ),
+        _readiness_check(
+            "writes_disabled",
+            "Real writes disabled",
+            "ok" if not writes_enabled else "warning",
+            "Priority writes are disabled." if not writes_enabled else "Priority writes are enabled. Confirm this is intentional.",
+        ),
+    ]
+    warnings: list[str] = []
+    errors: list[str] = []
+    service_root_checked = False
+    metadata_checked = False
+    service_root_available: bool | None = None
+    metadata_available: bool | None = None
+
+    remote_blocker = _priority_remote_drill_blocker(mode, read_only_enabled, base_url_configured, auth_configured)
+    if check_remote and remote_blocker is not None:
+        checks.append(remote_blocker)
+        errors.append(remote_blocker.message)
+    elif check_remote:
+        adapter = erp_agent.adapters.get(ERPAdapterType.PRIORITY)
+        if not isinstance(adapter, PriorityODataAdapter):
+            check = _readiness_check(
+                "real_adapter",
+                "Priority real adapter active",
+                "missing",
+                "Priority real adapter is not active.",
+            )
+            checks.append(check)
+            errors.append(check.message)
+        else:
+            service_root_checked = True
+            service_root_result = adapter.check_service_root()
+            service_root_available = service_root_result.get("status") == "ok"
+            checks.append(_remote_result_check("service_root", "Service root reachable", service_root_result))
+            if not service_root_available:
+                errors.append(str(service_root_result.get("message", "Priority service root check failed.")))
+            else:
+                metadata_checked = True
+                metadata_result = adapter.check_metadata()
+                metadata_available = metadata_result.get("status") == "ok"
+                checks.append(_remote_result_check("metadata", "Metadata reachable", metadata_result))
+                if not metadata_available:
+                    warnings.append(str(metadata_result.get("message", "Priority metadata was not available.")))
+    else:
+        checks.extend(
+            [
+                _readiness_check(
+                    "service_root",
+                    "Service root reachable",
+                    "not_applicable",
+                    "Run the remote connection drill to check service-root reachability.",
+                ),
+                _readiness_check(
+                    "metadata",
+                    "Metadata reachable",
+                    "not_applicable",
+                    "Run the remote connection drill to check metadata reachability.",
+                ),
+            ]
+        )
+
+    local_ready = mode == "real" and read_only_enabled and base_url_configured and auth_configured
+    if check_remote and service_root_available and metadata_available and local_ready:
+        status = "ready"
+        message = "Priority real read-only connection is ready for limited preview fetches."
+    elif check_remote and local_ready and service_root_available:
+        status = "partially_ready"
+        message = "Priority service root is reachable, but metadata was not confirmed."
+    elif check_remote and local_ready:
+        status = "not_ready"
+        message = "Priority remote connection drill did not complete. Review the checklist before real preview fetches."
+    elif local_ready:
+        status = "partially_ready"
+        message = "Priority local configuration is present. Run the remote connection drill before real preview fetches."
+    else:
+        status = "not_ready"
+        message = "Priority real read-only fetch is not ready. Review the checklist before enabling real previews."
+    if writes_enabled:
+        warnings.append("Priority real writes are enabled. Keep PRIORITY_ERP_ENABLE_WRITES=false during read-only testing.")
+
+    return PriorityReadinessResponse(
+        status=status,
+        mode=mode,
+        read_only_fetch_enabled=read_only_enabled,
+        writes_enabled=writes_enabled,
+        base_url_configured=base_url_configured,
+        company_configured=company_configured,
+        environment_configured=environment_configured,
+        auth_configured=auth_configured,
+        service_root_checked=service_root_checked,
+        metadata_checked=metadata_checked,
+        service_root_available=service_root_available,
+        metadata_available=metadata_available,
+        checks=checks,
+        warnings=warnings,
+        errors=errors,
+        message=message,
+    )
+
+
+def _priority_secret_configured() -> bool:
+    return bool(settings.priority_erp_password.strip() or settings.priority_erp_api_key.strip())
+
+
+def _priority_base_url_host() -> str | None:
+    return urlparse(settings.priority_erp_base_url).hostname
+
+
+def _readiness_check(
+    key: str,
+    label: str,
+    status: str,
+    message: str,
+    *,
+    safe_detail: str | None = None,
+) -> PriorityReadinessCheck:
+    return PriorityReadinessCheck(
+        key=key,
+        label=label,
+        status=status,
+        message=message,
+        safe_detail=safe_detail,
+    )
+
+
+def _priority_remote_drill_blocker(
+    mode: str,
+    read_only_enabled: bool,
+    base_url_configured: bool,
+    auth_configured: bool,
+) -> PriorityReadinessCheck | None:
+    if mode != "real":
+        return _readiness_check(
+            "remote_drill",
+            "Remote connection drill",
+            "disabled",
+            "Remote drill requires PRIORITY_ERP_MODE=real.",
+        )
+    if not read_only_enabled:
+        return _readiness_check(
+            "remote_drill",
+            "Remote connection drill",
+            "disabled",
+            "Remote drill requires PRIORITY_ERP_READ_ONLY_FETCH_ENABLED=true.",
+        )
+    if not base_url_configured:
+        return _readiness_check(
+            "remote_drill",
+            "Remote connection drill",
+            "missing",
+            "Remote drill requires PRIORITY_ERP_BASE_URL.",
+        )
+    if not auth_configured:
+        return _readiness_check(
+            "remote_drill",
+            "Remote connection drill",
+            "missing",
+            "Remote drill requires Priority username and password or API key.",
+        )
+    return None
+
+
+def _remote_result_check(key: str, label: str, result: dict) -> PriorityReadinessCheck:
+    status = "ok" if result.get("status") == "ok" else "warning"
+    return _readiness_check(
+        key,
+        label,
+        status,
+        str(result.get("message") or "Priority remote check completed."),
+        safe_detail=str(result.get("base_url_host") or "") or None,
+    )
 
 
 def _priority_read_only_fetch_blocker(

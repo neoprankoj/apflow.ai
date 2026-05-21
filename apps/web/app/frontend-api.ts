@@ -45,6 +45,33 @@ export type PriorityMappingValidationResult = {
   summary: Record<string, unknown>;
 };
 
+export type PriorityReadinessCheck = {
+  key: string;
+  label: string;
+  status: "ok" | "missing" | "disabled" | "warning" | "not_applicable" | string;
+  message: string;
+  safe_detail?: string | null;
+};
+
+export type PriorityReadinessResponse = {
+  status: "ready" | "not_ready" | "partially_ready" | string;
+  mode: string;
+  read_only_fetch_enabled: boolean;
+  writes_enabled: boolean;
+  base_url_configured: boolean;
+  company_configured: boolean;
+  environment_configured: boolean;
+  auth_configured: boolean;
+  service_root_checked: boolean;
+  metadata_checked: boolean;
+  service_root_available?: boolean | null;
+  metadata_available?: boolean | null;
+  checks: PriorityReadinessCheck[];
+  warnings: string[];
+  errors: string[];
+  message: string;
+};
+
 export type PrioritySyncPreviewKind = "vendors" | "purchase_orders";
 export type PrioritySyncPreviewSource = "sample" | "priority";
 
@@ -240,6 +267,20 @@ export function savePriorityMapping(
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ tenant_id: tenantId, mapping }),
     action: "Save Priority mapping"
+  });
+}
+
+export function getPriorityReadiness(
+  apiBaseUrl: string,
+  token: string,
+  tenantId: string,
+  checkRemote = false
+) {
+  const params = new URLSearchParams({ tenant_id: tenantId });
+  if (checkRemote) params.set("check_remote", "true");
+  return apiFetch<PriorityReadinessResponse>(apiBaseUrl, `/erp/priority/readiness?${params.toString()}`, {
+    token,
+    action: checkRemote ? "Run Priority connection drill" : "Load Priority readiness"
   });
 }
 
