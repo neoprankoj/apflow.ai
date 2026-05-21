@@ -228,17 +228,21 @@ class PriorityODataAdapter:
         return self.settings.priority_erp_password or self.settings.priority_erp_api_key
 
     def fetch_entity_rows(self, entity_name: str, limit: int = 50) -> list[dict[str, Any]]:
+        return self.fetch_entity_rows_read_only(entity_name, limit=limit)
+
+    def fetch_entity_rows_read_only(self, entity_name: str, limit: int = 50) -> list[dict[str, Any]]:
         if not self.is_configured():
             raise ERPAdapterError(
                 "missing_credentials",
                 "Priority credentials are not configured.",
                 self._configuration_status(),
             )
+        safe_limit = max(1, min(limit, self.settings.priority_erp_max_preview_records))
         try:
             with self._client() as client:
                 response = client.get(
                     f"{self.service_root_url()}/{entity_name}",
-                    params={"$top": limit},
+                    params={"$top": safe_limit},
                 )
         except httpx.RequestError as exc:
             raise ERPAdapterError(
@@ -250,6 +254,12 @@ class PriorityODataAdapter:
             raise ERPAdapterError(
                 "unauthorized",
                 "Priority rejected the configured credentials.",
+                {"provider": ERPAdapterType.PRIORITY, "mode": "real", "entity_name": entity_name},
+            )
+        if response.status_code == 404:
+            raise ERPAdapterError(
+                "entity_not_found",
+                "Priority entity was not found. Verify the tenant mapping entity name.",
                 {"provider": ERPAdapterType.PRIORITY, "mode": "real", "entity_name": entity_name},
             )
         if response.status_code != 200:
@@ -266,14 +276,14 @@ class PriorityODataAdapter:
                 "Priority entity response did not return JSON.",
                 {"provider": ERPAdapterType.PRIORITY, "mode": "real", "entity_name": entity_name},
             ) from exc
-        rows = payload.get("value")
+        rows = payload.get("value") if isinstance(payload, dict) else payload
         if not isinstance(rows, list):
             raise ERPAdapterError(
                 "invalid_response",
                 "Priority entity response did not include a row list.",
                 {"provider": ERPAdapterType.PRIORITY, "mode": "real", "entity_name": entity_name},
             )
-        return [row for row in rows if isinstance(row, dict)]
+        return [row for row in rows if isinstance(row, dict)][:safe_limit]
 
     def build_invoice_payload(self, invoice: CanonicalInvoice) -> dict[str, Any]:
         mapping = self._entity_mapping("invoice_export")

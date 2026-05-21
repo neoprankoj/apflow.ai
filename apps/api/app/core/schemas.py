@@ -807,6 +807,7 @@ class PriorityMappingValidationResult(APFlowModel):
 class PrioritySyncPreviewRequest(APFlowModel):
     tenant_id: UUID
     kind: str = "vendors"
+    source: str = "sample"
     limit: int = Field(default=10, ge=1, le=50)
     sample_records: list[dict[str, Any]] | None = None
 
@@ -828,6 +829,7 @@ class PrioritySyncPreviewResponse(APFlowModel):
 class PriorityImportPlanRequest(APFlowModel):
     tenant_id: UUID
     kind: str = "vendors"
+    source: str = "sample"
     limit: int = Field(default=10, ge=1, le=50)
     sample_records: list[dict[str, Any]] | None = None
 
@@ -857,6 +859,7 @@ class PriorityImportPlanResponse(APFlowModel):
 class PriorityImportRequest(APFlowModel):
     tenant_id: UUID
     kind: str = "vendors"
+    source: str = "sample"
     selected_external_ids: list[str] = Field(default_factory=list)
     confirmation: str
     allow_updates: bool = False

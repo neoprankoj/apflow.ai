@@ -24,6 +24,7 @@ import {
   type PriorityImportedVendorRecord,
   type PriorityMapping,
   type PrioritySyncPreviewKind,
+  type PrioritySyncPreviewSource,
   type PrioritySyncPreviewResponse,
   type PriorityMappingValidationResult,
   validatePriorityMapping
@@ -92,6 +93,7 @@ export function PriorityMappingAdmin({
   const [status, setStatus] = useState<"idle" | "loading" | "validating" | "saving">("idle");
   const [previewStatus, setPreviewStatus] = useState<"idle" | "loading">("idle");
   const [preview, setPreview] = useState<PrioritySyncPreviewResponse | null>(null);
+  const [previewSource, setPreviewSource] = useState<PrioritySyncPreviewSource>("sample");
   const [planStatus, setPlanStatus] = useState<"idle" | "loading">("idle");
   const [importPlan, setImportPlan] = useState<PriorityImportPlanResponse | null>(null);
   const [controlledImportStatus, setControlledImportStatus] = useState<"idle" | "loading">("idle");
@@ -226,8 +228,8 @@ export function PriorityMappingAdmin({
     try {
       const result =
         kind === "vendors"
-          ? await previewPriorityVendorSync(apiBaseUrl, accessToken, tenantId)
-          : await previewPriorityPurchaseOrderSync(apiBaseUrl, accessToken, tenantId);
+          ? await previewPriorityVendorSync(apiBaseUrl, accessToken, tenantId, previewSource)
+          : await previewPriorityPurchaseOrderSync(apiBaseUrl, accessToken, tenantId, previewSource);
       setPreview(result);
       setPreviewMessage(result.message);
     } catch (error) {
@@ -245,8 +247,8 @@ export function PriorityMappingAdmin({
     try {
       const result =
         kind === "vendors"
-          ? await generatePriorityVendorImportPlan(apiBaseUrl, accessToken, tenantId)
-          : await generatePriorityPurchaseOrderImportPlan(apiBaseUrl, accessToken, tenantId);
+          ? await generatePriorityVendorImportPlan(apiBaseUrl, accessToken, tenantId, previewSource)
+          : await generatePriorityPurchaseOrderImportPlan(apiBaseUrl, accessToken, tenantId, previewSource);
       setImportPlan(result);
       setControlledImportResult(null);
       setPlanMessage(result.message);
@@ -274,6 +276,7 @@ export function PriorityMappingAdmin({
         accessToken,
         tenantId,
         kind,
+        previewSource,
         selectedExternalIds,
         confirmation,
         allowCreates,
@@ -288,6 +291,16 @@ export function PriorityMappingAdmin({
     } finally {
       setControlledImportStatus("idle");
     }
+  }
+
+  function handlePreviewSourceChange(source: PrioritySyncPreviewSource) {
+    setPreviewSource(source);
+    setPreview(null);
+    setImportPlan(null);
+    setControlledImportResult(null);
+    setPreviewMessage(null);
+    setPlanMessage(null);
+    setControlledImportMessage(null);
   }
 
   function loadSample() {
@@ -396,11 +409,13 @@ export function PriorityMappingAdmin({
                 onControlledImport={handleControlledImport}
                 onImportPlan={handleImportPlan}
                 onPreview={handlePreview}
+                onPreviewSourceChange={handlePreviewSourceChange}
                 importPlan={importPlan}
                 planMessage={planMessage}
                 planStatus={planStatus}
                 preview={preview}
                 previewMessage={previewMessage}
+                previewSource={previewSource}
                 previewStatus={previewStatus}
               />
 
@@ -464,10 +479,12 @@ function SyncDryRun({
   onControlledImport,
   onImportPlan,
   onPreview,
+  onPreviewSourceChange,
   planMessage,
   planStatus,
   preview,
   previewMessage,
+  previewSource,
   previewStatus
 }: {
   canRunSyncPreview: boolean;
@@ -485,10 +502,12 @@ function SyncDryRun({
   ) => void;
   onImportPlan: (kind: PrioritySyncPreviewKind) => void;
   onPreview: (kind: PrioritySyncPreviewKind) => void;
+  onPreviewSourceChange: (source: PrioritySyncPreviewSource) => void;
   planMessage: string | null;
   planStatus: "idle" | "loading";
   preview: PrioritySyncPreviewResponse | null;
   previewMessage: string | null;
+  previewSource: PrioritySyncPreviewSource;
   previewStatus: "idle" | "loading";
 }) {
   const isVendorPreview = preview?.kind === "vendors";
@@ -536,6 +555,9 @@ function SyncDryRun({
             Preview how saved Priority mappings transform vendor and purchase-order records. Dry run only:
             no records are imported and no ERP data is changed.
           </p>
+          <p className="mt-1 text-xs text-muted">
+            Real Priority read-only fetch uses GET requests only. Real writes remain disabled.
+          </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button
@@ -558,6 +580,44 @@ function SyncDryRun({
       {!canRunSyncPreview ? (
         <div className="rounded-md border border-border bg-white px-4 py-3 text-sm text-muted">
           You do not have permission to run ERP sync previews.
+        </div>
+      ) : null}
+
+      <div className="grid gap-3 rounded-md border border-border bg-white p-3 text-sm lg:grid-cols-2">
+        <label className="flex items-start gap-2">
+          <input
+            checked={previewSource === "sample"}
+            className="mt-1"
+            name="priority-preview-source"
+            onChange={() => onPreviewSourceChange("sample")}
+            type="radio"
+          />
+          <span>
+            <span className="block font-medium">Sample records</span>
+            <span className="text-muted">Use deterministic mock Priority-like rows. Default and safe for staging demos.</span>
+          </span>
+        </label>
+        <label className="flex items-start gap-2">
+          <input
+            checked={previewSource === "priority"}
+            className="mt-1"
+            name="priority-preview-source"
+            onChange={() => onPreviewSourceChange("priority")}
+            type="radio"
+          />
+          <span>
+            <span className="block font-medium">Real Priority read-only fetch</span>
+            <span className="text-muted">
+              Attempts a limited GET-only OData fetch when real mode, credentials, mapping, and read-only fetch are enabled.
+            </span>
+          </span>
+        </label>
+      </div>
+
+      {previewSource === "priority" ? (
+        <div className="rounded-md border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm text-slate-700">
+          This performs GET-only reads from Priority. No data is imported and no Priority records are created,
+          updated, or deleted. Use sample records until real Priority credentials are configured.
         </div>
       ) : null}
 

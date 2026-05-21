@@ -207,6 +207,8 @@ PRIORITY_ERP_MODE=real
 PRIORITY_ERP_BASE_URL=https://your-priority-host/odata/...
 PRIORITY_ERP_USERNAME=...
 PRIORITY_ERP_PASSWORD=...  # or PRIORITY_ERP_API_KEY for a token secret
+PRIORITY_ERP_READ_ONLY_FETCH_ENABLED=false
+PRIORITY_ERP_MAX_PREVIEW_RECORDS=10
 ```
 
 Keep `PRIORITY_ERP_ENABLE_WRITES=false` while validating a tenant mapping. Use `POST /erp/test-connection` first, then save and validate tenant-scoped mapping JSON with `/erp/priority/mapping` and `/erp/priority/validate-mapping`.
@@ -220,12 +222,14 @@ For safe staging edits, use the dashboard `Admin` section:
 3. Validate before saving.
 4. Treat the sample as a template only; verify every entity and field against the customer's Priority environment.
 5. Confirm the UI still shows mock mode and writes disabled unless operations explicitly changes those runtime settings.
-6. Use `Preview Vendor Sync` and `Preview Purchase Orders` to inspect mapped sample rows before enabling any real import path.
-7. Use `Generate Vendor Import Plan` and `Generate Purchase Order Import Plan` to compare mapped rows with existing APFlow records before any import is enabled.
-8. Select only the rows you intend to import, type `IMPORT_SELECTED`, and import into APFlow only when the plan is understood.
-9. After import, reload `Imported Records` to verify APFlow vendor/PO IDs, Priority external IDs, source, and last import result.
+6. Keep preview source set to `Sample records` for deterministic staging demos.
+7. Use `Preview Vendor Sync` and `Preview Purchase Orders` to inspect mapped sample rows before enabling any real import path.
+8. If real Priority credentials are configured later, switch source to `Real Priority read-only fetch` and confirm the gate is enabled. This path performs GET-only OData reads and does not import or write data.
+9. Use `Generate Vendor Import Plan` and `Generate Purchase Order Import Plan` to compare mapped rows with existing APFlow records before any import is enabled.
+10. Select only the rows you intend to import, type `IMPORT_SELECTED`, and import into APFlow only when the plan is understood.
+11. After import, reload `Imported Records` to verify APFlow vendor/PO IDs, Priority external IDs, source, and last import result.
 
-Priority sync preview is dry-run only. It does not import vendors or purchase orders into APFlow and does not write to Priority. In mock mode, the preview uses deterministic synthetic Priority-like records. In real mode, configured credentials can be used for a read-only limited OData fetch, but writes remain disabled unless explicitly enabled later.
+Priority sync preview is dry-run only. It does not import vendors or purchase orders into APFlow and does not write to Priority. In mock mode, the preview uses deterministic synthetic Priority-like records. In real mode, configured credentials can be used for an explicitly requested, GET-only limited OData fetch when `PRIORITY_ERP_READ_ONLY_FETCH_ENABLED=true`. If the gate is disabled or credentials are missing, the dashboard shows a safe status and operators should use sample records.
 
 Priority import plans are also preview-only. They reuse the saved mapping and dry-run records, then classify each row as `would_create`, `would_update`, `would_skip`, or `would_conflict` against existing tenant vendors and purchase orders. A conflict means matching was ambiguous and should be resolved before enabling a future import. The import-plan endpoints do not create vendors, purchase orders, ERP records, or audit events.
 

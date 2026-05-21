@@ -180,6 +180,62 @@ def test_priority_real_adapter_maps_mocked_vendor_rows():
     assert vendors[0].payment_terms == "Net 30"
 
 
+def test_priority_read_only_fetch_uses_get_and_caps_limit():
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, json={"value": [{"SUPNAME": "SUP-1"}, {"SUPNAME": "SUP-2"}]})
+
+    adapter = PriorityODataAdapter(
+        _real_settings(priority_erp_max_preview_records=1),
+        client_factory=_client_factory(handler),
+    )
+
+    rows = adapter.fetch_entity_rows_read_only("SUPPLIERS", limit=50)
+
+    assert len(rows) == 1
+    assert requests[0].method == "GET"
+    assert requests[0].url.params["$top"] == "1"
+
+
+def test_priority_read_only_fetch_maps_unauthorized_safely():
+    adapter = PriorityODataAdapter(
+        _real_settings(),
+        client_factory=_client_factory(lambda _request: httpx.Response(401)),
+    )
+
+    with pytest.raises(ERPAdapterError) as exc_info:
+        adapter.fetch_entity_rows_read_only("SUPPLIERS")
+
+    assert exc_info.value.code == "unauthorized"
+    assert "super-secret-password" not in str(exc_info.value.details)
+
+
+def test_priority_read_only_fetch_maps_missing_entity_safely():
+    adapter = PriorityODataAdapter(
+        _real_settings(),
+        client_factory=_client_factory(lambda _request: httpx.Response(404)),
+    )
+
+    with pytest.raises(ERPAdapterError) as exc_info:
+        adapter.fetch_entity_rows_read_only("MISSING")
+
+    assert exc_info.value.code == "entity_not_found"
+
+
+def test_priority_read_only_fetch_handles_invalid_shape():
+    adapter = PriorityODataAdapter(
+        _real_settings(),
+        client_factory=_client_factory(lambda _request: httpx.Response(200, json={"unexpected": []})),
+    )
+
+    with pytest.raises(ERPAdapterError) as exc_info:
+        adapter.fetch_entity_rows_read_only("SUPPLIERS")
+
+    assert exc_info.value.code == "invalid_response"
+
+
 def test_priority_real_adapter_maps_mocked_purchase_order_rows():
     adapter = PriorityODataAdapter(
         _real_settings(),

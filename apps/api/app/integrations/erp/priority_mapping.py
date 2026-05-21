@@ -239,6 +239,11 @@ def build_priority_sync_preview(
         mapped_records.append(mapped)
         warnings.extend(row_warnings)
 
+    message = (
+        "Read-only Priority preview generated. No data was imported and no Priority data was changed."
+        if source == "priority"
+        else f"Preview generated from {source} records. No data was imported."
+    )
     return PrioritySyncPreviewResponse(
         status="preview_ready",
         kind=normalized_kind,
@@ -250,7 +255,7 @@ def build_priority_sync_preview(
         mapped_records=mapped_records,
         errors=validation.errors,
         warnings=warnings,
-        message=f"Preview generated from {source} records. No data was imported.",
+        message=message,
     )
 
 
