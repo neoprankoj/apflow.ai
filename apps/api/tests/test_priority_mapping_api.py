@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from app.api import dependencies
 from app.core.config import settings
+from app.integrations.erp.priority import PriorityODataAdapter
 from main import create_app
 
 
@@ -198,6 +199,152 @@ def test_priority_vendor_preview_maps_sample_without_import(auth_enabled):
     assert "secret" not in str(body).lower()
 
 
+def test_priority_preview_priority_source_requires_real_mode(auth_enabled):
+    client = TestClient(create_app())
+    owner = _register(client, "priority-preview-real-mode@example.com")
+    client.put(
+        "/erp/priority/mapping",
+        json=_mapping_payload(owner["tenant"]["id"]),
+        headers=_headers(owner["access_token"]),
+    )
+
+    response = client.post(
+        "/erp/priority/sync-preview/vendors",
+        json={"tenant_id": owner["tenant"]["id"], "source": "priority"},
+        headers=_headers(owner["access_token"]),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "real_mode_required"
+    assert response.json()["source"] == "priority"
+
+
+def test_priority_preview_priority_source_respects_read_only_gate(auth_enabled, monkeypatch):
+    monkeypatch.setattr(settings, "priority_erp_mode", "real")
+    monkeypatch.setattr(settings, "priority_erp_read_only_fetch_enabled", False)
+    client = TestClient(create_app())
+    owner = _register(client, "priority-preview-disabled@example.com")
+    client.put(
+        "/erp/priority/mapping",
+        json=_mapping_payload(owner["tenant"]["id"]),
+        headers=_headers(owner["access_token"]),
+    )
+
+    response = client.post(
+        "/erp/priority/sync-preview/vendors",
+        json={"tenant_id": owner["tenant"]["id"], "source": "priority"},
+        headers=_headers(owner["access_token"]),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "read_only_fetch_disabled"
+    assert response.json()["records_previewed"] == 0
+
+
+def test_priority_preview_priority_source_reports_missing_credentials(auth_enabled, monkeypatch):
+    monkeypatch.setattr(settings, "priority_erp_mode", "real")
+    monkeypatch.setattr(settings, "priority_erp_read_only_fetch_enabled", True)
+    monkeypatch.setattr(settings, "priority_erp_base_url", "")
+    monkeypatch.setattr(settings, "priority_erp_username", "")
+    monkeypatch.setattr(settings, "priority_erp_password", "")
+    monkeypatch.setattr(settings, "priority_erp_api_key", "")
+    client = TestClient(create_app())
+    owner = _register(client, "priority-preview-missing-creds@example.com")
+    client.put(
+        "/erp/priority/mapping",
+        json=_mapping_payload(owner["tenant"]["id"]),
+        headers=_headers(owner["access_token"]),
+    )
+
+    response = client.post(
+        "/erp/priority/sync-preview/vendors",
+        json={"tenant_id": owner["tenant"]["id"], "source": "priority"},
+        headers=_headers(owner["access_token"]),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "missing_credentials"
+    assert "password" not in str(response.json()).lower()
+
+
+def test_priority_preview_priority_source_maps_mocked_vendor_rows(auth_enabled, monkeypatch):
+    monkeypatch.setattr(settings, "priority_erp_mode", "real")
+    monkeypatch.setattr(settings, "priority_erp_read_only_fetch_enabled", True)
+    monkeypatch.setattr(settings, "priority_erp_base_url", "https://priority.example.test/odata")
+    monkeypatch.setattr(settings, "priority_erp_username", "api-user")
+    monkeypatch.setattr(settings, "priority_erp_password", "secret-password")
+    captured = {}
+
+    def fake_fetch(self, entity_name: str, limit: int = 50):
+        captured["entity_name"] = entity_name
+        captured["limit"] = limit
+        return [{"SUPNAME": "SUP-LIVE-1", "SUPDES": "Live Supplier", "VATNUM": "LIVE-TAX"}]
+
+    monkeypatch.setattr(PriorityODataAdapter, "fetch_entity_rows_read_only", fake_fetch)
+    client = TestClient(create_app())
+    owner = _register(client, "priority-preview-live-vendor@example.com")
+    client.put(
+        "/erp/priority/mapping",
+        json=_mapping_payload(owner["tenant"]["id"]),
+        headers=_headers(owner["access_token"]),
+    )
+
+    response = client.post(
+        "/erp/priority/sync-preview/vendors",
+        json={"tenant_id": owner["tenant"]["id"], "source": "priority", "limit": 25},
+        headers=_headers(owner["access_token"]),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "preview_ready"
+    assert body["mode"] == "real"
+    assert body["source"] == "priority"
+    assert body["mapped_records"][0]["external_id"] == "SUP-LIVE-1"
+    assert captured == {"entity_name": "SUPPLIERS", "limit": 10}
+    assert "secret-password" not in str(body)
+
+
+def test_priority_preview_priority_source_maps_mocked_purchase_order_rows(auth_enabled, monkeypatch):
+    monkeypatch.setattr(settings, "priority_erp_mode", "real")
+    monkeypatch.setattr(settings, "priority_erp_read_only_fetch_enabled", True)
+    monkeypatch.setattr(settings, "priority_erp_base_url", "https://priority.example.test/odata")
+    monkeypatch.setattr(settings, "priority_erp_username", "api-user")
+    monkeypatch.setattr(settings, "priority_erp_password", "secret-password")
+
+    def fake_fetch(self, entity_name: str, limit: int = 50):
+        return [
+            {
+                "ORDNAME": "PO-LIVE-1",
+                "SUPNAME": "SUP-LIVE-1",
+                "ORDSTATUSDES": "Open",
+                "TOTPRICE": 321.5,
+                "CODE": "USD",
+            }
+        ]
+
+    monkeypatch.setattr(PriorityODataAdapter, "fetch_entity_rows_read_only", fake_fetch)
+    client = TestClient(create_app())
+    owner = _register(client, "priority-preview-live-po@example.com")
+    client.put(
+        "/erp/priority/mapping",
+        json=_mapping_payload(owner["tenant"]["id"]),
+        headers=_headers(owner["access_token"]),
+    )
+
+    response = client.post(
+        "/erp/priority/sync-preview/purchase-orders",
+        json={"tenant_id": owner["tenant"]["id"], "source": "priority"},
+        headers=_headers(owner["access_token"]),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "preview_ready"
+    assert body["mapped_records"][0]["po_number"] == "PO-LIVE-1"
+    assert body["mapped_records"][0]["total_amount"] == 321.5
+
+
 def test_priority_purchase_order_preview_maps_sample_without_import(auth_enabled):
     client = TestClient(create_app())
     owner = _register(client, "priority-preview-pos@example.com")
@@ -288,6 +435,48 @@ def test_priority_vendor_import_plan_requires_mapping(auth_enabled):
 
     assert response.status_code == 200
     assert response.json()["status"] == "mapping_required"
+    assert response.json()["records_planned"] == 0
+
+
+def test_priority_import_plan_default_still_uses_sample(auth_enabled):
+    client = TestClient(create_app())
+    owner = _register(client, "priority-plan-default-source@example.com")
+    client.put(
+        "/erp/priority/mapping",
+        json=_mapping_payload(owner["tenant"]["id"]),
+        headers=_headers(owner["access_token"]),
+    )
+
+    response = client.post(
+        "/erp/priority/import-plan/vendors",
+        json={"tenant_id": owner["tenant"]["id"]},
+        headers=_headers(owner["access_token"]),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "plan_ready"
+    assert response.json()["source"] == "sample"
+
+
+def test_priority_import_plan_priority_source_honors_read_only_gate(auth_enabled, monkeypatch):
+    monkeypatch.setattr(settings, "priority_erp_mode", "real")
+    monkeypatch.setattr(settings, "priority_erp_read_only_fetch_enabled", False)
+    client = TestClient(create_app())
+    owner = _register(client, "priority-plan-disabled-source@example.com")
+    client.put(
+        "/erp/priority/mapping",
+        json=_mapping_payload(owner["tenant"]["id"]),
+        headers=_headers(owner["access_token"]),
+    )
+
+    response = client.post(
+        "/erp/priority/import-plan/vendors",
+        json={"tenant_id": owner["tenant"]["id"], "source": "priority"},
+        headers=_headers(owner["access_token"]),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "read_only_fetch_disabled"
     assert response.json()["records_planned"] == 0
 
 

@@ -10,7 +10,7 @@ APFlow AI is tenant-first and deny-by-default.
 - SQLAlchemy repositories apply tenant filters on list and lookup methods. Cross-tenant access raises or returns no records.
 - Dashboard integration can run in demo mode, but `/auth/me` now exposes the current demo or authenticated tenant context.
 - ERP adapter calls are tenant-scoped. Mock mode remains the default; the experimental real Priority connector reads credentials only from environment configuration, stores tenant-specific mapping JSON separately from secrets, and returns safe diagnostics without echoing secrets.
-- Real ERP credentials must be stored through a secrets manager or credential reference, not in request payloads, logs, or audit metadata. `PRIORITY_ERP_ENABLE_WRITES` stays `false` by default so mapping previews cannot become live exports accidentally.
+- Real ERP credentials must be stored through a secrets manager or credential reference, not in request payloads, logs, or audit metadata. `PRIORITY_ERP_ENABLE_WRITES` stays `false` by default so mapping previews cannot become live exports accidentally. `PRIORITY_ERP_READ_ONLY_FETCH_ENABLED` also defaults to `false`; when enabled, Priority previews use GET-only limited OData reads and still do not import or write data.
 - OCR provider credentials are read from environment variables only. Missing credentials produce safe placeholder responses.
 - Human review tasks, corrections, and history are tenant-scoped. Correction, approve, and reject actions require `review:correct` when auth is enabled.
 - Local auth uses PBKDF2 password hashing and signed JWT access tokens. `AUTH_SECRET_KEY` must be changed outside local development.

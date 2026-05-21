@@ -61,15 +61,17 @@ Use this script for a private staging demo. Keep the presenter flow deterministi
 3. Load the safe sample mapping and explain that it is only a template.
 4. Click `Validate` and show status, warnings, and summary.
 5. Save only after explaining that customer-specific Priority entity names must be verified first.
-6. Click `Preview Vendor Sync` and show the mapped vendor rows.
+6. Keep source set to `Sample records`, then click `Preview Vendor Sync` and show the mapped vendor rows.
 7. Click `Preview Purchase Orders` and show the mapped PO rows.
-8. Click `Generate Vendor Import Plan` and show which rows would be created, updated, skipped, or flagged as conflicts.
-9. Click `Generate Purchase Order Import Plan` and show the same plan categories for POs.
-10. Select one `would_create` vendor row, type `IMPORT_SELECTED`, and import it into APFlow.
-11. Generate the PO import plan again, select a PO that references the imported vendor, type `IMPORT_SELECTED`, and import it.
-12. Show the controlled import result and explain that APFlow records changed but Priority data did not.
-13. Open `Imported Records` and confirm the vendor and PO show Priority source, external ID, APFlow ID, and last import result.
-14. Open `Audit Trail` and show the Priority import events.
+8. Switch source to `Real Priority read-only fetch` and show the safe disabled or missing-credentials message in mock staging.
+9. Switch back to `Sample records`.
+10. Click `Generate Vendor Import Plan` and show which rows would be created, updated, skipped, or flagged as conflicts.
+11. Click `Generate Purchase Order Import Plan` and show the same plan categories for POs.
+12. Select one `would_create` vendor row, type `IMPORT_SELECTED`, and import it into APFlow.
+13. Generate the PO import plan again, select a PO that references the imported vendor, type `IMPORT_SELECTED`, and import it.
+14. Show the controlled import result and explain that APFlow records changed but Priority data did not.
+15. Open `Imported Records` and confirm the vendor and PO show Priority source, external ID, APFlow ID, and last import result.
+16. Open `Audit Trail` and show the Priority import events.
 
 ## H. Demo Path 7 - Approval Inbox
 

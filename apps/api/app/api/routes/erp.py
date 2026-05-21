@@ -130,12 +130,13 @@ def plan_priority_import(
         PrioritySyncPreviewRequest(
             tenant_id=request.tenant_id,
             kind=request.kind,
+            source=request.source,
             limit=request.limit,
             sample_records=request.sample_records,
         ),
         erp_agent,
     )
-    if preview.status in {"mapping_required", "invalid_mapping"}:
+    if preview.status != "preview_ready":
         return PriorityImportPlanResponse(
             status=preview.status,
             kind=preview.kind,
@@ -212,6 +213,7 @@ def import_priority_records(
         PriorityImportPlanRequest(
             tenant_id=request.tenant_id,
             kind=request.kind,
+            source=request.source,
             limit=request.limit,
         ),
         erp_agent,
@@ -350,38 +352,51 @@ def _build_priority_preview(
 ) -> PrioritySyncPreviewResponse:
     try:
         kind = _normalize_preview_kind(request.kind)
+        source = _normalize_preview_source(request.source)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     config = erp_agent.get_connection_config(request.tenant_id)
     mapping = priority_mapping_from_config(config.config)
     mode = settings.priority_erp_mode if settings.priority_erp_mode in {"mock", "real"} else "mock"
-    source = "sample"
-    raw_records = request.sample_records
+    limit = max(1, min(request.limit, settings.priority_erp_max_preview_records))
+    raw_records = request.sample_records if source == "sample" else None
 
-    if raw_records is None:
-        entity_mapping = getattr(mapping, kind, None) if mapping is not None else None
+    if source == "sample":
+        raw_records = raw_records if raw_records is not None else priority_sample_records(kind, limit)
+    else:
+        blocked = _priority_read_only_fetch_blocker(kind, mode, mapping)
+        if blocked is not None:
+            return blocked
+        entity_mapping = getattr(mapping, kind)
         adapter = erp_agent.adapters.get(ERPAdapterType.PRIORITY)
-        if mode == "real" and isinstance(adapter, PriorityODataAdapter) and entity_mapping is not None:
-            try:
-                raw_records = adapter.with_mapping_config(mapping).fetch_entity_rows(
-                    entity_mapping.entity_name,
-                    limit=request.limit,
-                )
-                source = "priority"
-            except ERPAdapterError as exc:
-                return PrioritySyncPreviewResponse(
-                    status=str(exc.code),
-                    kind=kind,
-                    mode=mode,
-                    source="priority",
-                    mapping_status="unknown",
-                    errors=[exc.message],
-                    warnings=[],
-                    message="Priority read-only preview failed before any data was imported.",
-                )
-        else:
-            raw_records = priority_sample_records(kind, request.limit)
+        if not isinstance(adapter, PriorityODataAdapter):
+            return PrioritySyncPreviewResponse(
+                status="real_mode_required",
+                kind=kind,
+                mode=mode,
+                source="priority",
+                mapping_status="unknown",
+                errors=["Priority real adapter is not active."],
+                warnings=[],
+                message="Priority read-only fetch requires PRIORITY_ERP_MODE=real.",
+            )
+        try:
+            raw_records = adapter.with_mapping_config(mapping).fetch_entity_rows_read_only(
+                entity_mapping.entity_name,
+                limit=limit,
+            )
+        except ERPAdapterError as exc:
+            return PrioritySyncPreviewResponse(
+                status=str(exc.code),
+                kind=kind,
+                mode=mode,
+                source="priority",
+                mapping_status="unknown",
+                errors=[exc.message],
+                warnings=[],
+                message="Priority read-only preview failed before any data was imported.",
+            )
 
     return build_priority_sync_preview(
         kind=kind,
@@ -389,7 +404,7 @@ def _build_priority_preview(
         source=source,
         mapping_config=mapping,
         raw_records=raw_records,
-        limit=request.limit,
+        limit=limit,
     )
 
 
@@ -500,6 +515,57 @@ def _normalize_preview_kind(kind: str) -> str:
     if normalized in {"purchase_order", "purchase_orders", "po", "pos"}:
         return "purchase_orders"
     raise ValueError("Priority sync preview kind must be vendors or purchase_orders.")
+
+
+def _normalize_preview_source(source: str) -> str:
+    normalized = source.strip().lower()
+    if normalized in {"sample", "samples"}:
+        return "sample"
+    if normalized in {"priority", "real", "odata"}:
+        return "priority"
+    raise ValueError("Priority sync preview source must be sample or priority.")
+
+
+def _priority_read_only_fetch_blocker(
+    kind: str,
+    mode: str,
+    mapping,
+) -> PrioritySyncPreviewResponse | None:
+    entity_mapping = getattr(mapping, kind, None) if mapping is not None else None
+    if mode != "real":
+        return PrioritySyncPreviewResponse(
+            status="real_mode_required",
+            kind=kind,
+            mode=mode,
+            source="priority",
+            mapping_status="unknown",
+            errors=["Priority read-only fetch requires PRIORITY_ERP_MODE=real."],
+            warnings=[],
+            message="Use sample preview until Priority real mode is configured.",
+        )
+    if not settings.priority_erp_read_only_fetch_enabled:
+        return PrioritySyncPreviewResponse(
+            status="read_only_fetch_disabled",
+            kind=kind,
+            mode=mode,
+            source="priority",
+            mapping_status="unknown",
+            errors=["Priority read-only fetch is disabled."],
+            warnings=[],
+            message="Priority read-only fetch is disabled. Use sample preview or enable it in environment configuration.",
+        )
+    if entity_mapping is None or not entity_mapping.enabled:
+        return PrioritySyncPreviewResponse(
+            status="mapping_required",
+            kind=kind,
+            mode=mode,
+            source="priority",
+            mapping_status="mapping_required",
+            errors=[f"Priority {kind.replace('_', ' ')} mapping is not configured."],
+            warnings=[],
+            message="Save a Priority mapping before running a read-only fetch preview.",
+        )
+    return None
 
 
 def _import_priority_vendors(

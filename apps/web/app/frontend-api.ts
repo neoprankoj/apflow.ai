@@ -46,6 +46,7 @@ export type PriorityMappingValidationResult = {
 };
 
 export type PrioritySyncPreviewKind = "vendors" | "purchase_orders";
+export type PrioritySyncPreviewSource = "sample" | "priority";
 
 export type PrioritySyncPreviewResponse = {
   status: string;
@@ -247,23 +248,34 @@ export function previewPrioritySync(
   token: string,
   tenantId: string,
   kind: PrioritySyncPreviewKind,
+  source: PrioritySyncPreviewSource = "sample",
   limit = 10
 ) {
   return apiFetch<PrioritySyncPreviewResponse>(apiBaseUrl, "/erp/priority/sync-preview", {
     method: "POST",
     token,
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ tenant_id: tenantId, kind, limit }),
+    body: JSON.stringify({ tenant_id: tenantId, kind, source, limit }),
     action: kind === "vendors" ? "Preview Priority vendor sync" : "Preview Priority purchase order sync"
   });
 }
 
-export function previewPriorityVendorSync(apiBaseUrl: string, token: string, tenantId: string) {
-  return previewPrioritySync(apiBaseUrl, token, tenantId, "vendors");
+export function previewPriorityVendorSync(
+  apiBaseUrl: string,
+  token: string,
+  tenantId: string,
+  source: PrioritySyncPreviewSource = "sample"
+) {
+  return previewPrioritySync(apiBaseUrl, token, tenantId, "vendors", source);
 }
 
-export function previewPriorityPurchaseOrderSync(apiBaseUrl: string, token: string, tenantId: string) {
-  return previewPrioritySync(apiBaseUrl, token, tenantId, "purchase_orders");
+export function previewPriorityPurchaseOrderSync(
+  apiBaseUrl: string,
+  token: string,
+  tenantId: string,
+  source: PrioritySyncPreviewSource = "sample"
+) {
+  return previewPrioritySync(apiBaseUrl, token, tenantId, "purchase_orders", source);
 }
 
 export function generatePriorityImportPlan(
@@ -271,23 +283,34 @@ export function generatePriorityImportPlan(
   token: string,
   tenantId: string,
   kind: PrioritySyncPreviewKind,
+  source: PrioritySyncPreviewSource = "sample",
   limit = 10
 ) {
   return apiFetch<PriorityImportPlanResponse>(apiBaseUrl, "/erp/priority/import-plan", {
     method: "POST",
     token,
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ tenant_id: tenantId, kind, limit }),
+    body: JSON.stringify({ tenant_id: tenantId, kind, source, limit }),
     action: kind === "vendors" ? "Generate Priority vendor import plan" : "Generate Priority purchase order import plan"
   });
 }
 
-export function generatePriorityVendorImportPlan(apiBaseUrl: string, token: string, tenantId: string) {
-  return generatePriorityImportPlan(apiBaseUrl, token, tenantId, "vendors");
+export function generatePriorityVendorImportPlan(
+  apiBaseUrl: string,
+  token: string,
+  tenantId: string,
+  source: PrioritySyncPreviewSource = "sample"
+) {
+  return generatePriorityImportPlan(apiBaseUrl, token, tenantId, "vendors", source);
 }
 
-export function generatePriorityPurchaseOrderImportPlan(apiBaseUrl: string, token: string, tenantId: string) {
-  return generatePriorityImportPlan(apiBaseUrl, token, tenantId, "purchase_orders");
+export function generatePriorityPurchaseOrderImportPlan(
+  apiBaseUrl: string,
+  token: string,
+  tenantId: string,
+  source: PrioritySyncPreviewSource = "sample"
+) {
+  return generatePriorityImportPlan(apiBaseUrl, token, tenantId, "purchase_orders", source);
 }
 
 export function importPriorityRecords(
@@ -295,6 +318,7 @@ export function importPriorityRecords(
   token: string,
   tenantId: string,
   kind: PrioritySyncPreviewKind,
+  source: PrioritySyncPreviewSource,
   selectedExternalIds: string[],
   confirmation: string,
   allowCreates: boolean,
@@ -307,6 +331,7 @@ export function importPriorityRecords(
     body: JSON.stringify({
       tenant_id: tenantId,
       kind,
+      source,
       selected_external_ids: selectedExternalIds,
       confirmation,
       allow_creates: allowCreates,
