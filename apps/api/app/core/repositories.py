@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
@@ -403,10 +403,14 @@ class InMemoryAPRepository:
         record = self.vendors[vendor_id]
         if record.tenant_id != tenant_id:
             raise KeyError("vendor is outside tenant scope")
+        updates = {}
         if name not in (None, ""):
-            record.name = name
+            updates["name"] = name
         if tax_id not in (None, ""):
-            record.tax_id = tax_id
+            updates["tax_id"] = tax_id
+        if updates:
+            record = replace(record, **updates)
+            self.vendors[vendor_id] = record
         return record
 
     def add_purchase_order(

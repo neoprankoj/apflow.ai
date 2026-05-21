@@ -223,12 +223,15 @@ For safe staging edits, use the dashboard `Admin` section:
 6. Use `Preview Vendor Sync` and `Preview Purchase Orders` to inspect mapped sample rows before enabling any real import path.
 7. Use `Generate Vendor Import Plan` and `Generate Purchase Order Import Plan` to compare mapped rows with existing APFlow records before any import is enabled.
 8. Select only the rows you intend to import, type `IMPORT_SELECTED`, and import into APFlow only when the plan is understood.
+9. After import, reload `Imported Records` to verify APFlow vendor/PO IDs, Priority external IDs, source, and last import result.
 
 Priority sync preview is dry-run only. It does not import vendors or purchase orders into APFlow and does not write to Priority. In mock mode, the preview uses deterministic synthetic Priority-like records. In real mode, configured credentials can be used for a read-only limited OData fetch, but writes remain disabled unless explicitly enabled later.
 
 Priority import plans are also preview-only. They reuse the saved mapping and dry-run records, then classify each row as `would_create`, `would_update`, `would_skip`, or `would_conflict` against existing tenant vendors and purchase orders. A conflict means matching was ambiguous and should be resolved before enabling a future import. The import-plan endpoints do not create vendors, purchase orders, ERP records, or audit events.
 
 Controlled Priority import writes only to APFlow. It regenerates the plan server-side, accepts only selected external IDs, requires the `IMPORT_SELECTED` confirmation phrase, blocks conflicts, skips unchanged rows, and requires `allow_updates=true` before updating existing APFlow records. Import vendors before purchase orders so PO rows can resolve `vendor_external_id`. Priority writes remain disabled and are not used by controlled import.
+
+Imported-record visibility is read-only. The dashboard uses `/erp/priority/imported/vendors` and `/erp/priority/imported/purchase-orders` to show what now exists in APFlow after controlled import. These views never call Priority, never import data, and are useful for confirming that audit events and external references line up with the operator action.
 
 ## OCR And Human Review
 

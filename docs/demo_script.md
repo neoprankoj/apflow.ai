@@ -68,7 +68,8 @@ Use this script for a private staging demo. Keep the presenter flow deterministi
 10. Select one `would_create` vendor row, type `IMPORT_SELECTED`, and import it into APFlow.
 11. Generate the PO import plan again, select a PO that references the imported vendor, type `IMPORT_SELECTED`, and import it.
 12. Show the controlled import result and explain that APFlow records changed but Priority data did not.
-13. Open `Audit Trail` and show the Priority import events.
+13. Open `Imported Records` and confirm the vendor and PO show Priority source, external ID, APFlow ID, and last import result.
+14. Open `Audit Trail` and show the Priority import events.
 
 ## H. Demo Path 7 - Approval Inbox
 

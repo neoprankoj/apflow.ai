@@ -102,6 +102,42 @@ export type PriorityImportResult = {
   message: string;
 };
 
+export type PriorityImportedVendorRecord = {
+  apflow_vendor_id: string;
+  external_id?: string | null;
+  name: string;
+  tax_id?: string | null;
+  email?: string | null;
+  payment_terms?: string | null;
+  source_adapter: string;
+  imported_from_priority: boolean;
+  last_imported_at?: string | null;
+  last_import_action?: string | null;
+  external_reference_id?: string | null;
+};
+
+export type PriorityImportedPurchaseOrderRecord = {
+  apflow_purchase_order_id: string;
+  po_number: string;
+  external_id?: string | null;
+  vendor_id?: string | null;
+  vendor_external_id?: string | null;
+  status: string;
+  total_amount: number;
+  currency: string;
+  source_adapter: string;
+  imported_from_priority: boolean;
+  last_imported_at?: string | null;
+  last_import_action?: string | null;
+  external_reference_id?: string | null;
+};
+
+export type PriorityImportedRecordsResponse<TRecord> = {
+  tenant_id: string;
+  kind: PrioritySyncPreviewKind;
+  records: TRecord[];
+};
+
 export function getApiBaseUrl() {
   const value = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
   if (!value) return null;
@@ -278,6 +314,22 @@ export function importPriorityRecords(
     }),
     action: kind === "vendors" ? "Import selected Priority vendors" : "Import selected Priority purchase orders"
   });
+}
+
+export function getPriorityImportedVendors(apiBaseUrl: string, token: string, tenantId: string) {
+  return apiFetch<PriorityImportedRecordsResponse<PriorityImportedVendorRecord>>(
+    apiBaseUrl,
+    `/erp/priority/imported/vendors?tenant_id=${encodeURIComponent(tenantId)}`,
+    { token, action: "Load imported Priority vendors" }
+  );
+}
+
+export function getPriorityImportedPurchaseOrders(apiBaseUrl: string, token: string, tenantId: string) {
+  return apiFetch<PriorityImportedRecordsResponse<PriorityImportedPurchaseOrderRecord>>(
+    apiBaseUrl,
+    `/erp/priority/imported/purchase-orders?tenant_id=${encodeURIComponent(tenantId)}`,
+    { token, action: "Load imported Priority purchase orders" }
+  );
 }
 
 async function readResponseDetail(response: Response) {

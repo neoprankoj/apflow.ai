@@ -900,6 +900,153 @@ def test_viewer_cannot_import_priority_records(auth_enabled):
     assert response.status_code == 403
 
 
+def test_priority_imported_vendor_records_show_controlled_import(auth_enabled):
+    client = TestClient(create_app())
+    owner = _register(client, "priority-imported-vendors@example.com")
+    tenant_id = UUID(owner["tenant"]["id"])
+    client.put(
+        "/erp/priority/mapping",
+        json=_mapping_payload(owner["tenant"]["id"]),
+        headers=_headers(owner["access_token"]),
+    )
+    repository = dependencies.get_in_memory_repository()
+
+    imported = client.post(
+        "/erp/priority/import/vendors",
+        json={
+            "tenant_id": owner["tenant"]["id"],
+            "selected_external_ids": ["SUP-1001"],
+            "confirmation": "IMPORT_SELECTED",
+        },
+        headers=_headers(owner["access_token"]),
+    )
+    before_count = len(repository.list_vendors(tenant_id))
+    response = client.get(
+        f"/erp/priority/imported/vendors?tenant_id={owner['tenant']['id']}",
+        headers=_headers(owner["access_token"]),
+    )
+
+    assert imported.status_code == 200
+    assert response.status_code == 200
+    assert len(repository.list_vendors(tenant_id)) == before_count
+    body = response.json()
+    assert body["kind"] == "vendors"
+    assert body["records"][0]["external_id"] == "SUP-1001"
+    assert body["records"][0]["name"] == "Demo Office Supplies Ltd."
+    assert body["records"][0]["imported_from_priority"] is True
+    assert body["records"][0]["last_import_action"] == "created"
+    assert body["records"][0]["last_imported_at"] is not None
+    assert "secret" not in str(body).lower()
+
+
+def test_priority_imported_purchase_order_records_show_controlled_import(auth_enabled):
+    client = TestClient(create_app())
+    owner = _register(client, "priority-imported-pos@example.com")
+    tenant_id = UUID(owner["tenant"]["id"])
+    client.put(
+        "/erp/priority/mapping",
+        json=_mapping_payload(owner["tenant"]["id"]),
+        headers=_headers(owner["access_token"]),
+    )
+    repository = dependencies.get_in_memory_repository()
+    vendor = repository.add_vendor(tenant_id=tenant_id, name="Demo Office Supplies Ltd.")
+    repository.link_external_vendor_id(tenant_id, vendor.vendor_id, "SUP-1001")
+
+    imported = client.post(
+        "/erp/priority/import/purchase-orders",
+        json={
+            "tenant_id": owner["tenant"]["id"],
+            "selected_external_ids": ["PO-240001"],
+            "confirmation": "IMPORT_SELECTED",
+        },
+        headers=_headers(owner["access_token"]),
+    )
+    before_count = len(repository.list_purchase_orders(tenant_id))
+    response = client.get(
+        f"/erp/priority/imported/purchase-orders?tenant_id={owner['tenant']['id']}",
+        headers=_headers(owner["access_token"]),
+    )
+
+    assert imported.status_code == 200
+    assert response.status_code == 200
+    assert len(repository.list_purchase_orders(tenant_id)) == before_count
+    body = response.json()
+    assert body["kind"] == "purchase_orders"
+    assert body["records"][0]["external_id"] == "PO-240001"
+    assert body["records"][0]["po_number"] == "PO-240001"
+    assert body["records"][0]["vendor_external_id"] == "SUP-1001"
+    assert body["records"][0]["imported_from_priority"] is True
+    assert body["records"][0]["last_import_action"] == "created"
+
+
+def test_priority_imported_records_include_local_records_without_external_reference(auth_enabled):
+    client = TestClient(create_app())
+    owner = _register(client, "priority-imported-local-record@example.com")
+    tenant_id = UUID(owner["tenant"]["id"])
+    repository = dependencies.get_in_memory_repository()
+    repository.add_vendor(tenant_id=tenant_id, name="Local Vendor", tax_id="LOCAL-TAX")
+
+    response = client.get(
+        f"/erp/priority/imported/vendors?tenant_id={owner['tenant']['id']}",
+        headers=_headers(owner["access_token"]),
+    )
+
+    assert response.status_code == 200
+    record = response.json()["records"][0]
+    assert record["name"] == "Local Vendor"
+    assert record["external_id"] is None
+    assert record["imported_from_priority"] is False
+
+
+def test_priority_imported_records_are_tenant_scoped(auth_enabled):
+    client = TestClient(create_app())
+    owner_a = _register(client, "priority-imported-tenant-a@example.com")
+    owner_b = _register(client, "priority-imported-tenant-b@example.com")
+    tenant_a = UUID(owner_a["tenant"]["id"])
+    repository = dependencies.get_in_memory_repository()
+    vendor = repository.add_vendor(tenant_id=tenant_a, name="Tenant A Vendor")
+    repository.link_external_vendor_id(tenant_a, vendor.vendor_id, "SUP-A")
+
+    forbidden = client.get(
+        f"/erp/priority/imported/vendors?tenant_id={owner_a['tenant']['id']}",
+        headers=_headers(owner_b["access_token"]),
+    )
+    own_records = client.get(
+        f"/erp/priority/imported/vendors?tenant_id={owner_b['tenant']['id']}",
+        headers=_headers(owner_b["access_token"]),
+    )
+
+    assert forbidden.status_code == 403
+    assert own_records.status_code == 200
+    assert own_records.json()["records"] == []
+
+
+def test_viewer_can_read_priority_imported_records(auth_enabled):
+    client = TestClient(create_app())
+    owner = _register(client, "priority-imported-owner@example.com")
+    client.post(
+        "/admin/users",
+        json={
+            "email": "priority-imported-viewer@example.com",
+            "full_name": "Viewer",
+            "password": "password-123",
+            "role": "viewer",
+        },
+        headers=_headers(owner["access_token"]),
+    )
+    login = client.post(
+        "/auth/login",
+        json={"email": "priority-imported-viewer@example.com", "password": "password-123"},
+    )
+
+    response = client.get(
+        f"/erp/priority/imported/vendors?tenant_id={owner['tenant']['id']}",
+        headers=_headers(login.json()["access_token"]),
+    )
+
+    assert response.status_code == 200
+
+
 def test_priority_import_is_tenant_scoped(auth_enabled):
     client = TestClient(create_app())
     owner_a = _register(client, "priority-import-tenant-a@example.com")
