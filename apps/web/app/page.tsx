@@ -730,7 +730,9 @@ export default function Dashboard() {
                   ))
                 ) : (
                   <p className="text-sm text-muted">
-                    {isSignedIn ? "No notification events recorded yet." : "Sign in to load notifications."}
+                    {isSignedIn
+                      ? "Workflow notifications will appear after review, approval, export, or import actions."
+                      : "Sign in to load notifications."}
                   </p>
                 )}
               </div>

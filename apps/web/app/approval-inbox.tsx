@@ -165,11 +165,7 @@ export function ApprovalInbox({
       );
       await onRefresh();
       await loadVendorPreview(selectedItem.invoice.invoice_id);
-      setApprovalMessage(
-        `Approval decision saved: ${humanize(result.approval_status)}. ${
-          result.blocker_reason ?? "Open Audit Trail to verify this decision."
-        }`.trim()
-      );
+      setApprovalMessage(approvalDecisionMessage(action, result));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Approval decision failed.");
     } finally {
@@ -198,7 +194,7 @@ export function ApprovalInbox({
       await onRefresh();
       await loadVendorPreview(selectedItem.invoice.invoice_id);
       setErpMessage(
-        `Invoice exported to mock ERP with status ${result.status}; external ID ${
+        `Invoice exported to ERP mock with status ${result.status}; external ID ${
           result.external_id ?? "not returned"
         }. Open Audit Trail to verify the export.`
       );
@@ -407,7 +403,7 @@ export function ApprovalInbox({
                         variant="secondary"
                       >
                         <Send className="h-4 w-4" />
-                        {activeAction === "export" ? "Exporting..." : "Export to Mock ERP"}
+                        {activeAction === "export" ? "Exporting..." : "Export to ERP mock"}
                       </Button>
                       {selectedItem.erpReady ? null : (
                         <p className="text-sm text-muted">Approval must be ready before ERP export is enabled.</p>
@@ -415,7 +411,7 @@ export function ApprovalInbox({
                       {erpMessage ? <FeedbackMessage>{erpMessage}</FeedbackMessage> : null}
                       {erpResult ? (
                         <div className="rounded-md bg-slate-50 px-3 py-2 text-sm">
-                          <p className="font-medium">Mock ERP export {erpResult.status}</p>
+                          <p className="font-medium">ERP mock export {erpResult.status}</p>
                           <p className="mt-1 text-xs text-muted">
                             {erpResult.adapter_type} - {erpResult.external_id ?? "no external id"}
                           </p>
@@ -586,6 +582,18 @@ function DetailRow({ label, value }: { label: string; value: ReactNode }) {
 
 function FeedbackMessage({ children }: { children: ReactNode }) {
   return <p className="rounded-md bg-green-50 px-3 py-2 text-sm text-success">{children}</p>;
+}
+
+function approvalDecisionMessage(action: "approve" | "reject" | "hold", result: ApprovalDecisionResult) {
+  if (action === "approve") {
+    return result.erp_export_ready
+      ? "Invoice approved. You can now export it to ERP mock. Open Audit Trail to verify this decision."
+      : `Invoice approved. ${result.blocker_reason ?? "Review ERP readiness before export."} Open Audit Trail to verify this decision.`;
+  }
+  if (action === "reject") {
+    return "Invoice rejected. No ERP export will be allowed. Open Audit Trail to verify this decision.";
+  }
+  return "Invoice placed on hold. It will stay out of ERP export until an AP reviewer resolves it. Open Audit Trail to verify this decision.";
 }
 
 function buildInboxItems(invoices: InvoiceRecord[], approvals: ApprovalTask[], notifications: NotificationEvent[]) {

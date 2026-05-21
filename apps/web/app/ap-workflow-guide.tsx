@@ -72,9 +72,9 @@ export function APWorkflowGuide({
       id: "ocr-review",
       icon: ScanText,
       name: "OCR",
-      status: workflowCount || invoiceCount ? "complete" : invoiceCount ? "ready" : "not started",
+      status: workflowCount ? "complete" : invoiceCount ? "ready" : "not started",
       description: "Extract invoice fields using OCR.",
-      action: "Open OCR Review"
+      action: workflowCount ? "Open OCR Review" : "Extract OCR"
     },
     {
       id: "ocr-review",
@@ -105,7 +105,7 @@ export function APWorkflowGuide({
       icon: Send,
       name: "Export",
       status: exportedCount ? "complete" : approvalReadyCount ? "ready" : "not started",
-      description: "Export approval-ready invoices to the mock ERP adapter.",
+      description: "Export approval-ready invoices to the ERP mock.",
       action: approvalReadyCount ? "Go to ERP Export" : "Check ERP readiness"
     },
     {
@@ -137,7 +137,15 @@ export function APWorkflowGuide({
           </div>
           <div className="flex flex-wrap gap-2">
             <StatusBadge status={priorityMode || "mock"} />
-            <StatusBadge status={priorityMappingConfigured === true ? "Priority mapping saved" : priorityMappingConfigured === false ? "Priority mapping pending" : "Priority mapping in Admin"} />
+            <StatusBadge
+              status={
+                priorityMappingConfigured === true
+                  ? "Priority mapping saved"
+                  : priorityMappingConfigured === false
+                    ? "Priority mapping pending"
+                    : "Priority mapping in Admin"
+              }
+            />
           </div>
         </CardHeader>
         <CardContent className="space-y-5">
@@ -190,7 +198,7 @@ export function APWorkflowGuide({
                 "Submit corrections if needed",
                 "Process invoice",
                 "Approve or hold in Approval Inbox",
-                "Export approved invoice to mock ERP",
+                "Export approved invoice to ERP mock",
                 "Review Audit Trail",
                 "Validate Priority mapping",
                 "Preview vendor/PO sync",
@@ -257,7 +265,7 @@ function getNextAction(input: {
   if (input.approvalReadyCount) {
     return {
       title: "Export approval-ready invoices.",
-      description: "Use the mock ERP export, then verify the result in Audit Trail.",
+      description: "Use Export to ERP mock, then verify the result in Audit Trail.",
       buttonLabel: "Go to ERP Export",
       sectionId: "erp-export"
     };

@@ -15,7 +15,7 @@ export function WorkflowTimeline({ stages }: { stages: TimelineStage[] }) {
   if (!stages.length) {
     return (
       <div className="rounded-md border border-border px-4 py-5 text-sm text-muted">
-        No workflow activity yet.
+        Workflow steps will appear after upload, OCR extraction, processing, approval, and export.
       </div>
     );
   }
