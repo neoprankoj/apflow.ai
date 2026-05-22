@@ -24,7 +24,8 @@ APFlow AI is tenant-first and deny-by-default.
 - Change `AUTH_SECRET_KEY` before enabling auth outside local development.
 - `/ready` exposes operational status only; it must not include credentials, raw tokens, or secrets.
 - Azure Document Intelligence endpoint/key are read only from environment variables. Health checks report configured/unconfigured status without echoing secrets.
-- OCR.space API keys are read only from `OCR_SPACE_API_KEY`. Health checks report configured/unconfigured status without echoing the key or submitting a document.
+- OCR.space API keys are read only from `OCR_SPACE_API_KEY`. Health checks report configured/unconfigured status, engine, and fallback readiness without echoing the key or submitting a document.
+- OCR.space diagnostics must not include API keys, auth headers, request bodies, or full OCR text. Safe UI previews are truncated and provider errors are normalized before display.
 - OCR.space extraction responses may expose a truncated OCR text preview for staging review. Treat the preview as invoice data, not as a secret; do not paste real customer/vendor invoice text into public tickets or logs.
 - Do not enable Azure SDK debug logging with request/response bodies in shared environments because document payloads may contain invoice PII.
 - Real invoice samples must stay in `samples/invoices`, which is gitignored. OCR result JSON must stay in `samples/ocr-results`, which is also gitignored.

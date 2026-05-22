@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     ocr_space_api_url: str = "https://api.ocr.space/parse/image"
     ocr_space_language: str = "eng"
     ocr_space_engine: str = "2"
+    ocr_space_fallback_engine: str = "2"
+    ocr_space_enable_engine_fallback: bool = True
     ocr_space_timeout_seconds: int = 60
     azure_document_intelligence_endpoint: str = ""
     azure_document_intelligence_key: str = ""

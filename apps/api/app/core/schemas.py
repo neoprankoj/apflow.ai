@@ -695,7 +695,13 @@ class OCRProviderMetadata(APFlowModel):
     sent_file_name: str | None = None
     sent_filetype: str | None = None
     sent_content_type: str | None = None
+    provider_error_code: str | None = None
     provider_error_message: str | None = None
+    engine_used: str | None = None
+    fallback_engine: str | None = None
+    fallback_used: bool | None = None
+    primary_provider_error_code: str | None = None
+    primary_provider_error_message: str | None = None
 
 
 class OCRExtractedField(APFlowModel):

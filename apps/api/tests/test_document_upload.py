@@ -15,6 +15,8 @@ def isolated_dependencies() -> Iterator[None]:
     previous_demo_mode = settings.demo_mode
     previous_max_upload = settings.max_invoice_upload_bytes
     previous_storage_provider = settings.document_storage_provider
+    previous_ocr_provider = settings.ocr_provider
+    previous_ocr_space_api_key = settings.ocr_space_api_key
     settings.auth_enabled = False
     settings.demo_mode = True
     settings.max_invoice_upload_bytes = 10 * 1024 * 1024
@@ -25,6 +27,8 @@ def isolated_dependencies() -> Iterator[None]:
     settings.demo_mode = previous_demo_mode
     settings.max_invoice_upload_bytes = previous_max_upload
     settings.document_storage_provider = previous_storage_provider
+    settings.ocr_provider = previous_ocr_provider
+    settings.ocr_space_api_key = previous_ocr_space_api_key
     _clear_dependency_caches()
 
 
@@ -109,6 +113,28 @@ def test_extract_uploaded_binary_pdf_with_mock_ocr_does_not_crash():
     assert body["ocr_result"]["provider_metadata"]["provider_name"] == "mock"
     assert body["review_status"] == "not_required"
     assert body["confidence_summary"]["average_confidence"] > 0.9
+
+
+def test_ocr_space_extract_rejects_plain_text_pdf_before_provider_call():
+    settings.ocr_provider = "ocr_space"
+    settings.ocr_space_api_key = "test-key"
+    _clear_dependency_caches()
+    client = TestClient(create_app())
+    tenant_id = str(uuid4())
+    uploaded = _upload(client, tenant_id, b"invoice_number=NOT-A-REAL-PDF").json()
+
+    response = client.post(
+        f"/documents/invoices/{uploaded['document']['document_id']}/extract?tenant_id={tenant_id}"
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    metadata = body["ocr_result"]["provider_metadata"]
+    assert body["review_status"] == "review_required"
+    assert body["ocr_result"]["error"] == "Uploaded file is not a valid PDF, PNG, or JPG. Please upload the original invoice file."
+    assert metadata["provider_name"] == "ocr_space"
+    assert metadata["provider_error_code"] == "invalid_file_signature"
+    assert metadata["raw_provider_status"] == "invalid_file_signature"
 
 
 def test_process_uploaded_document_through_full_pipeline():

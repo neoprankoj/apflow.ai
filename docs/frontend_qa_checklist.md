@@ -46,6 +46,9 @@ Use this short checklist before merging frontend UI changes.
 - [ ] OCR fields, confidence, and review state render correctly.
 - [ ] Review-required invoices show clear correction guidance.
 - [ ] Correction success message tells the user to run Process again.
+- [ ] Invalid PDF/image uploads show a clear invalid-file message instead of a generic OCR failure.
+- [ ] OCR.space engine failures show an engine/fallback message and do not expose secrets.
+- [ ] Fallback success, when configured, shows the engine used.
 - [ ] Buttons disable appropriately while actions are running.
 
 ## Vendor Preview

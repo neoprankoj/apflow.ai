@@ -55,7 +55,13 @@ type OcrResult = {
     sent_file_name?: string | null;
     sent_filetype?: string | null;
     sent_content_type?: string | null;
+    provider_error_code?: string | null;
     provider_error_message?: string | null;
+    engine_used?: string | null;
+    fallback_engine?: string | null;
+    fallback_used?: boolean | null;
+    primary_provider_error_code?: string | null;
+    primary_provider_error_message?: string | null;
   };
   raw_response?: {
     provider?: string;
@@ -67,8 +73,14 @@ type OcrResult = {
     sent_file_name?: string | null;
     sent_filetype?: string | null;
     sent_content_type?: string | null;
+    provider_error_code?: string | null;
     provider_error_message?: string | null;
     is_errored_on_processing?: boolean;
+    engine_used?: string | null;
+    fallback_engine?: string | null;
+    fallback_used?: boolean | null;
+    primary_provider_error_code?: string | null;
+    primary_provider_error_message?: string | null;
   };
   error?: string | null;
 };
@@ -235,11 +247,10 @@ export function InvoiceUploadPanel({
     ocrRawResponse?.sent_content_type ?? ocrProviderMetadata?.sent_content_type ?? "n/a";
   const providerErrorMessage =
     ocrRawResponse?.provider_error_message ?? ocrProviderMetadata?.provider_error_message ?? ocrResult?.error;
-  const fileTypeAdvice =
-    providerErrorMessage &&
-    /file type|file extension|e216|unable to recognize/i.test(providerErrorMessage)
-      ? "OCR.space could not detect file type. Try a real exported PDF/image or check filetype configuration."
-      : null;
+  const providerErrorCode = ocrRawResponse?.provider_error_code ?? ocrProviderMetadata?.provider_error_code;
+  const fallbackUsed = Boolean(ocrRawResponse?.fallback_used ?? ocrProviderMetadata?.fallback_used);
+  const engineUsed = ocrRawResponse?.engine_used ?? ocrProviderMetadata?.engine_used;
+  const ocrAdvice = ocrDiagnosticAdvice(providerErrorCode, providerErrorMessage);
   const fields = useMemo(() => ocrResult?.fields ?? [], [ocrResult?.fields]);
   const reviewRequiredFields = Array.from(
     new Set([
@@ -927,6 +938,12 @@ export function InvoiceUploadPanel({
               <Metric label="Sent file" value={sentFileName} />
               <Metric label="Sent filetype" value={sentFiletype} />
               <Metric label="Sent content type" value={sentContentType} />
+              <Metric label="OCR engine" value={engineUsed ?? "n/a"} />
+            </div>
+          ) : null}
+          {fallbackUsed ? (
+            <div className="rounded-md border border-cyan-200 bg-cyan-50 px-3 py-2 text-sm text-cyan-900">
+              OCR succeeded using fallback engine {engineUsed ?? ""}. The primary OCR.space engine could not read this file.
             </div>
           ) : null}
           {reviewRequiredFields.length ? (
@@ -939,9 +956,9 @@ export function InvoiceUploadPanel({
               OCR provider error: {ocrResult.error}
             </div>
           ) : null}
-          {fileTypeAdvice ? (
+          {ocrAdvice ? (
             <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-              {fileTypeAdvice}
+              {ocrAdvice}
             </div>
           ) : null}
           {fields.length ? (
@@ -1386,6 +1403,25 @@ function exportReadinessBlocker(
     return `PO match result is ${pipeline.po_match_result.match_status.replaceAll("_", " ")}.`;
   }
   return "Invoice is not ready for export yet.";
+}
+
+function ocrDiagnosticAdvice(errorCode?: string | null, message?: string | null) {
+  const lowerMessage = (message ?? "").toLowerCase();
+  if (
+    errorCode === "invalid_file_signature" ||
+    errorCode === "empty_file" ||
+    errorCode === "E501" ||
+    /not an image or pdf|invalid file signature/.test(lowerMessage)
+  ) {
+    return "This file does not look like a real PDF/image invoice. Re-download the original invoice or export it as PDF, PNG, or JPG.";
+  }
+  if (errorCode === "E580" || errorCode === "engine_failed" || lowerMessage.includes("e580")) {
+    return "OCR.space could not read this file with the selected OCR engine. Try again or switch OCR engine/fallback in staging configuration.";
+  }
+  if (/file type|file extension|e216|unable to recognize/.test(lowerMessage)) {
+    return "OCR.space could not detect file type. Try a real exported PDF/image or check filetype configuration.";
+  }
+  return null;
 }
 
 function statusFor(done: boolean, waiting: StepStatus, failed: boolean): StepStatus {

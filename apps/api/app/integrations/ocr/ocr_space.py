@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import socket
 import urllib.error
 import urllib.request
 from pathlib import PurePath
@@ -34,6 +35,20 @@ OCR_SPACE_FILETYPES = {
     "image/jpeg": ("JPG", ".jpg"),
     "image/jpg": ("JPG", ".jpg"),
 }
+FILE_SIGNATURES = {
+    "PDF": (b"%PDF-", "pdf"),
+    "PNG": (b"\x89PNG\r\n\x1a\n", "png"),
+    "JPG": (b"\xff\xd8\xff", "jpg"),
+}
+OCR_SPACE_ERROR_MESSAGES = {
+    "E501": "OCR.space rejected the file because it is not a valid image or PDF.",
+    "E580": "OCR.space engine failed while reading this file.",
+    "invalid_file_signature": "Uploaded file is not a valid PDF, PNG, or JPG. Please upload the original invoice file.",
+    "empty_file": "Uploaded file is empty. Please upload the original invoice PDF, PNG, or JPG.",
+    "unsupported_filetype": "Uploaded file type is not supported for OCR.space. Please upload a PDF, PNG, or JPG.",
+    "timeout": "OCR.space request timed out.",
+    "malformed_response": "OCR.space returned an unexpected response.",
+}
 
 
 class OCRSpaceOCRAdapter:
@@ -57,6 +72,8 @@ class OCRSpaceOCRAdapter:
             "api_url_configured": bool(self.settings.ocr_space_api_url),
             "language": self.settings.ocr_space_language or "eng",
             "engine": str(self.settings.ocr_space_engine or "2"),
+            "fallback_engine": str(self.settings.ocr_space_fallback_engine or ""),
+            "engine_fallback_enabled": bool(self.settings.ocr_space_enable_engine_fallback),
         }
 
     def extract_invoice(self, document_reference: dict, tenant_id: UUID) -> OCRExtractionResult:
@@ -88,8 +105,24 @@ class OCRSpaceOCRAdapter:
                 raw_provider_status="unsupported_content_type",
             )
         safe_file_name, file_type, normalized_content_type = prepared
+        signature = self._validate_file_signature(body, file_type)
+        if not signature["valid"]:
+            return self.normalize_provider_response(
+                {
+                    "error": signature["safe_message"],
+                    "_apflow_provider_error_code": signature["reason"],
+                    "_apflow_content_type": content_type,
+                    "_apflow_sent_file_name": safe_file_name,
+                    "_apflow_sent_filetype": file_type,
+                    "_apflow_sent_content_type": normalized_content_type,
+                    "_apflow_detected_filetype": signature["detected_filetype"],
+                    "_apflow_file_size_bytes": signature["size_bytes"],
+                },
+                tenant_id,
+                raw_provider_status=signature["reason"],
+            )
         try:
-            raw_response = self._post_to_ocr_space(
+            raw_response = self._post_with_optional_fallback(
                 file_name=safe_file_name,
                 content=body,
                 content_type=normalized_content_type,
@@ -104,6 +137,7 @@ class OCRSpaceOCRAdapter:
             return self.normalize_provider_response(
                 {
                     "error": f"OCR.space extraction failed: {exc.__class__.__name__}",
+                    "_apflow_provider_error_code": "provider_exception",
                     "_apflow_content_type": content_type,
                     "_apflow_sent_file_name": safe_file_name,
                     "_apflow_sent_filetype": file_type,
@@ -120,17 +154,24 @@ class OCRSpaceOCRAdapter:
         raw_provider_status: str | None = None,
     ) -> OCRExtractionResult:
         parsed_text = self._parsed_text(raw_response)
+        provider_error = self._provider_error(raw_response, parsed_text)
         if raw_response.get("error"):
             return self._error_result(
-                str(raw_response["error"]),
+                provider_error["message"] if provider_error is not None else str(raw_response["error"]),
                 tenant_id,
                 raw_response,
                 parsed_text,
-                raw_provider_status=raw_provider_status or "missing_credentials",
+                raw_provider_status=raw_provider_status
+                or (provider_error["status"] if provider_error is not None else "missing_credentials"),
             )
-        if raw_response.get("IsErroredOnProcessing"):
-            message = self._provider_error_message(raw_response)
-            return self._error_result(message, tenant_id, raw_response, parsed_text, raw_provider_status="provider_error")
+        if provider_error is not None:
+            return self._error_result(
+                provider_error["message"],
+                tenant_id,
+                raw_response,
+                parsed_text,
+                raw_provider_status=provider_error["status"],
+            )
 
         fields = self._fields_from_text(parsed_text)
         line_items = self._line_items_from_text(parsed_text)
@@ -141,7 +182,7 @@ class OCRSpaceOCRAdapter:
             provider_metadata=OCRProviderMetadata(
                 provider_name=OCRProviderName.OCR_SPACE,
                 configured=self.is_configured(),
-                model_version=f"engine-{self.settings.ocr_space_engine or '2'}",
+                model_version=f"engine-{diagnostics['engine_used'] or self.settings.ocr_space_engine or '2'}",
                 raw_provider_status=status,
                 is_errored_on_processing=diagnostics["is_errored_on_processing"],
                 ocr_exit_code=diagnostics["ocr_exit_code"],
@@ -151,7 +192,13 @@ class OCRSpaceOCRAdapter:
                 sent_file_name=diagnostics["sent_file_name"],
                 sent_filetype=diagnostics["sent_filetype"],
                 sent_content_type=diagnostics["sent_content_type"],
+                provider_error_code=diagnostics["provider_error_code"],
                 provider_error_message=diagnostics["provider_error_message"],
+                engine_used=diagnostics["engine_used"],
+                fallback_engine=diagnostics["fallback_engine"],
+                fallback_used=diagnostics["fallback_used"],
+                primary_provider_error_code=diagnostics["primary_provider_error_code"],
+                primary_provider_error_message=diagnostics["primary_provider_error_message"],
             ),
             fields=fields,
             line_items=line_items,
@@ -162,18 +209,66 @@ class OCRSpaceOCRAdapter:
             },
         )
 
-    def _post_to_ocr_space(
+    def _post_with_optional_fallback(
         self,
         file_name: str,
         content: bytes,
         content_type: str,
         file_type: str,
     ) -> dict:
+        primary_engine = str(self.settings.ocr_space_engine or "2")
+        fallback_engine = str(self.settings.ocr_space_fallback_engine or "").strip()
+        raw_response = self._post_to_ocr_space(
+            file_name=file_name,
+            content=content,
+            content_type=content_type,
+            file_type=file_type,
+            engine=primary_engine,
+        )
+        raw_response["_apflow_engine_used"] = primary_engine
+        raw_response["_apflow_primary_engine"] = primary_engine
+        raw_response["_apflow_fallback_engine"] = fallback_engine or None
+        raw_response["_apflow_fallback_used"] = False
+
+        provider_error = self._provider_error(raw_response, self._parsed_text(raw_response))
+        should_retry = (
+            bool(self.settings.ocr_space_enable_engine_fallback)
+            and fallback_engine
+            and fallback_engine != primary_engine
+            and provider_error is not None
+            and provider_error["code"] in {"E580", "engine_failed"}
+        )
+        if not should_retry:
+            return raw_response
+
+        fallback_response = self._post_to_ocr_space(
+            file_name=file_name,
+            content=content,
+            content_type=content_type,
+            file_type=file_type,
+            engine=fallback_engine,
+        )
+        fallback_response["_apflow_engine_used"] = fallback_engine
+        fallback_response["_apflow_primary_engine"] = primary_engine
+        fallback_response["_apflow_fallback_engine"] = fallback_engine
+        fallback_response["_apflow_fallback_used"] = True
+        fallback_response["_apflow_primary_provider_error_code"] = provider_error["code"]
+        fallback_response["_apflow_primary_provider_error_message"] = provider_error["message"]
+        return fallback_response
+
+    def _post_to_ocr_space(
+        self,
+        file_name: str,
+        content: bytes,
+        content_type: str,
+        file_type: str,
+        engine: str | None = None,
+    ) -> dict:
         boundary = "----apflow-ocr-space-boundary"
         data_fields = {
             "language": self.settings.ocr_space_language or "eng",
             "isOverlayRequired": "false",
-            "OCREngine": str(self.settings.ocr_space_engine or "2"),
+            "OCREngine": str(engine or self.settings.ocr_space_engine or "2"),
             "scale": "true",
             "detectOrientation": "true",
             "filetype": file_type,
@@ -212,9 +307,53 @@ class OCRSpaceOCRAdapter:
                 request,
                 timeout=self.settings.ocr_space_timeout_seconds,
             ) as response:
-                return json.loads(response.read().decode("utf-8"))
+                return self._decode_provider_json(response.read(), http_status=getattr(response, "status", None))
         except urllib.error.HTTPError as exc:
-            raise RuntimeError(f"OCR.space HTTP {exc.code}") from exc
+            decoded = self._decode_provider_json(exc.read(), http_status=exc.code)
+            decoded.setdefault("error", self._http_error_message(exc.code, decoded))
+            return decoded
+        except (TimeoutError, socket.timeout) as exc:
+            return {
+                "error": OCR_SPACE_ERROR_MESSAGES["timeout"],
+                "_apflow_provider_error_code": "timeout",
+                "_apflow_transport_error": exc.__class__.__name__,
+            }
+        except urllib.error.URLError as exc:
+            reason = getattr(exc, "reason", None)
+            timed_out = isinstance(reason, (TimeoutError, socket.timeout))
+            return {
+                "error": OCR_SPACE_ERROR_MESSAGES["timeout"]
+                if timed_out
+                else "OCR.space request failed before a response was received.",
+                "_apflow_provider_error_code": "timeout" if timed_out else "connection_failed",
+                "_apflow_transport_error": exc.__class__.__name__,
+            }
+
+    def _decode_provider_json(self, body: bytes, http_status: int | None = None) -> dict:
+        try:
+            decoded = json.loads(body.decode("utf-8"))
+            if isinstance(decoded, dict):
+                decoded["_apflow_http_status"] = http_status
+                return decoded
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            pass
+        return {
+            "error": OCR_SPACE_ERROR_MESSAGES["malformed_response"],
+            "_apflow_provider_error_code": "malformed_response",
+            "_apflow_http_status": http_status,
+        }
+
+    def _http_error_message(self, status_code: int, decoded: dict) -> str:
+        provider_error = self._provider_error(decoded, self._parsed_text(decoded))
+        if provider_error is not None:
+            return provider_error["message"]
+        if status_code in {401, 403}:
+            decoded["_apflow_provider_error_code"] = "unauthorized"
+            return "OCR.space rejected the request. Check OCR.space API credentials."
+        if status_code == 429:
+            decoded["_apflow_provider_error_code"] = "rate_limited"
+            return "OCR.space rate limit or quota was reached."
+        return f"OCR.space HTTP {status_code} error."
 
     def _prepare_file_metadata(
         self,
@@ -236,6 +375,48 @@ class OCRSpaceOCRAdapter:
         if current_extension not in valid_extensions:
             safe_name = f"{safe_name}{extension}"
         return safe_name, file_type, normalized_content_type
+
+    def _validate_file_signature(self, content: bytes, expected_file_type: str) -> dict:
+        size = len(content)
+        if size == 0:
+            return {
+                "valid": False,
+                "detected_filetype": "unknown",
+                "reason": "empty_file",
+                "safe_message": OCR_SPACE_ERROR_MESSAGES["empty_file"],
+                "size_bytes": size,
+            }
+        expected_signature = FILE_SIGNATURES.get(expected_file_type)
+        detected = self._detect_filetype(content)
+        if expected_signature is None:
+            return {
+                "valid": False,
+                "detected_filetype": detected,
+                "reason": "unsupported_filetype",
+                "safe_message": OCR_SPACE_ERROR_MESSAGES["unsupported_filetype"],
+                "size_bytes": size,
+            }
+        if not content.startswith(expected_signature[0]):
+            return {
+                "valid": False,
+                "detected_filetype": detected,
+                "reason": "invalid_file_signature",
+                "safe_message": OCR_SPACE_ERROR_MESSAGES["invalid_file_signature"],
+                "size_bytes": size,
+            }
+        return {
+            "valid": True,
+            "detected_filetype": expected_signature[1],
+            "reason": "ok",
+            "safe_message": "File signature is valid.",
+            "size_bytes": size,
+        }
+
+    def _detect_filetype(self, content: bytes) -> str:
+        for _file_type, (signature, detected) in FILE_SIGNATURES.items():
+            if content.startswith(signature):
+                return detected
+        return "unknown"
 
     def _fields_from_text(self, text: str) -> list[OCRExtractedField]:
         invoice_number = self._find(
@@ -460,8 +641,67 @@ class OCRSpaceOCRAdapter:
         texts = [str(result.get("ParsedText") or "") for result in results if isinstance(result, dict)]
         return "\n".join(text for text in texts if text)
 
+    def _provider_error(self, raw_response: dict, parsed_text: str) -> dict | None:
+        code = self._provider_error_code(raw_response)
+        message = self._provider_error_message(raw_response)
+        results = raw_response.get("ParsedResults") or []
+        first_result = results[0] if isinstance(results, list) and results and isinstance(results[0], dict) else {}
+        file_parse_exit_code = first_result.get("FileParseExitCode")
+        has_result_error = bool(first_result.get("ErrorMessage") or first_result.get("ErrorDetails"))
+        if code == "E501" or self._contains_error_token(message, "E501"):
+            return {
+                "code": "E501",
+                "message": OCR_SPACE_ERROR_MESSAGES["E501"],
+                "status": "invalid_file_signature",
+            }
+        if code == "E580" or self._contains_error_token(message, "E580"):
+            if raw_response.get("_apflow_fallback_used"):
+                primary = raw_response.get("_apflow_primary_engine")
+                fallback = raw_response.get("_apflow_fallback_engine")
+                message = f"OCR.space failed with primary engine {primary} and fallback engine {fallback}."
+            else:
+                message = OCR_SPACE_ERROR_MESSAGES["E580"]
+            return {
+                "code": "E580",
+                "message": message,
+                "status": "engine_failed",
+            }
+        if raw_response.get("_apflow_provider_error_code"):
+            safe_code = str(raw_response["_apflow_provider_error_code"])
+            return {
+                "code": safe_code,
+                "message": str(raw_response.get("error") or OCR_SPACE_ERROR_MESSAGES.get(safe_code) or message),
+                "status": safe_code,
+            }
+        if raw_response.get("IsErroredOnProcessing"):
+            return {"code": code or "provider_error", "message": message, "status": "provider_error"}
+        if not parsed_text and (file_parse_exit_code in {-1, "-1"} or has_result_error):
+            return {
+                "code": code or "engine_failed",
+                "message": OCR_SPACE_ERROR_MESSAGES["E580"] if code == "E580" else message,
+                "status": "engine_failed",
+            }
+        return None
+
+    def _provider_error_code(self, raw_response: dict) -> str | None:
+        explicit = raw_response.get("_apflow_provider_error_code")
+        if explicit:
+            return str(explicit)
+        message = self._provider_error_message(raw_response)
+        match = re.search(r"\b(E\d{3})\b", message)
+        if match:
+            return match.group(1)
+        return None
+
+    def _contains_error_token(self, message: str, token: str) -> bool:
+        return token.lower() in message.lower()
+
     def _provider_error_message(self, raw_response: dict) -> str:
         message = raw_response.get("ErrorMessage") or raw_response.get("ErrorDetails")
+        if not message:
+            results = raw_response.get("ParsedResults") or []
+            first_result = results[0] if isinstance(results, list) and results and isinstance(results[0], dict) else {}
+            message = first_result.get("ErrorMessage") or first_result.get("ErrorDetails")
         if isinstance(message, list):
             return "; ".join(str(item) for item in message if item)
         if message:
@@ -470,6 +710,7 @@ class OCRSpaceOCRAdapter:
 
     def _safe_diagnostics(self, raw_response: dict, parsed_text: str) -> dict:
         results = raw_response.get("ParsedResults") or []
+        provider_error = self._provider_error(raw_response, parsed_text)
         return {
             "provider": "ocr_space",
             "is_errored_on_processing": bool(raw_response.get("IsErroredOnProcessing")),
@@ -480,9 +721,17 @@ class OCRSpaceOCRAdapter:
             "sent_file_name": raw_response.get("_apflow_sent_file_name"),
             "sent_filetype": raw_response.get("_apflow_sent_filetype"),
             "sent_content_type": raw_response.get("_apflow_sent_content_type"),
-            "provider_error_message": self._provider_error_message(raw_response)
-            if raw_response.get("IsErroredOnProcessing")
+            "provider_error_code": provider_error["code"] if provider_error is not None else self._provider_error_code(raw_response),
+            "provider_error_message": provider_error["message"]
+            if provider_error is not None
             else raw_response.get("error"),
+            "engine_used": raw_response.get("_apflow_engine_used") or str(self.settings.ocr_space_engine or "2"),
+            "fallback_engine": raw_response.get("_apflow_fallback_engine") or str(self.settings.ocr_space_fallback_engine or ""),
+            "fallback_used": bool(raw_response.get("_apflow_fallback_used")),
+            "primary_provider_error_code": raw_response.get("_apflow_primary_provider_error_code"),
+            "primary_provider_error_message": raw_response.get("_apflow_primary_provider_error_message"),
+            "file_size_bytes": raw_response.get("_apflow_file_size_bytes"),
+            "detected_filetype": raw_response.get("_apflow_detected_filetype"),
         }
 
     def _error_result(
@@ -509,7 +758,13 @@ class OCRSpaceOCRAdapter:
                 sent_file_name=diagnostics["sent_file_name"],
                 sent_filetype=diagnostics["sent_filetype"],
                 sent_content_type=diagnostics["sent_content_type"],
+                provider_error_code=diagnostics["provider_error_code"],
                 provider_error_message=diagnostics["provider_error_message"],
+                engine_used=diagnostics["engine_used"],
+                fallback_engine=diagnostics["fallback_engine"],
+                fallback_used=diagnostics["fallback_used"],
+                primary_provider_error_code=diagnostics["primary_provider_error_code"],
+                primary_provider_error_message=diagnostics["primary_provider_error_message"],
             ),
             fields=[],
             line_items=[],

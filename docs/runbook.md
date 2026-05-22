@@ -270,14 +270,20 @@ OCR.space setup:
 
 1. Set `OCR_PROVIDER=ocr_space`.
 2. Set `OCR_SPACE_API_KEY` in `.env` or `.env.staging`; never commit the key.
-3. Optional overrides: `OCR_SPACE_API_URL`, `OCR_SPACE_LANGUAGE`, `OCR_SPACE_ENGINE`, and `OCR_SPACE_TIMEOUT_SECONDS`.
+3. Optional overrides: `OCR_SPACE_API_URL`, `OCR_SPACE_LANGUAGE`, `OCR_SPACE_ENGINE`, `OCR_SPACE_FALLBACK_ENGINE`, `OCR_SPACE_ENABLE_ENGINE_FALLBACK`, and `OCR_SPACE_TIMEOUT_SECONDS`.
 4. Restart FastAPI or the API container.
 5. Check `GET /ocr/test-provider?provider_name=ocr_space`.
 6. Upload a PDF/image and run `POST /documents/invoices/{document_id}/extract?tenant_id={uuid}`.
 
 OCR.space returns generic parsed text rather than a finance-specific invoice schema. APFlow uses conservative label-based parsing; unclear or missing totals, currency, invoice number, vendor, or dates are marked for human review instead of being invented. `review_required` is a valid safe outcome, not a failed extraction. The dashboard OCR Review section shows parsed result count, parsed text length, OCR exit code, sent filename/filetype/content type, required fields, and a truncated OCR text preview to help tune real sample invoices. To fall back to deterministic local extraction, set `OCR_PROVIDER=mock` and restart.
 
-If OCR.space returns E216 or says it cannot detect file type, confirm the dashboard shows `Sent filetype` as `PDF`, `PNG`, or `JPG` and that `Sent file` has a matching extension. Some synthetic PDFs may not be accepted by OCR.space even with correct metadata; test a real exported PDF or scanned invoice image before treating that as an integration failure.
+If OCR.space returns E216 or says it cannot detect file type, confirm the dashboard shows `Sent filetype` as `PDF`, `PNG`, or `JPG` and that `Sent file` has a matching extension. If APFlow reports `invalid_file_signature` or OCR.space returns E501, the uploaded bytes are not a real PDF/image invoice; re-download or re-export the source invoice. Some synthetic PDFs may not be accepted by OCR.space even with correct metadata; test a real exported PDF or scanned invoice image before treating that as an integration failure.
+
+If OCR.space returns E580, the selected OCR engine failed while reading the file. Configure `OCR_SPACE_ENABLE_ENGINE_FALLBACK=true` and `OCR_SPACE_FALLBACK_ENGINE=2` to retry a different engine once. Docker environment changes require recreating the API container, not only restarting it:
+
+```powershell
+docker compose ... up -d --force-recreate api
+```
 
 When OCR.space extraction reaches review:
 
