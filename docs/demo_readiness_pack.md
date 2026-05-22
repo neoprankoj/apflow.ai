@@ -1,6 +1,7 @@
 # Demo Readiness Pack
 
 Use this pack before a private APFlow AI staging demo. It consolidates the operator checklist, AP manager walkthrough, Priority connector walkthrough, and common recovery notes.
+Use [production_readiness_checklist.md](production_readiness_checklist.md) and the Admin Product Readiness Gate when you need to explain why APFlow is demo ready but not yet pilot or production ready.
 
 ## A. Demo Purpose
 

@@ -41,6 +41,7 @@ import { APWorkflowGuide } from "./ap-workflow-guide";
 import { AuditTimeline, type AuditEvent } from "./audit-timeline";
 import { InvoiceUploadPanel } from "./invoice-upload-panel";
 import { PriorityMappingAdmin } from "./priority-mapping-admin";
+import { ProductReadinessPanel } from "./product-readiness-panel";
 
 const DEMO_EMAIL = "demo-owner@apflow.local";
 const DEMO_PASSWORD = "password-123";
@@ -518,6 +519,7 @@ export default function Dashboard() {
     { id: "approvals", label: "Approvals" },
     { id: "erp-export", label: "ERP Export" },
     { id: "vendor-portal-preview", label: "Vendor Portal Preview" },
+    { id: "product-readiness", label: "Readiness" },
     { id: "admin", label: "Admin" }
   ];
   const selectedProviderName = selectedOcrProvider?.provider ?? "mock";
@@ -1068,6 +1070,12 @@ export default function Dashboard() {
               }
             }}
             tenantId={tenantId}
+          />
+
+          <ProductReadinessPanel
+            accessToken={accessToken}
+            apiBaseUrl={apiBaseUrl}
+            canAdmin={canAdmin}
           />
 
           <PriorityMappingAdmin

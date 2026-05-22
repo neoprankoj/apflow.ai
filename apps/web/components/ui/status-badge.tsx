@@ -27,17 +27,17 @@ export function StatusBadge({ status, className }: { status: string; className?:
 }
 
 function toneFor(status: string): Tone {
-  if (["approved", "approval_ready", "auto_approved", "clear", "completed", "exported", "erp_ready", "paid"].includes(status)) {
+  if (["approved", "approval_ready", "auto_approved", "clear", "completed", "exported", "erp_ready", "paid", "pass", "ready"].includes(status)) {
     return "success";
   }
   if (
-    ["blocked", "on_hold", "missing_po", "review_required", "warning", "pending", "high", "critical", "likely_duplicate", "duplicate"].includes(
+    ["blocked", "on_hold", "missing_po", "review_required", "warning", "pending", "high", "critical", "likely_duplicate", "duplicate", "partially_ready"].includes(
       status
     )
   ) {
     return "warning";
   }
-  if (["rejected", "failed", "overdue", "danger"].includes(status)) {
+  if (["rejected", "failed", "overdue", "danger", "fail", "not_ready"].includes(status)) {
     return "danger";
   }
   if (["active", "processing", "running", "info"].includes(status)) {

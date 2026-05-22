@@ -119,6 +119,7 @@ Never enable demo reset in production. Production settings reject `ALLOW_DEMO_RE
 ## Demo Operations
 
 For the complete demo readiness flow, use [demo_readiness_pack.md](demo_readiness_pack.md).
+For Demo/Pilot/Production readiness definitions and current blockers, use [production_readiness_checklist.md](production_readiness_checklist.md).
 
 1. Check readiness before a demo:
 

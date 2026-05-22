@@ -231,6 +231,34 @@ class APFlowModel(BaseModel):
     model_config = ConfigDict(extra="forbid", use_enum_values=True)
 
 
+class ProductReadinessCheck(APFlowModel):
+    key: str
+    label: str
+    status: str
+    category: str
+    message: str
+    next_step: str | None = None
+    safe_detail: str | None = None
+
+
+class ProductReadinessLevel(APFlowModel):
+    key: str
+    status: str
+    summary: str
+    blockers: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+
+
+class ProductReadinessResponse(APFlowModel):
+    environment: str
+    generated_at: datetime
+    demo_ready: ProductReadinessLevel
+    pilot_ready: ProductReadinessLevel
+    production_ready: ProductReadinessLevel
+    checks: list[ProductReadinessCheck]
+    message: str
+
+
 class AgentContext(APFlowModel):
     tenant_id: UUID | None = None
     actor_id: str = "system"

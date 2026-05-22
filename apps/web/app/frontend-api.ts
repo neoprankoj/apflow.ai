@@ -166,6 +166,34 @@ export type PriorityImportedRecordsResponse<TRecord> = {
   records: TRecord[];
 };
 
+export type ProductReadinessCheck = {
+  key: string;
+  label: string;
+  status: "pass" | "fail" | "warning" | "not_applicable" | string;
+  category: string;
+  message: string;
+  next_step?: string | null;
+  safe_detail?: string | null;
+};
+
+export type ProductReadinessLevel = {
+  key: string;
+  status: "ready" | "not_ready" | "partially_ready" | string;
+  summary: string;
+  blockers: string[];
+  warnings: string[];
+};
+
+export type ProductReadinessResponse = {
+  environment: string;
+  generated_at: string;
+  demo_ready: ProductReadinessLevel;
+  pilot_ready: ProductReadinessLevel;
+  production_ready: ProductReadinessLevel;
+  checks: ProductReadinessCheck[];
+  message: string;
+};
+
 export function getApiBaseUrl() {
   const value = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
   if (!value) return null;
@@ -396,6 +424,13 @@ export function getPriorityImportedPurchaseOrders(apiBaseUrl: string, token: str
     `/erp/priority/imported/purchase-orders?tenant_id=${encodeURIComponent(tenantId)}`,
     { token, action: "Load imported Priority purchase orders" }
   );
+}
+
+export function getProductReadiness(apiBaseUrl: string, token: string) {
+  return apiFetch<ProductReadinessResponse>(apiBaseUrl, "/ready/product", {
+    token,
+    action: "Load product readiness"
+  });
 }
 
 async function readResponseDetail(response: Response) {
