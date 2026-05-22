@@ -156,3 +156,19 @@ def test_production_env_fails_if_auth_disabled():
             minio_root_password="apflow-minio-password",
             database_url="postgresql+psycopg://apflow:secret@postgres:5432/apflow",
         )
+
+
+def test_production_env_fails_if_demo_mode_enabled():
+    with pytest.raises(ValidationError, match="DEMO_MODE"):
+        Settings(
+            app_env="production",
+            public_app_url="https://apflow.example.com",
+            api_public_url="https://api.apflow.example.com",
+            cors_allowed_origins="https://apflow.example.com",
+            auth_enabled=True,
+            demo_mode=True,
+            auth_secret_key="production-secret-key-change-me-32-chars",
+            minio_root_user="apflow-minio",
+            minio_root_password="apflow-minio-password",
+            database_url="postgresql+psycopg://apflow:secret@postgres:5432/apflow",
+        )

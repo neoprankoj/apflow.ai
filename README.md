@@ -205,6 +205,7 @@ Demo materials:
 
 - `docs/demo_readiness_pack.md` for the complete staging demo readiness, walkthrough, safety, and troubleshooting pack.
 - `docs/production_readiness_checklist.md` for Demo/Pilot/Production readiness gates and current blockers.
+- `docs/production_security.md` for production access, demo-mode, tenant isolation, RBAC, and vendor-safe guardrails.
 - `docs/demo_script.md` for the live presenter flow.
 - `docs/demo_qa_checklist.md` for pre-demo validation.
 - `samples/demo` for synthetic scenario notes and expected outcomes.

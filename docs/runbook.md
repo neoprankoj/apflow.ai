@@ -102,7 +102,7 @@ Required for staging and production:
 - `MINIO_ROOT_PASSWORD`
 - `NEXT_PUBLIC_API_BASE_URL`
 
-Production additionally requires `AUTH_ENABLED=true` and rejects `DEMO_MODE=true` unless `ALLOW_DEMO_MODE_IN_PRODUCTION=true` is deliberately set.
+Production additionally requires `AUTH_ENABLED=true` and rejects `DEMO_MODE=true`. Demo behavior is private-staging only.
 
 ## Staging Demo Reset
 
@@ -119,7 +119,7 @@ Never enable demo reset in production. Production settings reject `ALLOW_DEMO_RE
 ## Demo Operations
 
 For the complete demo readiness flow, use [demo_readiness_pack.md](demo_readiness_pack.md).
-For Demo/Pilot/Production readiness definitions and current blockers, use [production_readiness_checklist.md](production_readiness_checklist.md).
+For Demo/Pilot/Production readiness definitions and current blockers, use [production_readiness_checklist.md](production_readiness_checklist.md). For the production access guardrails behind that gate, use [production_security.md](production_security.md).
 
 1. Check readiness before a demo:
 
