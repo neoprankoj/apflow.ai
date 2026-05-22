@@ -33,7 +33,9 @@ Use this script for a private staging demo. Keep the presenter flow deterministi
 2. Click `Extract`.
 3. Show the selected OCR provider and configured state.
 4. Explain confidence, required fields, parsed text preview, and provider diagnostics.
-5. Point out that the Workflow Guide moves the AP manager toward review, approval, export, or audit.
+5. If OCR.space reports `E501` or `invalid_file_signature`, explain that the uploaded bytes are not a real PDF/image and the original invoice should be re-exported.
+6. If OCR.space reports `E580`, explain that the selected OCR engine failed and APFlow can use a configured fallback engine.
+7. Point out that the Workflow Guide moves the AP manager toward review, approval, export, or audit.
 
 ## D. Demo Path 3 - Review-Required Invoice
 

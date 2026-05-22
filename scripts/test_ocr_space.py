@@ -40,6 +40,9 @@ def main() -> int:
         ocr_space_api_url=os.getenv("OCR_SPACE_API_URL", "https://api.ocr.space/parse/image"),
         ocr_space_language=os.getenv("OCR_SPACE_LANGUAGE", "eng"),
         ocr_space_engine=os.getenv("OCR_SPACE_ENGINE", "2"),
+        ocr_space_fallback_engine=os.getenv("OCR_SPACE_FALLBACK_ENGINE", "2"),
+        ocr_space_enable_engine_fallback=os.getenv("OCR_SPACE_ENABLE_ENGINE_FALLBACK", "true").lower()
+        in {"1", "true", "yes"},
         ocr_space_timeout_seconds=int(os.getenv("OCR_SPACE_TIMEOUT_SECONDS", "60")),
     )
     adapter = OCRSpaceOCRAdapter(settings)
@@ -58,6 +61,9 @@ def main() -> int:
 
     print("OCR.space extraction")
     print(f"provider_status={result.provider_metadata.raw_provider_status}")
+    print(f"engine_used={result.provider_metadata.engine_used or 'n/a'}")
+    print(f"fallback_used={result.provider_metadata.fallback_used}")
+    print(f"provider_error_code={result.provider_metadata.provider_error_code or 'none'}")
     print(f"average_confidence={result.confidence_summary.average_confidence}")
     print(f"required_missing={','.join(result.confidence_summary.required_fields_missing) or 'none'}")
     print(f"error={result.error or 'none'}")

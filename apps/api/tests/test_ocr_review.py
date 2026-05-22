@@ -301,6 +301,72 @@ def test_ocr_space_provider_error_is_safe(tenant_id):
     assert result.confidence_summary.required_fields_missing
 
 
+def test_ocr_space_file_signature_validation_accepts_supported_types():
+    adapter = OCRSpaceOCRAdapter(Settings(ocr_space_api_key="test-key"))
+
+    assert adapter._validate_file_signature(b"%PDF-1.4\ncontent", "PDF")["valid"] is True
+    assert adapter._validate_file_signature(b"\x89PNG\r\n\x1a\ncontent", "PNG")["valid"] is True
+    assert adapter._validate_file_signature(b"\xff\xd8\xffcontent", "JPG")["valid"] is True
+
+
+def test_ocr_space_invalid_pdf_signature_rejected_before_provider_call(tenant_id, monkeypatch):
+    adapter = OCRSpaceOCRAdapter(Settings(ocr_space_api_key="test-key"))
+
+    def fake_post(*args, **kwargs):
+        raise AssertionError("OCR.space should not be called for invalid file signatures")
+
+    monkeypatch.setattr(adapter, "_post_to_ocr_space", fake_post)
+
+    result = adapter.extract_invoice(
+        {"file_name": "invoice.pdf", "mime_type": "application/pdf", "content": b"invoice_number=FAKE"},
+        tenant_id,
+    )
+
+    assert result.error == "Uploaded file is not a valid PDF, PNG, or JPG. Please upload the original invoice file."
+    assert result.provider_metadata.raw_provider_status == "invalid_file_signature"
+    assert result.provider_metadata.provider_error_code == "invalid_file_signature"
+    assert result.raw_response["detected_filetype"] == "unknown"
+
+
+def test_ocr_space_e501_maps_to_actionable_error(tenant_id):
+    adapter = OCRSpaceOCRAdapter(Settings(ocr_space_api_key="test-key"))
+
+    result = adapter.normalize_provider_response(
+        {
+            "IsErroredOnProcessing": True,
+            "ErrorMessage": ["E501: Not an image or PDF"],
+            "ErrorDetails": "Invalid file signature.",
+        },
+        tenant_id,
+    )
+
+    assert result.error == "OCR.space rejected the file because it is not a valid image or PDF."
+    assert result.provider_metadata.raw_provider_status == "invalid_file_signature"
+    assert result.provider_metadata.provider_error_code == "E501"
+
+
+def test_ocr_space_e580_maps_to_engine_failed_error(tenant_id):
+    adapter = OCRSpaceOCRAdapter(Settings(ocr_space_api_key="test-key"))
+
+    result = adapter.normalize_provider_response(
+        {
+            "IsErroredOnProcessing": False,
+            "ParsedResults": [
+                {
+                    "FileParseExitCode": -1,
+                    "ParsedText": "",
+                    "ErrorMessage": "E580: This OCR Engine returned an unexpected error.",
+                }
+            ],
+        },
+        tenant_id,
+    )
+
+    assert result.error == "OCR.space engine failed while reading this file."
+    assert result.provider_metadata.raw_provider_status == "engine_failed"
+    assert result.provider_metadata.provider_error_code == "E580"
+
+
 def test_ocr_space_e216_response_includes_safe_diagnostics(tenant_id):
     adapter = OCRSpaceOCRAdapter(Settings(ocr_space_api_key="test-key"))
 
@@ -331,11 +397,12 @@ def test_ocr_space_e216_response_includes_safe_diagnostics(tenant_id):
 def test_ocr_space_extract_uses_multipart_without_logging_key(tenant_id, caplog, monkeypatch):
     adapter = OCRSpaceOCRAdapter(Settings(ocr_space_api_key="secret-test-key"))
 
-    def fake_post(file_name: str, content: bytes, content_type: str, file_type: str) -> dict:
+    def fake_post(file_name: str, content: bytes, content_type: str, file_type: str, engine: str | None = None) -> dict:
         assert file_name == "invoice.pdf"
-        assert content == b"pdf-bytes"
+        assert content == b"%PDF-1.4\npdf-bytes"
         assert content_type == "application/pdf"
         assert file_type == "PDF"
+        assert engine == "2"
         return {
             "IsErroredOnProcessing": False,
             "ParsedResults": [{"ParsedText": "Invoice Number: INV-SPACE-2\nTotal: 10.00"}],
@@ -344,7 +411,7 @@ def test_ocr_space_extract_uses_multipart_without_logging_key(tenant_id, caplog,
     monkeypatch.setattr(adapter, "_post_to_ocr_space", fake_post)
 
     result = adapter.extract_invoice(
-        {"file_name": "invoice.pdf", "mime_type": "application/pdf", "content": b"pdf-bytes"},
+        {"file_name": "invoice.pdf", "mime_type": "application/pdf", "content": b"%PDF-1.4\npdf-bytes"},
         tenant_id,
     )
 
@@ -358,13 +425,13 @@ def test_ocr_space_extract_adds_safe_pdf_filename_when_missing(tenant_id, monkey
     adapter = OCRSpaceOCRAdapter(Settings(ocr_space_api_key="test-key"))
     seen = {}
 
-    def fake_post(file_name: str, content: bytes, content_type: str, file_type: str) -> dict:
+    def fake_post(file_name: str, content: bytes, content_type: str, file_type: str, engine: str | None = None) -> dict:
         seen.update(file_name=file_name, content_type=content_type, file_type=file_type)
         return {"IsErroredOnProcessing": False, "ParsedResults": [{"ParsedText": "Invoice Number: INV-1"}]}
 
     monkeypatch.setattr(adapter, "_post_to_ocr_space", fake_post)
 
-    result = adapter.extract_invoice({"mime_type": "application/pdf", "content": b"pdf"}, tenant_id)
+    result = adapter.extract_invoice({"mime_type": "application/pdf", "content": b"%PDF-1.4\npdf"}, tenant_id)
 
     assert result.error is None
     assert seen == {"file_name": "invoice.pdf", "content_type": "application/pdf", "file_type": "PDF"}
@@ -374,13 +441,13 @@ def test_ocr_space_extract_sends_png_filetype(tenant_id, monkeypatch):
     adapter = OCRSpaceOCRAdapter(Settings(ocr_space_api_key="test-key"))
     seen = {}
 
-    def fake_post(file_name: str, content: bytes, content_type: str, file_type: str) -> dict:
+    def fake_post(file_name: str, content: bytes, content_type: str, file_type: str, engine: str | None = None) -> dict:
         seen.update(file_name=file_name, content_type=content_type, file_type=file_type)
         return {"IsErroredOnProcessing": False, "ParsedResults": [{"ParsedText": "Invoice Number: INV-PNG"}]}
 
     monkeypatch.setattr(adapter, "_post_to_ocr_space", fake_post)
 
-    result = adapter.extract_invoice({"file_name": "scan", "mime_type": "image/png", "content": b"png"}, tenant_id)
+    result = adapter.extract_invoice({"file_name": "scan", "mime_type": "image/png", "content": b"\x89PNG\r\n\x1a\npng"}, tenant_id)
 
     assert result.error is None
     assert seen == {"file_name": "scan.png", "content_type": "image/png", "file_type": "PNG"}
@@ -390,14 +457,14 @@ def test_ocr_space_extract_sends_jpg_filetype(tenant_id, monkeypatch):
     adapter = OCRSpaceOCRAdapter(Settings(ocr_space_api_key="test-key"))
     seen = {}
 
-    def fake_post(file_name: str, content: bytes, content_type: str, file_type: str) -> dict:
+    def fake_post(file_name: str, content: bytes, content_type: str, file_type: str, engine: str | None = None) -> dict:
         seen.update(file_name=file_name, content_type=content_type, file_type=file_type)
         return {"IsErroredOnProcessing": False, "ParsedResults": [{"ParsedText": "Invoice Number: INV-JPG"}]}
 
     monkeypatch.setattr(adapter, "_post_to_ocr_space", fake_post)
 
     result = adapter.extract_invoice(
-        {"file_name": "photo.jpeg", "mime_type": "image/jpeg", "content": b"jpg"},
+        {"file_name": "photo.jpeg", "mime_type": "image/jpeg", "content": b"\xff\xd8\xffjpg"},
         tenant_id,
     )
 
@@ -447,6 +514,180 @@ def test_ocr_space_multipart_body_includes_filetype_and_filename(monkeypatch):
     result = adapter._post_to_ocr_space("invoice.pdf", b"%PDF", "application/pdf", "PDF")
 
     assert result["IsErroredOnProcessing"] is False
+
+
+def test_ocr_space_engine_fallback_retries_e580_and_returns_parsed_text(tenant_id, monkeypatch):
+    adapter = OCRSpaceOCRAdapter(
+        Settings(
+            ocr_space_api_key="test-key",
+            ocr_space_engine="3",
+            ocr_space_fallback_engine="2",
+            ocr_space_enable_engine_fallback=True,
+        )
+    )
+    engines_seen = []
+
+    def fake_post(file_name: str, content: bytes, content_type: str, file_type: str, engine: str | None = None) -> dict:
+        engines_seen.append(engine)
+        if engine == "3":
+            return {
+                "IsErroredOnProcessing": False,
+                "ParsedResults": [
+                    {
+                        "FileParseExitCode": -1,
+                        "ParsedText": "",
+                        "ErrorMessage": "E580: This OCR Engine returned an unexpected error.",
+                    }
+                ],
+            }
+        return {
+            "IsErroredOnProcessing": False,
+            "ParsedResults": [
+                {
+                    "ParsedText": (
+                        "SuperStore\nINVOICE\n# 40100\nDate: Dec 30 2012\n"
+                        "Subtotal: $104.31\nShipping: $8.22\nTotal: $112.53\n"
+                    )
+                }
+            ],
+        }
+
+    monkeypatch.setattr(adapter, "_post_to_ocr_space", fake_post)
+
+    result = adapter.extract_invoice(
+        {"file_name": "invoice.pdf", "mime_type": "application/pdf", "content": b"%PDF-1.4\nvalid"},
+        tenant_id,
+    )
+    field_map = {field.field_name: field for field in result.fields}
+
+    assert engines_seen == ["3", "2"]
+    assert result.error is None
+    assert result.provider_metadata.engine_used == "2"
+    assert result.provider_metadata.fallback_used is True
+    assert result.provider_metadata.primary_provider_error_code == "E580"
+    assert field_map["invoice_number"].value == "40100"
+    assert field_map["grand_total"].value == 112.53
+
+
+def test_ocr_space_fallback_disabled_does_not_retry_e580(tenant_id, monkeypatch):
+    adapter = OCRSpaceOCRAdapter(
+        Settings(
+            ocr_space_api_key="test-key",
+            ocr_space_engine="3",
+            ocr_space_fallback_engine="2",
+            ocr_space_enable_engine_fallback=False,
+        )
+    )
+    engines_seen = []
+
+    def fake_post(file_name: str, content: bytes, content_type: str, file_type: str, engine: str | None = None) -> dict:
+        engines_seen.append(engine)
+        return {
+            "IsErroredOnProcessing": False,
+            "ParsedResults": [{"FileParseExitCode": -1, "ParsedText": "", "ErrorMessage": "E580"}],
+        }
+
+    monkeypatch.setattr(adapter, "_post_to_ocr_space", fake_post)
+
+    result = adapter.extract_invoice(
+        {"file_name": "invoice.pdf", "mime_type": "application/pdf", "content": b"%PDF-1.4\nvalid"},
+        tenant_id,
+    )
+
+    assert engines_seen == ["3"]
+    assert result.error == "OCR.space engine failed while reading this file."
+    assert result.provider_metadata.fallback_used is False
+
+
+def test_ocr_space_fallback_same_as_primary_does_not_retry(tenant_id, monkeypatch):
+    adapter = OCRSpaceOCRAdapter(
+        Settings(
+            ocr_space_api_key="test-key",
+            ocr_space_engine="2",
+            ocr_space_fallback_engine="2",
+            ocr_space_enable_engine_fallback=True,
+        )
+    )
+    engines_seen = []
+
+    def fake_post(file_name: str, content: bytes, content_type: str, file_type: str, engine: str | None = None) -> dict:
+        engines_seen.append(engine)
+        return {
+            "IsErroredOnProcessing": False,
+            "ParsedResults": [{"FileParseExitCode": -1, "ParsedText": "", "ErrorMessage": "E580"}],
+        }
+
+    monkeypatch.setattr(adapter, "_post_to_ocr_space", fake_post)
+
+    adapter.extract_invoice(
+        {"file_name": "invoice.pdf", "mime_type": "application/pdf", "content": b"%PDF-1.4\nvalid"},
+        tenant_id,
+    )
+
+    assert engines_seen == ["2"]
+
+
+def test_ocr_space_e501_does_not_retry_fallback(tenant_id, monkeypatch):
+    adapter = OCRSpaceOCRAdapter(
+        Settings(
+            ocr_space_api_key="test-key",
+            ocr_space_engine="3",
+            ocr_space_fallback_engine="2",
+            ocr_space_enable_engine_fallback=True,
+        )
+    )
+    engines_seen = []
+
+    def fake_post(file_name: str, content: bytes, content_type: str, file_type: str, engine: str | None = None) -> dict:
+        engines_seen.append(engine)
+        return {"IsErroredOnProcessing": True, "ErrorMessage": "E501: Not an image or PDF"}
+
+    monkeypatch.setattr(adapter, "_post_to_ocr_space", fake_post)
+
+    result = adapter.extract_invoice(
+        {"file_name": "invoice.pdf", "mime_type": "application/pdf", "content": b"%PDF-1.4\nvalid"},
+        tenant_id,
+    )
+
+    assert engines_seen == ["3"]
+    assert result.provider_metadata.provider_error_code == "E501"
+
+
+def test_ocr_space_malformed_json_is_safe(monkeypatch):
+    adapter = OCRSpaceOCRAdapter(Settings(ocr_space_api_key="test-key"))
+
+    class FakeResponse:
+        status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
+
+        def read(self):
+            return b"not-json"
+
+    monkeypatch.setattr("urllib.request.urlopen", lambda request, timeout: FakeResponse())
+
+    result = adapter._post_to_ocr_space("invoice.pdf", b"%PDF", "application/pdf", "PDF")
+
+    assert result["error"] == "OCR.space returned an unexpected response."
+    assert result["_apflow_provider_error_code"] == "malformed_response"
+
+
+def test_ocr_space_timeout_is_safe(monkeypatch):
+    adapter = OCRSpaceOCRAdapter(Settings(ocr_space_api_key="test-key"))
+
+    def raise_timeout(request, timeout):
+        raise TimeoutError("timed out")
+
+    monkeypatch.setattr("urllib.request.urlopen", raise_timeout)
+
+    result = adapter._post_to_ocr_space("invoice.pdf", b"%PDF", "application/pdf", "PDF")
+
+    assert result["error"] == "OCR.space request timed out."
+    assert result["_apflow_provider_error_code"] == "timeout"
 
 
 def test_azure_adapter_health_check_reports_missing_credentials():

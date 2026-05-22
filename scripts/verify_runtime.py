@@ -315,7 +315,10 @@ def pipeline_summary(pipeline: dict, ocr_provider: str) -> dict:
         "extracted_field_count": len(ocr_result.get("fields") or []),
         "parsed_text_length": parsed_text_length(ocr_result),
         "review_required_fields": review_required_fields(confidence),
+        "provider_error_code": provider_error_code(ocr_result),
         "provider_error_message": provider_error_message(ocr_result),
+        "engine_used": ocr_engine_used(ocr_result),
+        "fallback_used": ocr_fallback_used(ocr_result),
     }
 
 
@@ -330,7 +333,10 @@ def extraction_summary(extract: dict, process: dict) -> dict:
         "extracted_field_count": len(ocr_result.get("fields") or []),
         "parsed_text_length": parsed_text_length(ocr_result),
         "review_required_fields": review_required_fields(confidence),
+        "provider_error_code": provider_error_code(ocr_result),
         "provider_error_message": provider_error_message(ocr_result),
+        "engine_used": ocr_engine_used(ocr_result),
+        "fallback_used": ocr_fallback_used(ocr_result),
     }
 
 
@@ -350,6 +356,27 @@ def provider_error_message(ocr_result: dict) -> str | None:
     provider_metadata = ocr_result.get("provider_metadata") or {}
     raw_response = ocr_result.get("raw_response") or {}
     return raw_response.get("provider_error_message") or provider_metadata.get("provider_error_message") or ocr_result.get("error")
+
+
+def provider_error_code(ocr_result: dict) -> str | None:
+    provider_metadata = ocr_result.get("provider_metadata") or {}
+    raw_response = ocr_result.get("raw_response") or {}
+    return raw_response.get("provider_error_code") or provider_metadata.get("provider_error_code")
+
+
+def ocr_engine_used(ocr_result: dict) -> str | None:
+    provider_metadata = ocr_result.get("provider_metadata") or {}
+    raw_response = ocr_result.get("raw_response") or {}
+    return raw_response.get("engine_used") or provider_metadata.get("engine_used")
+
+
+def ocr_fallback_used(ocr_result: dict) -> bool | None:
+    provider_metadata = ocr_result.get("provider_metadata") or {}
+    raw_response = ocr_result.get("raw_response") or {}
+    value = raw_response.get("fallback_used")
+    if value is None:
+        value = provider_metadata.get("fallback_used")
+    return value
 
 
 def get(context: RuntimeContext, path: str):
