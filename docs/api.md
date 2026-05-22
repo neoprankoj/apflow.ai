@@ -4,6 +4,7 @@ Initial endpoints:
 
 - `GET /health`
 - `GET /ready`
+- `GET /ready/product`
 - `POST /auth/register-demo-tenant`
 - `POST /auth/login`
 - `GET /auth/me`
@@ -59,6 +60,8 @@ Initial endpoints:
 `POST /workflow/events` accepts the `WorkflowEventInput` schema and returns an `OrchestratorOutput` with the next agent task.
 
 `GET /ready` returns database, OCR provider, document storage, ERP adapter registry, repository mode, auth mode, demo mode, and environment checks. It is intended for container readiness checks.
+
+`GET /ready/product` requires tenant-admin access and returns safe Demo/Pilot/Production readiness levels, categorized checks, blockers, warnings, and next steps. It is a read-only operator endpoint; it does not change runtime behavior, call external services, or expose secrets/raw environment values.
 
 `GET /ocr/providers` returns provider status objects by default, including `configured`, `status`, and `selected`. Use `GET /ocr/providers?include_status=false` for the legacy provider-name list.
 
