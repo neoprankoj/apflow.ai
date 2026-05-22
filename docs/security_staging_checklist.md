@@ -32,5 +32,5 @@ Production additionally requires:
 
 - `APP_ENV=production`.
 - `AUTH_ENABLED=true`.
-- `DEMO_MODE=false` unless a controlled exception sets `ALLOW_DEMO_MODE_IN_PRODUCTION=true`.
+- `DEMO_MODE=false`; demo mode is not allowed in production.
 - Domain, CORS, and email/vendor communication policies are reviewed before customer data is uploaded.

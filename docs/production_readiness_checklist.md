@@ -33,6 +33,7 @@ Current expected staging result: Pilot Ready is not ready.
 Current pilot blockers:
 
 - Production access hardening is not complete.
+- Tenant isolation and vendor-safe guardrail tests must stay in the release gate.
 - Domain/HTTPS are intentionally deferred.
 - Production vendor access lifecycle is not complete.
 - Payment status sync is missing.
@@ -50,6 +51,8 @@ Current production blockers:
 - APP_ENV is staging, not production.
 - Domain/HTTPS are not configured.
 - Demo mode must be disabled for production.
+- Demo reset must be disabled for production.
+- Auth must be enabled and JWT secrets must be non-default.
 - Production secret rotation and operational controls must be finalized.
 - Public DB/Redis/MinIO exposure must be hardened.
 - Production vendor access is not ready.
@@ -76,6 +79,7 @@ Use the Product Readiness Gate in the Admin area before demos, pilots, or produc
 - [Demo Readiness Pack](demo_readiness_pack.md)
 - [Runbook](runbook.md)
 - [Security](security.md)
+- [Production Security Guardrails](production_security.md)
 - [Frontend QA Checklist](frontend_qa_checklist.md)
 - [Staging Operations](operations_staging.md)
 - [Staging Release Checklist](staging_release_checklist.md)

@@ -37,7 +37,8 @@ APFlow AI is tenant-first and deny-by-default.
 - Docker Compose filesystem document storage uses a dedicated mounted volume; production object storage credentials are still pending and must be handled through a secrets manager.
 - Staging and production startup validation rejects wildcard CORS origins, missing public URLs, missing database URL, weak/default `AUTH_SECRET_KEY`, and default MinIO credentials.
 - Production startup validation requires `AUTH_ENABLED=true`.
-- Production rejects `DEMO_MODE=true` unless `ALLOW_DEMO_MODE_IN_PRODUCTION=true` is deliberately set for a controlled private demo.
+- Production rejects `DEMO_MODE=true`; demo behavior is private-staging only.
+- Production rejects `ALLOW_DEMO_RESET=true`; demo reset is never allowed in production.
 - `CORS_ALLOWED_ORIGINS` must name exact frontend origins in staging and production.
 - Startup logs may include environment, auth mode, repository mode, OCR provider, storage provider, ERP adapters, and public URLs; they must not include passwords, tokens, OCR keys, MinIO secrets, or database passwords.
 - `scripts/seed_demo_data.py` prints demo login details but does not print bearer tokens. Deterministic seed modes do not invoke live OCR providers. Rotate seeded credentials before giving access beyond a private staging demo.

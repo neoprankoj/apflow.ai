@@ -60,7 +60,6 @@ class Settings(BaseSettings):
     auth_secret_key: str = "dev-only-change-me-32-byte-minimum-key"
     access_token_expire_minutes: int = 60
     demo_mode: bool = True
-    allow_demo_mode_in_production: bool = False
     allow_demo_reset: bool = False
     demo_tenant_id: str = "11111111-1111-1111-1111-111111111111"
 
@@ -100,8 +99,8 @@ class Settings(BaseSettings):
                 raise ValueError("ALLOW_DEMO_RESET cannot be true in production")
             if not self.auth_enabled:
                 raise ValueError("AUTH_ENABLED must be true in production")
-            if self.demo_mode and not self.allow_demo_mode_in_production:
-                raise ValueError("DEMO_MODE cannot be true in production unless explicitly allowed")
+            if self.demo_mode:
+                raise ValueError("DEMO_MODE cannot be true in production")
         return self
 
 

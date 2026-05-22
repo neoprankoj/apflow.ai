@@ -89,6 +89,8 @@ def product_readiness(_context=Depends(require_permission(Permission.TENANT_ADMI
                 "ocr_provider_configured",
                 "https_domain_configured",
                 "production_access_hardening",
+                "tenant_isolation_tests_documented",
+                "vendor_safe_protections_documented",
                 "production_vendor_access_ready",
                 "payment_status_sync_ready",
                 "notification_delivery_configured",
@@ -103,6 +105,9 @@ def product_readiness(_context=Depends(require_permission(Permission.TENANT_ADMI
             required_keys=[
                 "app_env_production",
                 "demo_mode_disabled_for_production",
+                "demo_reset_disabled_for_production",
+                "auth_required_for_production",
+                "jwt_secret_non_default",
                 "auth_enabled",
                 "https_domain_configured",
                 "production_secret_policy_documented",
@@ -157,6 +162,7 @@ def _product_readiness_checks() -> list[ProductReadinessCheck]:
     priority_writes_enabled = bool(settings.priority_erp_enable_writes)
     read_only_fetch_enabled = bool(settings.priority_erp_read_only_fetch_enabled)
     https_configured = _uses_https(settings.public_app_url) and _uses_https(settings.api_public_url)
+    auth_secret_strong = _auth_secret_is_strong()
 
     return [
         _check(
@@ -319,12 +325,17 @@ def _product_readiness_checks() -> list[ProductReadinessCheck]:
         _check("priority_real_readonly_fetch_gated", "Priority read-only fetch gated", "pass", "integrations", "Real Priority fetch is explicit, limited, and GET-only when enabled."),
         _check("priority_live_write_not_enabled", "Priority live writes not enabled", "pass" if not priority_writes_enabled else "fail", "integrations", "No live Priority writes are enabled."),
         _check("production_access_hardening", "Production access hardening", "fail", "security", "Production access hardening is not complete.", "Finish domain/HTTPS, secret rotation, public port restrictions, tenant access review, and incident procedures."),
+        _check("tenant_isolation_tests_documented", "Tenant isolation guardrails", "pass", "security", "Tenant-scoped protected endpoints deny or filter cross-tenant data.", "Keep tenant isolation tests in the release gate."),
+        _check("vendor_safe_protections_documented", "Vendor-safe data boundary", "pass", "security", "Vendor-facing responses use an allowlist and hide internal risk, audit, ERP, and token metadata.", "Keep vendor-safe leak tests in the release gate."),
         _check("production_vendor_access_missing", "Production vendor access lifecycle", "fail", "pilot", "Production vendor access lifecycle is not complete.", "Define invitation, expiration, revocation, and support workflows."),
         _check("payment_status_sync_ready", "Payment status sync", "fail", "pilot", "Real payment status sync is missing.", "Add ERP/payment status sync before pilot/production commitments."),
         _check("vendor_chatbot_missing", "Vendor chatbot production hardening", "warning", "pilot", "Vendor chatbot remains deterministic/demo-safe.", "Define production escalation, abuse controls, and support ownership."),
         _check("notification_delivery_configured", "Notification delivery configured", "fail", "pilot", "Real email/Slack/Teams notification delivery is not configured.", "Configure and test a real notification provider for pilots."),
         _check("app_env_production", "Production environment", "pass" if settings.app_env == "production" else "fail", "production", f"Current APP_ENV is `{settings.app_env}`.", "Deploy with APP_ENV=production only after production controls are complete."),
         _check("demo_mode_disabled_for_production", "Demo mode disabled for production", "pass" if not settings.demo_mode else "fail", "production", "Demo mode is disabled." if not settings.demo_mode else "Demo mode is enabled.", "Disable DEMO_MODE before production."),
+        _check("demo_reset_disabled_for_production", "Demo reset disabled for production", "pass" if not settings.allow_demo_reset else "fail", "production", "Demo reset is disabled." if not settings.allow_demo_reset else "Demo reset is enabled.", "Keep ALLOW_DEMO_RESET=false outside controlled private staging cleanup."),
+        _check("auth_required_for_production", "Auth required for production", "pass" if settings.auth_enabled else "fail", "production", "Auth is enabled." if settings.auth_enabled else "Auth is disabled.", "Set AUTH_ENABLED=true before pilot or production access."),
+        _check("jwt_secret_non_default", "JWT secret non-default", "pass" if auth_secret_strong else "fail", "security", "JWT signing secret is configured with a non-default value." if auth_secret_strong else "JWT signing secret is default, empty, or too short.", "Set AUTH_SECRET_KEY to a strong server-only secret."),
         _check("https_domain_configured", "Domain and HTTPS configured", "pass" if https_configured else "fail", "production", "Public app/API URLs use HTTPS." if https_configured else "Domain and HTTPS are not configured.", "Configure domain, HTTPS, and CORS when access/security hardening is ready."),
         _check("production_secret_policy_documented", "Production secret policy documented", "pass", "security", "Security docs cover secret handling and rotation reminders."),
         _check("backup_runbook_documented", "Backup runbook documented", "pass", "operations", "Staging backup/restore operations are documented."),
@@ -397,6 +408,10 @@ def _readiness_level(
 
 def _uses_https(value: str) -> bool:
     return value.lower().startswith("https://")
+
+
+def _auth_secret_is_strong() -> bool:
+    return settings.auth_secret_key not in {"", "dev-only-change-me-32-byte-minimum-key"} and len(settings.auth_secret_key) >= 32
 
 
 def _document_storage_check() -> dict[str, str | bool]:
