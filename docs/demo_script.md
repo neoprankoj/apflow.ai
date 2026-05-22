@@ -1,6 +1,6 @@
 # Demo Script
 
-Use this script for a private staging demo. Keep the presenter flow deterministic; live OCR is a feature to demonstrate, not a dependency for setup.
+Use this script for a private staging demo. Keep the presenter flow deterministic; live OCR is a feature to demonstrate, not a dependency for setup. Use [demo_readiness_pack.md](demo_readiness_pack.md) before the meeting for environment checks, safety language, and troubleshooting.
 
 ## A. Demo Preparation
 
@@ -10,7 +10,9 @@ Use this script for a private staging demo. Keep the presenter flow deterministi
 4. Confirm the current `OCR_PROVIDER`.
 5. Confirm demo login works.
 6. Confirm demo reset is disabled unless you intentionally enabled `ALLOW_DEMO_RESET=true`.
-7. If you need a prepared state, seed it explicitly:
+7. Confirm Priority mode is mock and Priority writes are disabled.
+8. Confirm the known working invoice PDF is available.
+9. If you need a prepared state, seed it explicitly:
    - clean: `python scripts/seed_demo_data.py --api-base-url <api-url> --mode clean`
    - approval ready: `python scripts/seed_demo_data.py --api-base-url <api-url> --mode approval-ready`
    - review required: `python scripts/seed_demo_data.py --api-base-url <api-url> --mode review-required`
@@ -129,3 +131,7 @@ Use this script for a private staging demo. Keep the presenter flow deterministi
 3. Confirm the response says `Demo data reset successfully.`
 4. Set `ALLOW_DEMO_RESET=false` again.
 5. Restart the API service after changing the staging env file.
+6. Confirm Priority writes are still disabled.
+7. Confirm `/health` and `/ready` still pass.
+
+For the full operator checklist, recovery notes, and final AP manager smoke path, use [demo_readiness_pack.md](demo_readiness_pack.md).
