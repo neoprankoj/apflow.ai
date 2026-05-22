@@ -118,6 +118,8 @@ Never enable demo reset in production. Production settings reject `ALLOW_DEMO_RE
 
 ## Demo Operations
 
+For the complete demo readiness flow, use [demo_readiness_pack.md](demo_readiness_pack.md).
+
 1. Check readiness before a demo:
 
 ```powershell
@@ -138,6 +140,50 @@ python scripts/seed_demo_data.py --api-base-url http://127.0.0.1:8000 --mode ven
 4. Use `approval-ready` for the stable presenter path and `review-required` for the human-review path.
 5. Set `ALLOW_DEMO_RESET=false` again after cleanup and restart the API service.
 6. Use `docs/demo_script.md` and `docs/demo_qa_checklist.md` before live demos.
+
+## Before Demo
+
+Run these checks on the staging VPS before a live walkthrough:
+
+```bash
+git log --oneline --max-count=5
+APFLOW_ENV_FILE=.env.staging docker compose -f docker-compose.yml -f docker-compose.staging.yml --env-file .env.staging ps
+curl http://127.0.0.1:8000/health
+curl http://127.0.0.1:8000/ready
+curl -s "http://127.0.0.1:8000/ocr/test-provider?provider_name=ocr_space"
+python3 scripts/verify_runtime.py --api-url http://46.101.97.231/api --web-url http://46.101.97.231 --auth-enabled
+```
+
+Confirm before presenting:
+
+- `ALLOW_DEMO_RESET=false` unless you are intentionally resetting.
+- OCR provider is `ocr_space`.
+- OCR.space engine 2 is the recommended staging engine.
+- Priority mode is mock.
+- Priority writes are disabled.
+- Mock ERP export still works.
+- No `.env.staging` or secret changes are committed.
+
+If staging environment values were changed, recreate the API container so the new values load:
+
+```bash
+APFLOW_ENV_FILE=.env.staging docker compose -f docker-compose.yml -f docker-compose.staging.yml --env-file .env.staging up -d --force-recreate api
+```
+
+## After Demo
+
+Run these checks after the demo:
+
+- Confirm `ALLOW_DEMO_RESET=false`.
+- Confirm Priority writes are disabled.
+- Confirm no secrets, bearer tokens, OCR keys, or real invoice PII were exposed in screenshots, logs, docs, or chat.
+- Confirm `/health` and `/ready` still pass.
+- Confirm Audit Trail contains the expected approval/export/import events.
+- Check recent API logs if any browser request showed an error:
+
+```bash
+APFLOW_ENV_FILE=.env.staging docker compose -f docker-compose.yml -f docker-compose.staging.yml --env-file .env.staging logs api --tail=80
+```
 
 ## Safe Stop, Start, And Backups
 

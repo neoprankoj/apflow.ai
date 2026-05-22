@@ -203,6 +203,7 @@ The dashboard also includes a guided demo walkthrough for PDF/image upload, extr
 
 Demo materials:
 
+- `docs/demo_readiness_pack.md` for the complete staging demo readiness, walkthrough, safety, and troubleshooting pack.
 - `docs/demo_script.md` for the live presenter flow.
 - `docs/demo_qa_checklist.md` for pre-demo validation.
 - `samples/demo` for synthetic scenario notes and expected outcomes.

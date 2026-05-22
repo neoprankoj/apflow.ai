@@ -33,6 +33,36 @@ Use this short checklist before merging frontend UI changes.
 - [ ] Priority Admin always says when an action is preview-only, APFlow-only, or Priority-safe.
 - [ ] Imported records are visible after controlled Priority import.
 
+## Final AP user smoke test
+
+- [ ] Demo Login works.
+- [ ] Tenant Session shows Demo Owner, owner role, and API ready.
+- [ ] AP Workflow Guide appears and the Next Recommended Action is sensible.
+- [ ] Demo checklist is readable and not intrusive.
+- [ ] Dashboard overview loads without API errors.
+- [ ] Known working invoice PDF uploads successfully.
+- [ ] OCR extraction works and extracted text/fields appear.
+- [ ] Invalid fake PDF upload shows a clear invalid-file message.
+- [ ] No generic `RuntimeError` appears in OCR errors.
+- [ ] OCR engine/fallback messaging is visible only when relevant.
+- [ ] Corrections can be submitted if review is required.
+- [ ] Run Process continues the workflow.
+- [ ] Human Review state clears or shows a clear blocker.
+- [ ] Approval Inbox loads and invoice details are readable.
+- [ ] Approve works and the approval message is clear.
+- [ ] Dashboard refreshes after approval without 500 errors.
+- [ ] Vendor-safe preview works and does not expose fraud/risk details.
+- [ ] Mock ERP export works and success points to Audit Trail.
+- [ ] Audit Trail events are readable and main rows do not show raw UUID noise.
+- [ ] Priority Mapping Admin loads.
+- [ ] Priority readiness shows mock mode, read-only disabled, and writes disabled.
+- [ ] Sample mapping loads and validation works.
+- [ ] Vendor sync preview, vendor import plan, controlled vendor import, and Imported Vendors work.
+- [ ] PO preview, PO import plan, controlled PO import, and Imported Purchase Orders work.
+- [ ] Audit Trail shows Priority import events.
+- [ ] UI confirms no Priority data changed.
+- [ ] No 500 errors appear during the full flow.
+
 ## Approval Inbox
 
 - [ ] Invoice queue rows are scannable and selected state is clear.
