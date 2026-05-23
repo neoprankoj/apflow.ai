@@ -8,6 +8,8 @@ class TotalReconciliation:
     difference: float
     matches: bool
     components_complete: bool
+    formula_label: str
+    discount_deduction: float
 
 
 def reconcile_total(
@@ -21,7 +23,8 @@ def reconcile_total(
     components_complete: bool,
     tolerance: float = 0.02,
 ) -> TotalReconciliation:
-    expected_total = round(subtotal + tax_total + shipping_amount + fee_total - discount_total, 2)
+    discount_deduction = abs(discount_total)
+    expected_total = round(subtotal + tax_total + shipping_amount + fee_total - discount_deduction, 2)
     actual_total = round(grand_total, 2)
     difference = round(expected_total - actual_total, 2)
     return TotalReconciliation(
@@ -30,4 +33,6 @@ def reconcile_total(
         difference=difference,
         matches=abs(difference) <= tolerance,
         components_complete=components_complete,
+        formula_label="subtotal + tax + shipping + fees - discounts",
+        discount_deduction=round(discount_deduction, 2),
     )

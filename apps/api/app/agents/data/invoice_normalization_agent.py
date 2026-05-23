@@ -47,7 +47,7 @@ class InvoiceNormalizationAgent(BaseAgent[InvoiceNormalizationInput, InvoiceNorm
             fee_total = round(float(fields.fee_total or 0), 2)
             discount_total = round(float(fields.discount_total or 0), 2)
             grand_total = round(
-                float(fields.grand_total or subtotal + tax_total + shipping_amount + fee_total - discount_total),
+                float(fields.grand_total or subtotal + tax_total + shipping_amount + fee_total - abs(discount_total)),
                 2,
             )
             invoice_date = fields.invoice_date or date.today().isoformat()
