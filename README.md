@@ -57,6 +57,8 @@ Authentication defaults to demo-friendly local development with `AUTH_ENABLED=fa
 
 Vendor portal access uses random demo tokens whose hashes are stored tenant-scoped. Vendor APIs only return vendor-safe invoice/payment fields and deterministic chatbot answers; no external LLM or real email is used.
 
+Payment status tracking has a tenant-scoped manual/mock foundation for invoice payment lifecycle visibility. AP managers can run a mock payment sync, update internal APFlow payment state, see safe payment status in Vendor Preview, and audit changes. No real bank, payment provider, or ERP payment-status sync is connected yet; see `docs/payment_status.md`.
+
 ## Local Layout
 
 ```text

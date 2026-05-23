@@ -18,6 +18,7 @@ Required:
 - Approval Inbox works.
 - Vendor-safe preview works.
 - Mock ERP export works.
+- Payment status foundation is available for manual/mock APFlow tracking.
 - Audit Trail proves the workflow.
 - Demo readiness docs and runbook are available.
 - Priority writes are disabled.
@@ -36,7 +37,7 @@ Current pilot blockers:
 - Tenant isolation and vendor-safe guardrail tests must stay in the release gate.
 - Domain/HTTPS are intentionally deferred.
 - Production vendor access lifecycle is not complete.
-- Payment status sync is missing.
+- Payment status foundation exists, but real ERP payment status sync is missing.
 - Real notification delivery is missing.
 - Real customer Priority mapping/write flow is not live.
 
@@ -57,7 +58,7 @@ Current production blockers:
 - Public DB/Redis/MinIO exposure must be hardened.
 - Production vendor access is not ready.
 - Real notification provider is not configured.
-- Payment status sync is missing.
+- Real ERP payment status sync is missing.
 - Billing and usage metering are missing.
 - Accuracy analytics are missing.
 - E-invoicing/tax compliance requirements are not complete.
@@ -81,5 +82,6 @@ Use the Product Readiness Gate in the Admin area before demos, pilots, or produc
 - [Security](security.md)
 - [Production Security Guardrails](production_security.md)
 - [Frontend QA Checklist](frontend_qa_checklist.md)
+- [Payment Status Foundation](payment_status.md)
 - [Staging Operations](operations_staging.md)
 - [Staging Release Checklist](staging_release_checklist.md)

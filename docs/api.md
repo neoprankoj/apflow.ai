@@ -40,6 +40,11 @@ Initial endpoints:
 - `POST /erp/update-invoice-status`
 - `POST /erp/sync-payment-status`
 - `GET /erp/sync-logs?tenant_id={uuid}`
+- `GET /payments/statuses?tenant_id={uuid}`
+- `GET /payments/statuses/{payment_status_id}?tenant_id={uuid}`
+- `PATCH /payments/statuses/{payment_status_id}?tenant_id={uuid}`
+- `POST /payments/sync/mock`
+- `GET /payments/summary?tenant_id={uuid}`
 - `GET /ocr/providers`
 - `GET /ocr/test-provider?provider_name=mock`
 - `POST /ocr/test-provider?provider_name=mock`
@@ -75,6 +80,8 @@ Phase 7 permissions gate sensitive routes:
 - Review correction/approve/reject requires `review:correct`.
 - Audit event reads require `audit:read`.
 - Tenant admin routes require `tenant:admin`.
+- Payment status reads require `invoice:read`.
+- Payment status updates and mock payment sync require `invoice:process`.
 
 `POST /invoices/mock-pipeline` runs the Phase 2 deterministic mock flow:
 ingest, extract, normalize, supplier match, validate, and duplicate score.
@@ -235,6 +242,39 @@ Imported Priority records can be inspected without calling Priority or mutating 
 - `GET /erp/priority/imported/purchase-orders?tenant_id={uuid}`
 
 These read-only endpoints require `erp:read`, enforce tenant scope, and return APFlow IDs, Priority external IDs, source adapter, import flag, and best-effort last import action/timestamp derived from external references and audit events. Records without Priority external references are returned safely with `imported_from_priority=false`.
+
+## Payment Status
+
+Payment status endpoints are internal APFlow APIs for manual/mock invoice payment lifecycle tracking. They do not call banks, payment processors, or real ERP payment APIs.
+
+`GET /payments/statuses?tenant_id={uuid}` lists tenant-scoped payment statuses. Optional filters are `invoice_id` and `status`.
+
+`GET /payments/summary?tenant_id={uuid}` returns totals by status plus latest updates.
+
+`PATCH /payments/statuses/{payment_status_id}?tenant_id={uuid}` updates a status manually:
+
+```json
+{
+  "status": "paid",
+  "amount_paid": 1170.0,
+  "safe_vendor_message": "Payment has been marked as paid.",
+  "internal_note": "Internal AP note"
+}
+```
+
+`internal_note` is returned only through internal APIs and must never appear in vendor-safe responses.
+
+`POST /payments/sync/mock` creates or updates deterministic demo payment statuses:
+
+```json
+{
+  "tenant_id": "11111111-1111-1111-1111-111111111111",
+  "mode": "mock",
+  "invoice_id": "00000000-0000-0000-0000-000000000000"
+}
+```
+
+Mock sync records audit events and changes APFlow payment-status records only. It does not contact Priority, a bank, or any payment provider.
 
 Example Priority mapping payload:
 

@@ -20,6 +20,11 @@ from app.core.schemas import (
     InvoiceIngestionOutput,
     InvoiceNormalizationOutput,
     NotificationType,
+    PaymentStatusRead,
+    PaymentStatusSource,
+    PaymentStatusSummary,
+    PaymentStatusUpdate,
+    PaymentStatusValue,
     UploadedInvoiceDocument,
     TenantMembershipSchema,
     TenantRecordSchema,
@@ -146,6 +151,7 @@ class InMemoryAPRepository:
     memberships: dict[UUID, TenantMembershipSchema] = field(default_factory=dict)
     vendor_portal_access: dict[UUID, VendorPortalAccessRecord] = field(default_factory=dict)
     vendor_messages: dict[UUID, VendorMessageResult] = field(default_factory=dict)
+    payment_statuses: dict[UUID, PaymentStatusRead] = field(default_factory=dict)
 
     def create_tenant(
         self,
@@ -477,6 +483,144 @@ class InMemoryAPRepository:
             output.status = status
         return output
 
+    def get_payment_status_by_invoice(self, tenant_id: UUID, invoice_id: UUID) -> PaymentStatusRead | None:
+        self.get_invoice(tenant_id, invoice_id)
+        return next(
+            (
+                status
+                for status in self.payment_statuses.values()
+                if status.tenant_id == tenant_id and status.invoice_id == invoice_id
+            ),
+            None,
+        )
+
+    def get_payment_status(self, tenant_id: UUID, payment_status_id: UUID) -> PaymentStatusRead:
+        status = self.payment_statuses[payment_status_id]
+        if status.tenant_id != tenant_id:
+            raise KeyError("payment status is outside tenant scope")
+        return status
+
+    def list_payment_statuses(
+        self,
+        tenant_id: UUID,
+        *,
+        invoice_id: UUID | None = None,
+        status: str | None = None,
+    ) -> list[PaymentStatusRead]:
+        records = [record for record in self.payment_statuses.values() if record.tenant_id == tenant_id]
+        if invoice_id is not None:
+            records = [record for record in records if record.invoice_id == invoice_id]
+        if status:
+            records = [record for record in records if str(record.status) == status]
+        return sorted(records, key=lambda record: record.updated_at, reverse=True)
+
+    def upsert_payment_status(
+        self,
+        tenant_id: UUID,
+        invoice_id: UUID,
+        *,
+        status: PaymentStatusValue,
+        source: PaymentStatusSource,
+        amount_due: float | None = None,
+        amount_paid: float | None = None,
+        currency: str = "USD",
+        scheduled_payment_date: datetime | None = None,
+        paid_at: datetime | None = None,
+        external_payment_reference: str | None = None,
+        safe_vendor_message: str | None = None,
+        internal_note: str | None = None,
+        updated_by_user_id: UUID | None = None,
+    ) -> PaymentStatusRead:
+        self.get_invoice(tenant_id, invoice_id)
+        existing = self.get_payment_status_by_invoice(tenant_id, invoice_id)
+        now = datetime.now(UTC)
+        if existing is None:
+            record = PaymentStatusRead(
+                id=uuid4(),
+                tenant_id=tenant_id,
+                invoice_id=invoice_id,
+                status=status,
+                source=source,
+                amount_due=amount_due,
+                amount_paid=amount_paid,
+                currency=currency,
+                scheduled_payment_date=scheduled_payment_date,
+                paid_at=paid_at,
+                external_payment_reference=external_payment_reference,
+                safe_vendor_message=safe_vendor_message,
+                internal_note=internal_note,
+                last_synced_at=now if source in {PaymentStatusSource.MOCK, PaymentStatusSource.ERP} else None,
+                created_at=now,
+                updated_at=now,
+                updated_by_user_id=updated_by_user_id,
+            )
+            self.payment_statuses[record.id] = record
+            return record
+        update = PaymentStatusUpdate(
+            status=status,
+            amount_paid=amount_paid,
+            scheduled_payment_date=scheduled_payment_date,
+            paid_at=paid_at,
+            safe_vendor_message=safe_vendor_message,
+            internal_note=internal_note,
+            external_payment_reference=external_payment_reference,
+        )
+        return self.update_payment_status(
+            tenant_id,
+            existing.id,
+            update,
+            source=source,
+            amount_due=amount_due,
+            currency=currency,
+            updated_by_user_id=updated_by_user_id,
+        )
+
+    def update_payment_status(
+        self,
+        tenant_id: UUID,
+        payment_status_id: UUID,
+        update: PaymentStatusUpdate,
+        *,
+        source: PaymentStatusSource | None = None,
+        amount_due: float | None = None,
+        currency: str | None = None,
+        updated_by_user_id: UUID | None = None,
+    ) -> PaymentStatusRead:
+        existing = self.get_payment_status(tenant_id, payment_status_id)
+        data = existing.model_dump()
+        for key, value in update.model_dump(exclude_unset=True).items():
+            if value is not None:
+                data[key] = value
+        if source is not None:
+            data["source"] = source
+            if source in {PaymentStatusSource.MOCK, PaymentStatusSource.ERP}:
+                data["last_synced_at"] = datetime.now(UTC)
+        if amount_due is not None:
+            data["amount_due"] = amount_due
+        if currency:
+            data["currency"] = currency
+        data["updated_at"] = datetime.now(UTC)
+        data["updated_by_user_id"] = updated_by_user_id
+        record = PaymentStatusRead(**data)
+        self.payment_statuses[payment_status_id] = record
+        return record
+
+    def get_payment_status_summary(self, tenant_id: UUID) -> PaymentStatusSummary:
+        records = self.list_payment_statuses(tenant_id)
+        totals: dict[str, int] = {}
+        for record in records:
+            totals[str(record.status)] = totals.get(str(record.status), 0) + 1
+        return PaymentStatusSummary(
+            tenant_id=tenant_id,
+            totals_by_status=totals,
+            pending_count=totals.get(str(PaymentStatusValue.PENDING), 0),
+            scheduled_count=totals.get(str(PaymentStatusValue.SCHEDULED), 0),
+            paid_count=totals.get(str(PaymentStatusValue.PAID), 0),
+            failed_or_disputed_count=totals.get(str(PaymentStatusValue.FAILED), 0)
+            + totals.get(str(PaymentStatusValue.DISPUTED), 0),
+            latest_updates=records[:5],
+        )
+
     def set_approval_policy(self, policy: ApprovalPolicy) -> None:
         self.approval_policies[policy.tenant_id] = ApprovalPolicyRecord(policy=policy)
 
@@ -694,6 +838,7 @@ class InMemoryAPRepository:
     def clear_demo_operational_data(self, tenant_id: UUID) -> dict[str, int]:
         invoice_ids = {record.invoice_id for record in self.list_invoices(tenant_id)}
         cleared = {
+            "payment_statuses": sum(record.tenant_id == tenant_id for record in self.payment_statuses.values()),
             "vendor_messages": sum(message.tenant_id == tenant_id for message in self.vendor_messages.values()),
             "vendor_portal_access": sum(
                 record.tenant_id == tenant_id for record in self.vendor_portal_access.values()
@@ -730,6 +875,11 @@ class InMemoryAPRepository:
         self.invoices = {
             invoice_id: record
             for invoice_id, record in self.invoices.items()
+            if record.tenant_id != tenant_id
+        }
+        self.payment_statuses = {
+            payment_status_id: record
+            for payment_status_id, record in self.payment_statuses.items()
             if record.tenant_id != tenant_id
         }
         self.approval_tasks = {

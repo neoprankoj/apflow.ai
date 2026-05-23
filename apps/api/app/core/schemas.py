@@ -203,6 +203,26 @@ class VendorChatIntent(StrEnum):
     UNKNOWN = "unknown"
 
 
+class PaymentStatusValue(StrEnum):
+    NOT_STARTED = "not_started"
+    PENDING = "pending"
+    SCHEDULED = "scheduled"
+    PARTIALLY_PAID = "partially_paid"
+    PAID = "paid"
+    FAILED = "failed"
+    DISPUTED = "disputed"
+    CANCELLED = "cancelled"
+    UNKNOWN = "unknown"
+
+
+class PaymentStatusSource(StrEnum):
+    MANUAL = "manual"
+    MOCK = "mock"
+    ERP = "erp"
+    IMPORTED = "imported"
+    SYSTEM = "system"
+
+
 class UserRole(StrEnum):
     OWNER = "owner"
     ADMIN = "admin"
@@ -594,6 +614,66 @@ class PurchaseOrderInput(APFlowModel):
 
 class PurchaseOrderOutput(PurchaseOrderInput):
     purchase_order_id: UUID = Field(default_factory=uuid4)
+
+
+class PaymentStatusRead(APFlowModel):
+    id: UUID
+    tenant_id: UUID
+    invoice_id: UUID
+    status: PaymentStatusValue
+    source: PaymentStatusSource
+    amount_due: float | None = None
+    amount_paid: float | None = None
+    currency: str = "USD"
+    scheduled_payment_date: datetime | None = None
+    paid_at: datetime | None = None
+    external_payment_reference: str | None = None
+    safe_vendor_message: str | None = None
+    internal_note: str | None = None
+    last_synced_at: datetime | None = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_by_user_id: UUID | None = None
+
+
+class PaymentStatusUpdate(APFlowModel):
+    status: PaymentStatusValue | None = None
+    amount_paid: float | None = None
+    scheduled_payment_date: datetime | None = None
+    paid_at: datetime | None = None
+    safe_vendor_message: str | None = None
+    internal_note: str | None = None
+    external_payment_reference: str | None = None
+
+
+class PaymentStatusSyncRequest(APFlowModel):
+    tenant_id: UUID
+    invoice_id: UUID | None = None
+    mode: str = "mock"
+    status: PaymentStatusValue | None = None
+
+
+class PaymentStatusSummary(APFlowModel):
+    tenant_id: UUID
+    totals_by_status: dict[str, int] = Field(default_factory=dict)
+    pending_count: int = 0
+    scheduled_count: int = 0
+    paid_count: int = 0
+    failed_or_disputed_count: int = 0
+    latest_updates: list[PaymentStatusRead] = Field(default_factory=list)
+
+
+class VendorSafePaymentStatus(APFlowModel):
+    invoice_id: UUID
+    invoice_number: str
+    status: PaymentStatusValue
+    safe_status_label: str
+    safe_message: str
+    amount_due: float | None = None
+    amount_paid: float | None = None
+    currency: str = "USD"
+    scheduled_payment_date: datetime | None = None
+    paid_at: datetime | None = None
 
 
 class PurchaseOrderMatchingInput(APFlowModel):
@@ -1162,6 +1242,7 @@ class VendorInvoiceStatus(VendorInvoiceListItem):
     public_message: str
     missing_information: list[str] = Field(default_factory=list)
     line_item_count: int = 0
+    payment_status_detail: VendorSafePaymentStatus | None = None
 
 
 class VendorMessageCreate(APFlowModel):

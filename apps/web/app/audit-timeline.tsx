@@ -354,6 +354,9 @@ function titleForAuditAction(action: string) {
     "review.corrected": "Corrections submitted",
     "vendor.access_created": "Vendor-safe preview generated",
     "vendor.message_submitted": "Vendor message received",
+    "payment.status_created": "Payment status created",
+    "payment.status_updated": "Payment status updated",
+    "payment.mock_sync_run": "Mock payment sync run",
     "notification.sent": "Notification created"
   };
   if (action.startsWith("erp.")) return titleForErpAction(action);
@@ -372,6 +375,12 @@ function descriptionForAuditAction(action: string, metadata: Record<string, unkn
   if (action === "po.matched") return "PO matching was evaluated for this invoice.";
   if (action === "fraud.risk_scored") return "Risk screening was completed.";
   if (action.startsWith("erp.export_invoice")) return "Invoice exported to mock Priority ERP.";
+  if (action === "payment.status_created") return "Payment tracking was created for this invoice.";
+  if (action === "payment.status_updated") {
+    const status = readMetadataText(metadata, "status");
+    return status ? `Payment status updated to ${humanize(status)}.` : "Payment status was updated.";
+  }
+  if (action === "payment.mock_sync_run") return "Mock payment sync updated APFlow payment statuses only.";
   if (action.startsWith("erp.")) return "ERP activity was recorded.";
   if (action === "notification.sent") {
     const type = readMetadataText(metadata, "notification_type");

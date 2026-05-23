@@ -32,6 +32,7 @@ Use this short checklist before merging frontend UI changes.
 - [ ] Priority Admin clearly separates Sync dry run, Import plan, Controlled import, and Imported records.
 - [ ] Priority Admin always says when an action is preview-only, APFlow-only, or Priority-safe.
 - [ ] Imported records are visible after controlled Priority import.
+- [ ] Payment Status explains that current sync is manual/mock only and no real payment provider is contacted.
 
 ## Final AP user smoke test
 
@@ -52,6 +53,7 @@ Use this short checklist before merging frontend UI changes.
 - [ ] Approve works and the approval message is clear.
 - [ ] Dashboard refreshes after approval without 500 errors.
 - [ ] Vendor-safe preview works and does not expose fraud/risk details.
+- [ ] Payment Status mock sync works and payment updates appear in Vendor-safe preview without internal notes.
 - [ ] Mock ERP export works and success points to Audit Trail.
 - [ ] Audit Trail events are readable and main rows do not show raw UUID noise.
 - [ ] Priority Mapping Admin loads.
@@ -86,6 +88,19 @@ Use this short checklist before merging frontend UI changes.
 - [ ] Vendor-safe preview loads for processed invoices.
 - [ ] Internal risk, audit, and ERP details are not exposed.
 - [ ] Vendor-safe status language remains understandable.
+- [ ] Safe payment status appears when available.
+- [ ] Internal payment notes and raw payment references are not exposed.
+
+## Payment Status
+
+- [ ] Payment Status section loads after sign-in.
+- [ ] Summary cards show pending, scheduled, paid, and failed/disputed counts.
+- [ ] Empty state explains that statuses appear after mock sync or manual updates.
+- [ ] Run Mock Payment Sync creates visible APFlow payment statuses only.
+- [ ] Authorized users can manually update a status.
+- [ ] View-only users cannot update statuses.
+- [ ] Audit Trail records payment status changes.
+- [ ] Copy clearly says no bank, payment provider, or real ERP payment sync is connected.
 
 ## ERP Export
 

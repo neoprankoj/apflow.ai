@@ -33,6 +33,11 @@ from app.core.schemas import (
     InvoiceLineItem,
     InvoiceNormalizationOutput,
     NotificationType,
+    PaymentStatusRead,
+    PaymentStatusSource,
+    PaymentStatusSummary,
+    PaymentStatusUpdate,
+    PaymentStatusValue,
     UploadedInvoiceDocument,
     TenantMembershipSchema,
     TenantRecordSchema,
@@ -50,6 +55,7 @@ DEMO_OPERATIONAL_CLEANUP_MODELS = (
     dbm.VendorMessage,
     dbm.VendorPortalAccess,
     dbm.HumanReviewTask,
+    dbm.PaymentStatus,
     dbm.ERPExternalReference,
     dbm.ERPSyncLog,
     dbm.WorkflowEvent,
@@ -535,6 +541,153 @@ class SQLAlchemyAPRepository:
             row.status = status
         self.session.commit()
         return self._po_output(row)
+
+    def get_payment_status_by_invoice(self, tenant_id: UUID, invoice_id: UUID) -> PaymentStatusRead | None:
+        self._get_invoice_model(tenant_id, invoice_id)
+        row = self.session.scalar(
+            select(dbm.PaymentStatus).where(
+                dbm.PaymentStatus.tenant_id == tenant_id,
+                dbm.PaymentStatus.invoice_id == invoice_id,
+            )
+        )
+        return self._payment_status(row) if row else None
+
+    def get_payment_status(self, tenant_id: UUID, payment_status_id: UUID) -> PaymentStatusRead:
+        row = self.session.get(dbm.PaymentStatus, payment_status_id)
+        if row is None or row.tenant_id != tenant_id:
+            raise KeyError("payment status is outside tenant scope")
+        return self._payment_status(row)
+
+    def list_payment_statuses(
+        self,
+        tenant_id: UUID,
+        *,
+        invoice_id: UUID | None = None,
+        status: str | None = None,
+    ) -> list[PaymentStatusRead]:
+        query = select(dbm.PaymentStatus).where(dbm.PaymentStatus.tenant_id == tenant_id)
+        if invoice_id is not None:
+            query = query.where(dbm.PaymentStatus.invoice_id == invoice_id)
+        if status:
+            query = query.where(dbm.PaymentStatus.status == status)
+        rows = self.session.scalars(query.order_by(dbm.PaymentStatus.updated_at.desc())).all()
+        return [self._payment_status(row) for row in rows]
+
+    def upsert_payment_status(
+        self,
+        tenant_id: UUID,
+        invoice_id: UUID,
+        *,
+        status: PaymentStatusValue,
+        source: PaymentStatusSource,
+        amount_due: float | None = None,
+        amount_paid: float | None = None,
+        currency: str = "USD",
+        scheduled_payment_date=None,
+        paid_at=None,
+        external_payment_reference: str | None = None,
+        safe_vendor_message: str | None = None,
+        internal_note: str | None = None,
+        updated_by_user_id: UUID | None = None,
+    ) -> PaymentStatusRead:
+        self._get_invoice_model(tenant_id, invoice_id)
+        row = self.session.scalar(
+            select(dbm.PaymentStatus).where(
+                dbm.PaymentStatus.tenant_id == tenant_id,
+                dbm.PaymentStatus.invoice_id == invoice_id,
+            )
+        )
+        now = datetime_now_utc()
+        if row is None:
+            row = dbm.PaymentStatus(
+                tenant_id=tenant_id,
+                invoice_id=invoice_id,
+                status=str(status),
+                source=str(source),
+                amount_due=Decimal(str(amount_due)) if amount_due is not None else None,
+                amount_paid=Decimal(str(amount_paid)) if amount_paid is not None else None,
+                currency=currency,
+                scheduled_payment_date=scheduled_payment_date,
+                paid_at=paid_at,
+                external_payment_reference=external_payment_reference,
+                safe_vendor_message=safe_vendor_message,
+                internal_note=internal_note,
+                last_synced_at=now if source in {PaymentStatusSource.MOCK, PaymentStatusSource.ERP} else None,
+                updated_by_user_id=updated_by_user_id,
+            )
+            self.session.add(row)
+        else:
+            row.status = str(status)
+            row.source = str(source)
+            if amount_due is not None:
+                row.amount_due = Decimal(str(amount_due))
+            if amount_paid is not None:
+                row.amount_paid = Decimal(str(amount_paid))
+            row.currency = currency
+            row.scheduled_payment_date = scheduled_payment_date
+            row.paid_at = paid_at
+            row.external_payment_reference = external_payment_reference
+            row.safe_vendor_message = safe_vendor_message
+            row.internal_note = internal_note
+            row.updated_by_user_id = updated_by_user_id
+            if source in {PaymentStatusSource.MOCK, PaymentStatusSource.ERP}:
+                row.last_synced_at = now
+        self.session.commit()
+        return self._payment_status(row)
+
+    def update_payment_status(
+        self,
+        tenant_id: UUID,
+        payment_status_id: UUID,
+        update: PaymentStatusUpdate,
+        *,
+        source: PaymentStatusSource | None = None,
+        amount_due: float | None = None,
+        currency: str | None = None,
+        updated_by_user_id: UUID | None = None,
+    ) -> PaymentStatusRead:
+        row = self.session.get(dbm.PaymentStatus, payment_status_id)
+        if row is None or row.tenant_id != tenant_id:
+            raise KeyError("payment status is outside tenant scope")
+        update_data = update.model_dump(exclude_unset=True)
+        if update_data.get("status") is not None:
+            row.status = str(update_data["status"])
+        if update_data.get("amount_paid") is not None:
+            row.amount_paid = Decimal(str(update_data["amount_paid"]))
+        if "scheduled_payment_date" in update_data:
+            row.scheduled_payment_date = update_data["scheduled_payment_date"]
+        if "paid_at" in update_data:
+            row.paid_at = update_data["paid_at"]
+        for key in ("safe_vendor_message", "internal_note", "external_payment_reference"):
+            if key in update_data and update_data[key] is not None:
+                setattr(row, key, update_data[key])
+        if source is not None:
+            row.source = str(source)
+            if source in {PaymentStatusSource.MOCK, PaymentStatusSource.ERP}:
+                row.last_synced_at = datetime_now_utc()
+        if amount_due is not None:
+            row.amount_due = Decimal(str(amount_due))
+        if currency:
+            row.currency = currency
+        row.updated_by_user_id = updated_by_user_id
+        self.session.commit()
+        return self._payment_status(row)
+
+    def get_payment_status_summary(self, tenant_id: UUID) -> PaymentStatusSummary:
+        records = self.list_payment_statuses(tenant_id)
+        totals: dict[str, int] = {}
+        for record in records:
+            totals[str(record.status)] = totals.get(str(record.status), 0) + 1
+        return PaymentStatusSummary(
+            tenant_id=tenant_id,
+            totals_by_status=totals,
+            pending_count=totals.get(str(PaymentStatusValue.PENDING), 0),
+            scheduled_count=totals.get(str(PaymentStatusValue.SCHEDULED), 0),
+            paid_count=totals.get(str(PaymentStatusValue.PAID), 0),
+            failed_or_disputed_count=totals.get(str(PaymentStatusValue.FAILED), 0)
+            + totals.get(str(PaymentStatusValue.DISPUTED), 0),
+            latest_updates=records[:5],
+        )
 
     def set_approval_policy(self, policy: ApprovalPolicy) -> None:
         self._ensure_tenant(policy.tenant_id)
@@ -1060,6 +1213,27 @@ class SQLAlchemyAPRepository:
             reason=row.reason or "",
         )
 
+    def _payment_status(self, row: dbm.PaymentStatus) -> PaymentStatusRead:
+        return PaymentStatusRead(
+            id=row.id,
+            tenant_id=row.tenant_id,
+            invoice_id=row.invoice_id,
+            status=_safe_enum_value(PaymentStatusValue, row.status),
+            source=_safe_enum_value(PaymentStatusSource, row.source),
+            amount_due=float(row.amount_due) if row.amount_due is not None else None,
+            amount_paid=float(row.amount_paid) if row.amount_paid is not None else None,
+            currency=row.currency,
+            scheduled_payment_date=row.scheduled_payment_date,
+            paid_at=row.paid_at,
+            external_payment_reference=row.external_payment_reference,
+            safe_vendor_message=row.safe_vendor_message,
+            internal_note=row.internal_note,
+            last_synced_at=row.last_synced_at,
+            created_at=row.created_at,
+            updated_at=row.updated_at,
+            updated_by_user_id=row.updated_by_user_id,
+        )
+
     def _notification_record(self, row: dbm.NotificationEvent) -> NotificationEventRecord:
         return NotificationEventRecord(
             tenant_id=row.tenant_id,
@@ -1161,3 +1335,9 @@ def _safe_enum_value(enum_type, value: str | None) -> str:
         return str(enum_type(value))
     except ValueError:
         return str(value)
+
+
+def datetime_now_utc():
+    from datetime import UTC, datetime
+
+    return datetime.now(UTC)

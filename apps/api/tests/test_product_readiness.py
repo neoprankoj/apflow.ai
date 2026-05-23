@@ -91,6 +91,8 @@ def test_payment_and_vendor_gaps_are_pilot_or_production_blockers(auth_enabled):
     body = response.json()
     checks = {item["key"]: item for item in body["checks"]}
     assert checks["production_access_hardening"]["status"] == "fail"
+    assert checks["payment_status_foundation_available"]["status"] == "pass"
+    assert checks["real_payment_sync_configured"]["status"] == "fail"
     assert checks["payment_status_sync_ready"]["status"] == "fail"
     assert checks["production_vendor_access_ready"]["status"] == "fail"
     assert "Production access hardening" in body["pilot_ready"]["blockers"]

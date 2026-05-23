@@ -40,6 +40,7 @@ import { ApprovalInbox } from "./approval-inbox";
 import { APWorkflowGuide } from "./ap-workflow-guide";
 import { AuditTimeline, type AuditEvent } from "./audit-timeline";
 import { InvoiceUploadPanel } from "./invoice-upload-panel";
+import { PaymentStatusPanel } from "./payment-status-panel";
 import { PriorityMappingAdmin } from "./priority-mapping-admin";
 import { ProductReadinessPanel } from "./product-readiness-panel";
 
@@ -516,6 +517,7 @@ export default function Dashboard() {
     { id: "upload-invoice", label: "Upload Invoice" },
     { id: "ocr-review", label: "OCR Review" },
     { id: "approval-inbox", label: "Approval Inbox" },
+    { id: "payment-status", label: "Payment Status" },
     { id: "approvals", label: "Approvals" },
     { id: "erp-export", label: "ERP Export" },
     { id: "vendor-portal-preview", label: "Vendor Portal Preview" },
@@ -1069,6 +1071,14 @@ export default function Dashboard() {
                 return loadProtectedData(accessToken, currentUser);
               }
             }}
+            tenantId={tenantId}
+          />
+
+          <PaymentStatusPanel
+            accessToken={accessToken}
+            apiBaseUrl={apiBaseUrl}
+            canUpdatePaymentStatus={canReview || canApproveInvoice || canAdmin}
+            invoices={invoices}
             tenantId={tenantId}
           />
 

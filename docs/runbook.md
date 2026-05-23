@@ -38,6 +38,17 @@ Notification events are stored locally for:
 
 No real email, Slack, Teams, or webhook delivery happens in the current phase.
 
+## Payment Status
+
+Payment status tracking is currently APFlow-internal and manual/mock only.
+
+1. Use the dashboard `Payment Status` section to run mock payment sync.
+2. Use manual updates for demo payment states.
+3. Confirm vendor-safe preview shows only safe payment language.
+4. Confirm Audit Trail records payment status events.
+
+No bank, payment processor, or real ERP payment status sync runs in this phase. See [payment_status.md](payment_status.md) for the model and vendor-safe boundary.
+
 ## Database Migrations
 
 1. Start PostgreSQL with Docker Compose when Docker is available.
@@ -163,6 +174,7 @@ Confirm before presenting:
 - Priority mode is mock.
 - Priority writes are disabled.
 - Mock ERP export still works.
+- Payment Status mock sync works and does not contact real payment systems.
 - No `.env.staging` or secret changes are committed.
 
 If staging environment values were changed, recreate the API container so the new values load:

@@ -272,6 +272,25 @@ class ERPSyncLog(Base, TenantScopedMixin, TimestampMixin):
     metadata_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
 
 
+class PaymentStatus(Base, TenantScopedMixin, TimestampMixin):
+    __tablename__ = "payment_statuses"
+
+    id: Mapped[PyUUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    invoice_id: Mapped[PyUUID] = mapped_column(Uuid, ForeignKey("invoices.id"), index=True)
+    status: Mapped[str] = mapped_column(String(64), nullable=False, default="not_started", index=True)
+    source: Mapped[str] = mapped_column(String(64), nullable=False, default="manual")
+    amount_due: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
+    amount_paid: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="USD")
+    scheduled_payment_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    external_payment_reference: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    safe_vendor_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    internal_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    updated_by_user_id: Mapped[PyUUID | None] = mapped_column(Uuid, nullable=True)
+
+
 class ERPExternalReference(Base, TenantScopedMixin, TimestampMixin):
     __tablename__ = "erp_external_references"
 

@@ -19,6 +19,7 @@ APFlow AI is tenant-first and deny-by-default.
 - Vendor portal tokens are stored only as SHA-256 hashes. Raw tokens are returned once by the demo access endpoint.
 - Vendor users can only retrieve invoices linked to their `vendor_id`.
 - Vendor invoice and chatbot responses exclude fraud scores, internal risk reasons, audit logs, ERP sync logs, approval-policy internals, and other vendors' invoices.
+- Vendor-safe payment status responses may show safe labels, safe messages, amounts, and dates, but must not expose `internal_note`, raw provider payloads, audit metadata, or internal payment references.
 - Vendor chatbot responses are deterministic and based only on vendor-safe invoice/payment fields. Unsupported or internal questions are deflected to AP contact.
 - Production-like Docker runs should set `USE_IN_MEMORY_REPOSITORIES=false` and use PostgreSQL persistence.
 - Change `AUTH_SECRET_KEY` before enabling auth outside local development.
