@@ -21,6 +21,8 @@ from app.core.schemas import (
     HumanReviewTask,
     InvoiceLineItem,
     InvoiceNormalizationOutput,
+    PaymentStatusSource,
+    PaymentStatusValue,
     PriorityImportRequest,
     PriorityMappingConfig,
     PriorityMappingValidationRequest,
@@ -61,6 +63,8 @@ def test_protected_routes_reject_unauthenticated_requests(auth_enabled):
         ("GET", "/invoices/approval-tasks", None),
         ("GET", "/invoices/audit-events", None),
         ("GET", "/review/tasks", None),
+        ("GET", "/payments/statuses", None),
+        ("GET", "/payments/summary", None),
         ("GET", "/admin/users", None),
         ("GET", "/erp/priority/mapping", None),
         ("GET", "/erp/priority/readiness", None),
@@ -113,12 +117,18 @@ def test_viewer_role_cannot_approve_export_admin_or_configure(auth_enabled):
         json=PriorityImportRequest(tenant_id=tenant_id, selected_external_ids=["SUP-1001"], confirmation="IMPORT_SELECTED").model_dump(mode="json"),
         headers=headers,
     )
+    payment_update = client.patch(
+        f"/payments/statuses/{uuid4()}?tenant_id={tenant_id}",
+        json={"status": "paid"},
+        headers=headers,
+    )
     admin_users = client.get("/admin/users", headers=headers)
 
     assert approval.status_code == 403
     assert export.status_code == 403
     assert configure.status_code == 403
     assert priority_import.status_code == 403
+    assert payment_update.status_code == 403
     assert admin_users.status_code == 403
 
 
@@ -163,7 +173,13 @@ def test_tenant_a_cannot_read_or_configure_tenant_b_resources(auth_enabled):
     tenant_b = _register(client, "tenant-b-security@example.com")
     repository = dependencies.get_repository()
     tenant_b_id = UUID(tenant_b["tenant"]["id"])
-    _seed_invoice(repository, tenant_b_id, "TENANT-B-INV")
+    tenant_b_invoice = _seed_invoice(repository, tenant_b_id, "TENANT-B-INV")
+    repository.upsert_payment_status(
+        tenant_b_id,
+        tenant_b_invoice.invoice_id,
+        status=PaymentStatusValue.SCHEDULED,
+        source=PaymentStatusSource.MOCK,
+    )
     repository.store_review_task(
         HumanReviewTask(
             tenant_id=tenant_b_id,
@@ -181,6 +197,8 @@ def test_tenant_a_cannot_read_or_configure_tenant_b_resources(auth_enabled):
         f"/invoices/audit-events?{tenant_b_query}",
         f"/invoices/notification-events?{tenant_b_query}",
         f"/review/tasks?{tenant_b_query}",
+        f"/payments/statuses?{tenant_b_query}",
+        f"/payments/summary?{tenant_b_query}",
         f"/erp/priority/mapping?{tenant_b_query}",
         f"/erp/priority/imported/vendors?{tenant_b_query}",
         f"/erp/priority/imported/purchase-orders?{tenant_b_query}",

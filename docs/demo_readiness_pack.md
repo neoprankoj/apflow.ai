@@ -14,12 +14,13 @@ APFlow demonstrates a complete AP manager workflow:
 - Approve, reject, or hold invoices in Approval Inbox.
 - Show a vendor-safe preview without internal risk or audit details.
 - Export approved invoices to mock ERP.
+- Show manual/mock payment status tracking and vendor-safe payment messages.
 - Prove activity in Audit Trail.
 - Preview Priority ERP mapping, dry-run sync, import plans, controlled APFlow-side imports, and imported records.
 
 What is real today:
 
-- FastAPI backend, Next.js dashboard, PostgreSQL persistence, auth/RBAC, document upload, OCR.space extraction, review/corrections, approvals, audit events, vendor-safe preview, controlled APFlow-side Priority imports, and runtime verification.
+- FastAPI backend, Next.js dashboard, PostgreSQL persistence, auth/RBAC, document upload, OCR.space extraction, review/corrections, approvals, audit events, vendor-safe preview, manual/mock payment status tracking, controlled APFlow-side Priority imports, and runtime verification.
 
 What is mock or safe by design:
 
@@ -31,6 +32,7 @@ What is mock or safe by design:
 Intentionally disabled or deferred:
 
 - Real Priority writes.
+- Real ERP/bank payment status sync.
 - Domain and HTTPS.
 - Public production access.
 - Demo reset unless explicitly enabled for controlled cleanup.
@@ -84,8 +86,11 @@ Intentionally disabled or deferred:
 16. Open Vendor-safe preview and confirm internal fraud/risk details are hidden.
 17. Export to mock ERP.
 18. Confirm the export success message and external mock ERP ID.
-19. Open Audit Trail.
-20. Show approval/export events as proof of what happened.
+19. Open Payment Status.
+20. Run Mock Payment Sync and explain it updates APFlow only.
+21. Open Vendor-safe preview and show the safe payment message.
+22. Open Audit Trail.
+23. Show approval/export/payment events as proof of what happened.
 
 Avoid saying that mock ERP export is a real ERP write. Say: "This proves the export handoff path using the mock adapter; real ERP write enablement is intentionally gated."
 
@@ -112,6 +117,7 @@ Avoid saying that mock ERP export is a real ERP write. Say: "This proves the exp
 ## F. Safety Explanations
 
 - Mock ERP export does not write to a real ERP.
+- Mock payment sync does not call a bank, payment provider, or real ERP payment API.
 - Controlled Priority import writes only selected records into APFlow's database.
 - Priority writes remain disabled by default.
 - Priority real read-only fetch is gated and GET-only when enabled.

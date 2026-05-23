@@ -194,6 +194,44 @@ export type ProductReadinessResponse = {
   message: string;
 };
 
+export type PaymentStatusRead = {
+  id: string;
+  tenant_id: string;
+  invoice_id: string;
+  status: string;
+  source: string;
+  amount_due?: number | null;
+  amount_paid?: number | null;
+  currency: string;
+  scheduled_payment_date?: string | null;
+  paid_at?: string | null;
+  external_payment_reference?: string | null;
+  safe_vendor_message?: string | null;
+  last_synced_at?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PaymentStatusSummary = {
+  tenant_id: string;
+  totals_by_status: Record<string, number>;
+  pending_count: number;
+  scheduled_count: number;
+  paid_count: number;
+  failed_or_disputed_count: number;
+  latest_updates: PaymentStatusRead[];
+};
+
+export type PaymentStatusUpdate = {
+  status?: string;
+  amount_paid?: number | null;
+  scheduled_payment_date?: string | null;
+  paid_at?: string | null;
+  safe_vendor_message?: string | null;
+  internal_note?: string | null;
+  external_payment_reference?: string | null;
+};
+
 export function getApiBaseUrl() {
   const value = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
   if (!value) return null;
@@ -430,6 +468,64 @@ export function getProductReadiness(apiBaseUrl: string, token: string) {
   return apiFetch<ProductReadinessResponse>(apiBaseUrl, "/ready/product", {
     token,
     action: "Load product readiness"
+  });
+}
+
+export function listPaymentStatuses(
+  apiBaseUrl: string,
+  token: string,
+  tenantId: string,
+  filters: { invoiceId?: string; status?: string } = {}
+) {
+  const params = new URLSearchParams({ tenant_id: tenantId });
+  if (filters.invoiceId) params.set("invoice_id", filters.invoiceId);
+  if (filters.status) params.set("status", filters.status);
+  return apiFetch<PaymentStatusRead[]>(apiBaseUrl, `/payments/statuses?${params.toString()}`, {
+    token,
+    action: "Load payment statuses"
+  });
+}
+
+export function getPaymentSummary(apiBaseUrl: string, token: string, tenantId: string) {
+  return apiFetch<PaymentStatusSummary>(
+    apiBaseUrl,
+    `/payments/summary?tenant_id=${encodeURIComponent(tenantId)}`,
+    { token, action: "Load payment summary" }
+  );
+}
+
+export function updatePaymentStatus(
+  apiBaseUrl: string,
+  token: string,
+  tenantId: string,
+  paymentStatusId: string,
+  payload: PaymentStatusUpdate
+) {
+  return apiFetch<PaymentStatusRead>(
+    apiBaseUrl,
+    `/payments/statuses/${encodeURIComponent(paymentStatusId)}?tenant_id=${encodeURIComponent(tenantId)}`,
+    {
+      method: "PATCH",
+      token,
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+      action: "Update payment status"
+    }
+  );
+}
+
+export function runMockPaymentSync(
+  apiBaseUrl: string,
+  token: string,
+  tenantId: string,
+  invoiceId?: string
+) {
+  return apiFetch<PaymentStatusRead[]>(apiBaseUrl, "/payments/sync/mock", {
+    method: "POST",
+    token,
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ tenant_id: tenantId, mode: "mock", invoice_id: invoiceId ?? null }),
+    action: "Run mock payment sync"
   });
 }
 

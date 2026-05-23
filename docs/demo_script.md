@@ -64,6 +64,16 @@ Use this script for a private staging demo. Keep the presenter flow deterministi
 4. Explain that the adapter pattern is live now and real ERP adapters are the next integration step.
 5. Open Audit Trail to verify the export event.
 
+## F1. Demo Path 5a - Payment Status
+
+1. Open `Payment Status` after at least one invoice exists.
+2. Click `Run Mock Payment Sync`.
+3. Show pending, scheduled, paid, and failed/disputed summary cards.
+4. Update one payment status manually if the demo role allows it.
+5. Explain that this updates APFlow only; it does not contact a bank, payment provider, or real ERP payment API.
+6. Open Vendor Preview and show the safe payment message.
+7. Open Audit Trail and show the payment status event.
+
 ## G. Demo Path 6 - Priority Mapping Admin
 
 1. Open `Admin`, then show `Priority ERP Mapping`.
