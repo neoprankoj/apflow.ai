@@ -318,6 +318,46 @@ def test_corrected_review_task_returns_precise_blocker_when_unresolved_issue_rem
     assert pipeline["blocker_reason"] == body["blocker_reason"]
 
 
+def test_corrected_upload_with_discount_aware_total_persists_invoice_record():
+    client = TestClient(create_app())
+    tenant_id = str(uuid4())
+    content = (
+        "invoice_number=INV-UPLOAD-DISCOUNT supplier_name=Northstar supplier_tax_id=TAX-12345 "
+        "subtotal=15527.06 tax_total=0 discount_total=31.05 shipping_amount=159.52 grand_total=15655.53 "
+        "currency=USD invoice_date=2026-05-05 po_number=PO-100 confidence_supplier_name=0.4"
+    ).encode()
+    uploaded = _upload(client, tenant_id, content).json()
+    first_process = client.post(
+        f"/documents/invoices/{uploaded['document']['document_id']}/process",
+        json={"tenant_id": tenant_id},
+    ).json()
+    task_id = first_process["pipeline_result"]["review_tasks"][0]["task_id"]
+
+    correction = client.post(
+        f"/review/tasks/{task_id}/corrections",
+        json={
+            "tenant_id": tenant_id,
+            "corrections": {"supplier_name": "Northstar"},
+            "reviewer_id": "test-reviewer",
+        },
+    )
+    second_process = client.post(
+        f"/documents/invoices/{uploaded['document']['document_id']}/process",
+        json={"tenant_id": tenant_id},
+    )
+
+    assert correction.status_code == 200
+    assert second_process.status_code == 200
+    body = second_process.json()
+    pipeline = body["pipeline_result"]
+    assert body["workflow_status"] == "approval_ready"
+    assert body["review_status"] == "not_required"
+    assert body["invoice_created"] is True
+    assert pipeline["validation_result"]["validation_status"] == "passed"
+    assert pipeline["invoice"]["canonical_invoice"]["discount_total"] == 31.05
+    assert pipeline["invoice"]["canonical_invoice"]["grand_total"] == 15655.53
+
+
 def test_tenant_cannot_process_another_tenant_uploaded_document():
     client = TestClient(create_app())
     tenant_a = str(uuid4())

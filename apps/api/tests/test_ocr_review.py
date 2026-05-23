@@ -235,6 +235,38 @@ def test_ocr_space_parser_handles_invoice_header_date_and_shipping_total(tenant_
     assert all(issue.field_name != "grand_total" for issue in task.issues)
 
 
+def test_ocr_space_parser_handles_parenthesized_discount_as_deduction(tenant_id, human_review_agent):
+    adapter = OCRSpaceOCRAdapter(Settings(ocr_space_api_key="test-key"))
+
+    result = adapter.normalize_provider_response(
+        {
+            "IsErroredOnProcessing": False,
+            "ParsedResults": [
+                {
+                    "ParsedText": (
+                        "SuperStore\n"
+                        "Invoice # 40100\n"
+                        "Date: Dec 30 2012\n"
+                        "Subtotal: $15,527.06\n"
+                        "Discount (0.2%): $31.05\n"
+                        "Shipping: $159.52\n"
+                        "Total: $15,655.53\n"
+                    )
+                }
+            ],
+        },
+        tenant_id,
+    )
+    field_map = {field.field_name: field for field in result.fields}
+    task = human_review_agent.inspect_extraction(result, raw_invoice_id=uuid4())
+
+    assert field_map["subtotal"].value == 15527.06
+    assert field_map["discount_total"].value == 31.05
+    assert field_map["shipping_amount"].value == 159.52
+    assert field_map["grand_total"].value == 15655.53
+    assert all(issue.field_name != "grand_total" for issue in task.issues)
+
+
 def test_ocr_space_parser_handles_empty_parsed_text_safely(tenant_id):
     adapter = OCRSpaceOCRAdapter(Settings(ocr_space_api_key="test-key"))
 

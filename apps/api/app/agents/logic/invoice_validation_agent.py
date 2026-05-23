@@ -59,9 +59,15 @@ class InvoiceValidationAgent(BaseAgent[InvoiceValidationInput, InvoiceValidation
                 tolerance=self.total_tolerance,
             )
             if not reconciliation.matches and reconciliation.components_complete:
+                discount_note = (
+                    " Discount was treated as a deduction."
+                    if reconciliation.discount_deduction
+                    else ""
+                )
                 errors.append(
-                    f"grand_total {invoice.grand_total:.2f} does not equal visible invoice components "
-                    f"{reconciliation.expected_total:.2f}"
+                    f"Grand total mismatch: {reconciliation.formula_label} = "
+                    f"{reconciliation.expected_total:.2f}, but grand total is "
+                    f"{reconciliation.actual_total:.2f}.{discount_note}"
                 )
             elif not reconciliation.matches:
                 warnings.append("Total could not be fully reconciled from visible components.")

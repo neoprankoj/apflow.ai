@@ -504,7 +504,7 @@ class OCRSpaceOCRAdapter:
                 self._money(
                     text,
                     [
-                        rf"\bdiscount\s*[:#-]?\s*(?:[^\d\r\n-]{{0,20}}){MONEY_VALUE}",
+                        rf"\b(?:discount|credit|rebate)\s*(?:\([^)\r\n]{{0,30}}\))?\s*[:#-]?\s*(?:[^\d\r\n-]{{0,20}}){MONEY_VALUE}",
                     ],
                 ),
             ),

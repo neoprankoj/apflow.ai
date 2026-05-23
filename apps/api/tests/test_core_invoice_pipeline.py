@@ -210,7 +210,7 @@ def test_validation_fails_bad_math(tenant_id, invoice_validation_agent):
     )
 
     assert output.validation_status == InvoiceValidationStatus.FAILED
-    assert "does not equal" in output.errors[0]
+    assert "Grand total mismatch" in output.errors[0]
 
 
 @pytest.mark.parametrize(
@@ -220,6 +220,7 @@ def test_validation_fails_bad_math(tenant_id, invoice_validation_agent):
         (0, 4.29, 0, 0, 104.29),
         (20, 4.29, 0, 0, 124.29),
         (0, 0, 0, 10, 90),
+        (0, 0, 0, -10, 90),
     ],
 )
 def test_validation_reconciles_visible_total_components(
@@ -255,6 +256,61 @@ def test_validation_reconciles_visible_total_components(
 
     assert output.validation_status == InvoiceValidationStatus.PASSED
     assert output.errors == []
+
+
+def test_validation_reconciles_qa_invoice_discount_as_deduction(tenant_id, invoice_validation_agent):
+    from app.core.schemas import CanonicalInvoice
+
+    output = invoice_validation_agent.validate(
+        InvoiceValidationInput(
+            tenant_id=tenant_id,
+            invoice_id=uuid4(),
+            canonical_invoice=CanonicalInvoice(
+                invoice_number="INV-DISCOUNT",
+                supplier_name="Vendor",
+                invoice_date="2026-05-05",
+                currency="USD",
+                subtotal=15527.06,
+                tax_total=0,
+                shipping_amount=159.52,
+                discount_total=31.05,
+                grand_total=15655.53,
+            ),
+            vendor_id=uuid4(),
+        )
+    )
+
+    assert output.validation_status == InvoiceValidationStatus.PASSED
+    assert output.errors == []
+
+
+def test_validation_discount_mismatch_keeps_clear_blocker_message(tenant_id, invoice_validation_agent):
+    from app.core.schemas import CanonicalInvoice
+
+    output = invoice_validation_agent.validate(
+        InvoiceValidationInput(
+            tenant_id=tenant_id,
+            invoice_id=uuid4(),
+            canonical_invoice=CanonicalInvoice(
+                invoice_number="INV-DISCOUNT-MISMATCH",
+                supplier_name="Vendor",
+                invoice_date="2026-05-05",
+                currency="USD",
+                subtotal=15527.06,
+                tax_total=0,
+                shipping_amount=159.52,
+                discount_total=31.05,
+                grand_total=15686.58,
+            ),
+            vendor_id=uuid4(),
+        )
+    )
+
+    assert output.validation_status == InvoiceValidationStatus.FAILED
+    assert output.errors == [
+        "Grand total mismatch: subtotal + tax + shipping + fees - discounts = 15655.53, "
+        "but grand total is 15686.58. Discount was treated as a deduction."
+    ]
 
 
 def test_validation_uses_soft_warning_when_total_components_are_incomplete(tenant_id, invoice_validation_agent):

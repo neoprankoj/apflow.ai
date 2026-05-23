@@ -193,13 +193,19 @@ class HumanReviewAgent(BaseAgent[OCRExtractionResult, HumanReviewTask]):
                 components_complete=components_complete,
             )
             if not reconciliation.matches and reconciliation.components_complete:
+                discount_note = (
+                    " Discount was treated as a deduction."
+                    if reconciliation.discount_deduction
+                    else ""
+                )
                 issues.append(
                     HumanReviewFieldIssue(
                         field_name="grand_total",
                         issue_type="suspicious_totals",
                         message=(
-                            f"visible invoice components total {reconciliation.expected_total}, "
-                            f"but grand total is {reconciliation.actual_total}."
+                            f"Grand total mismatch: {reconciliation.formula_label} = "
+                            f"{reconciliation.expected_total}, but grand total is "
+                            f"{reconciliation.actual_total}.{discount_note}"
                         ),
                         current_value=reconciliation.actual_total,
                         confidence=grand_total.confidence,
