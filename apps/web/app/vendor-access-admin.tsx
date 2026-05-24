@@ -39,7 +39,7 @@ export function VendorAccessAdmin({
   const [error, setError] = useState<string | null>(null);
   const [oneTimeToken, setOneTimeToken] = useState<VendorAccessCreatedResponse | VendorAccessRotateResponse | null>(null);
   const [email, setEmail] = useState("vendor@example.com");
-  const [vendorName, setVendorName] = useState("Northstar Components");
+  const [vendorName, setVendorName] = useState("SuperStore");
   const [label, setLabel] = useState("Supplier self-service access");
   const [ttlDays, setTtlDays] = useState(30);
 
@@ -81,7 +81,11 @@ export function VendorAccessAdmin({
         ttl_days: ttlDays
       });
       setOneTimeToken(created);
-      setMessage("Vendor access created. Copy the token now; it will not be shown again.");
+      setMessage(
+        created.matching_invoice_count > 0
+          ? `Vendor access created with ${created.matching_invoice_count} matching invoice${created.matching_invoice_count === 1 ? "" : "s"}. Copy the token now; it will not be shown again.`
+          : "Vendor access created. This supplier currently has no vendor-visible invoices, so the supplier list may be empty."
+      );
       await loadRecords();
     } catch (err) {
       setError(readError(err, "Vendor access could not be created."));
@@ -192,10 +196,20 @@ export function VendorAccessAdmin({
               <p className="text-sm font-semibold text-main">Copy this token now. It will not be shown again.</p>
               <textarea className="mt-3 min-h-20 w-full rounded-md border border-border p-3 font-mono text-xs" readOnly value={oneTimeToken.access_token} />
               {oneTimeToken.access_url ? (
-                <p className="mt-2 break-all text-xs text-muted">Access URL: {oneTimeToken.access_url}</p>
+                <p className="mt-2 break-all text-xs text-muted">
+                  Access URL:{" "}
+                  <a className="font-medium text-primary underline" href={oneTimeToken.access_url} rel="noreferrer" target="_blank">
+                    {oneTimeToken.access_url}
+                  </a>
+                </p>
               ) : (
                 <p className="mt-2 text-xs text-muted">No public vendor URL is configured yet. Use the token through the vendor API/session flow.</p>
               )}
+              {createdMatchingInvoiceCount(oneTimeToken) === 0 ? (
+                <p className="mt-2 rounded-md border border-warning/30 bg-warning/5 px-3 py-2 text-xs text-warning">
+                  This supplier currently has no vendor-visible invoices. The token works, but the supplier will see an empty list until invoices match this supplier.
+                </p>
+              ) : null}
             </div>
           ) : null}
 
@@ -220,7 +234,7 @@ export function VendorAccessAdmin({
               <table className="min-w-full text-left text-sm">
                 <thead className="bg-slate-50 text-xs uppercase text-muted">
                   <tr>
-                    {["status", "supplier", "email", "token", "expires", "last used", "actions"].map((heading) => (
+                    {["status", "supplier", "matching invoices", "email", "token", "expires", "last used", "actions"].map((heading) => (
                       <th className="px-3 py-2" key={heading}>{heading}</th>
                     ))}
                   </tr>
@@ -233,6 +247,7 @@ export function VendorAccessAdmin({
                         <p className="font-medium">{record.vendor_name ?? "Supplier"}</p>
                         <p className="text-xs text-muted">{record.label ?? "Vendor portal access"}</p>
                       </td>
+                      <td className="px-3 py-3 align-top">{record.matching_invoice_count}</td>
                       <td className="px-3 py-3 align-top">{record.email}</td>
                       <td className="px-3 py-3 align-top font-mono text-xs">{record.token_prefix ?? "-"}</td>
                       <td className="px-3 py-3 align-top">{formatDate(record.expires_at)}</td>
@@ -281,6 +296,11 @@ function MiniStat({ label, value }: { label: string; value: string }) {
       <p className="mt-1 text-lg font-semibold">{value}</p>
     </div>
   );
+}
+
+function createdMatchingInvoiceCount(value: VendorAccessCreatedResponse | VendorAccessRotateResponse) {
+  if ("new_access" in value) return value.new_access.matching_invoice_count;
+  return value.matching_invoice_count;
 }
 
 function formatDate(value?: string | null) {

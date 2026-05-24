@@ -14,7 +14,7 @@ from app.api.dependencies import (
     require_permission,
     resolve_tenant_id,
 )
-from app.core.repositories import InMemoryAPRepository, VendorPortalAccessRecord
+from app.core.repositories import InMemoryAPRepository, VendorPortalAccessRecord, VendorRecord
 from app.core.config import settings
 from app.core.schemas import (
     ActorType,
@@ -40,6 +40,7 @@ from app.core.vendor_portal import (
     generate_vendor_access_token,
     hash_vendor_access_token,
     invoice_is_visible_to_vendor,
+    normalize_supplier_key,
     vendor_access_token_prefix,
     vendor_invoice_list_item,
     vendor_invoice_status,
@@ -86,7 +87,7 @@ def create_vendor_access(
         access_token=raw_token,
         token_prefix=record.token_prefix,
         label=record.label,
-        access_url=_access_url(raw_token),
+        access_url=_access_url(payload.tenant_id, raw_token),
         expires_at=record.expires_at,
         created_at=record.created_at,
     )
@@ -126,7 +127,7 @@ def create_vendor_access_for_admin(
     return VendorAccessCreatedResponse(
         **_vendor_access_read(repository, record).model_dump(),
         access_token=raw_token,
-        access_url=_access_url(raw_token),
+        access_url=_access_url(tenant_id, raw_token),
     )
 
 
@@ -230,7 +231,7 @@ def rotate_vendor_access(
         old_access=_vendor_access_read(repository, old_record),
         new_access=_vendor_access_read(repository, new_record),
         access_token=raw_token,
-        access_url=_access_url(raw_token),
+        access_url=_access_url(tenant_id, raw_token),
     )
 
 
@@ -243,10 +244,11 @@ def list_vendor_invoices(
     audit_agent: AuditLoggingAgent = Depends(get_audit_agent),
 ) -> list[VendorInvoiceListItem]:
     access = _resolve_vendor_access(tenant_id, x_vendor_access_token or access_token, repository, audit_agent)
+    vendor_name = _vendor_name(repository, tenant_id, access.vendor_id)
     invoices = [
         invoice
         for invoice in repository.list_invoices(tenant_id)
-        if invoice_is_visible_to_vendor(invoice, access.vendor_id)
+        if invoice_is_visible_to_vendor(invoice, access.vendor_id, vendor_name)
     ]
     return [vendor_invoice_list_item(repository, tenant_id, invoice) for invoice in invoices]
 
@@ -265,7 +267,7 @@ def get_vendor_invoice(
         invoice = repository.get_invoice(tenant_id, invoice_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Invoice not found") from exc
-    if not invoice_is_visible_to_vendor(invoice, access.vendor_id):
+    if not invoice_is_visible_to_vendor(invoice, access.vendor_id, _vendor_name(repository, tenant_id, access.vendor_id)):
         raise HTTPException(status_code=403, detail="Invoice is outside vendor scope")
     result = vendor_invoice_status(repository, tenant_id, invoice)
     audit_agent.record(
@@ -390,7 +392,7 @@ def _create_vendor_access(
     if resolved_vendor_id is None:
         vendors = repository.list_vendors(tenant_id)
         if vendor_name:
-            vendor = repository.add_vendor(tenant_id, vendor_name)
+            vendor = _find_vendor_by_name(vendors, vendor_name) or repository.add_vendor(tenant_id, vendor_name)
         elif vendors:
             vendor = vendors[0]
         else:
@@ -415,10 +417,7 @@ def _create_vendor_access(
 
 
 def _vendor_access_read(repository: InMemoryAPRepository, record: VendorPortalAccessRecord) -> VendorAccessRead:
-    vendor_name = next(
-        (vendor.name for vendor in repository.list_vendors(record.tenant_id) if vendor.vendor_id == record.vendor_id),
-        None,
-    )
+    vendor_name = _vendor_name(repository, record.tenant_id, record.vendor_id)
     status = record.status
     if status == "active" and record.expires_at is not None and record.expires_at < datetime.now(UTC):
         status = "expired"
@@ -427,6 +426,7 @@ def _vendor_access_read(repository: InMemoryAPRepository, record: VendorPortalAc
         tenant_id=record.tenant_id,
         vendor_id=record.vendor_id,
         vendor_name=vendor_name,
+        matching_invoice_count=_matching_invoice_count(repository, record.tenant_id, record.vendor_id, vendor_name),
         email=record.email,
         label=record.label,
         status=status,
@@ -449,7 +449,31 @@ def _expires_at(explicit: datetime | None, ttl_days: int | None) -> datetime | N
     return datetime.now(UTC) + timedelta(days=ttl_days)
 
 
-def _access_url(raw_token: str) -> str | None:
+def _vendor_name(repository: InMemoryAPRepository, tenant_id: UUID, vendor_id: UUID) -> str | None:
+    return next((vendor.name for vendor in repository.list_vendors(tenant_id) if vendor.vendor_id == vendor_id), None)
+
+
+def _find_vendor_by_name(vendors: list[VendorRecord], vendor_name: str) -> VendorRecord | None:
+    vendor_key = normalize_supplier_key(vendor_name)
+    if not vendor_key:
+        return None
+    return next((vendor for vendor in vendors if normalize_supplier_key(vendor.name) == vendor_key), None)
+
+
+def _matching_invoice_count(
+    repository: InMemoryAPRepository,
+    tenant_id: UUID,
+    vendor_id: UUID,
+    vendor_name: str | None,
+) -> int:
+    return sum(
+        1
+        for invoice in repository.list_invoices(tenant_id)
+        if invoice_is_visible_to_vendor(invoice, vendor_id, vendor_name)
+    )
+
+
+def _access_url(tenant_id: UUID, raw_token: str) -> str | None:
     if not settings.public_app_url:
         return None
-    return f"{settings.public_app_url.rstrip('/')}/vendor?access_token={raw_token}"
+    return f"{settings.public_app_url.rstrip('/')}/vendor?tenant_id={tenant_id}&access_token={raw_token}"

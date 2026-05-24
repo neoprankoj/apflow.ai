@@ -339,6 +339,78 @@ def test_admin_vendor_access_lifecycle_shows_raw_token_once_and_hides_hash(auth_
     assert stored.access_token_hash != body["access_token"]
 
 
+def test_vendor_access_link_and_supplier_name_matching_returns_invoices(auth_enabled):
+    client = TestClient(create_app())
+    owner = _register(client, "vendor-access-superstore@example.com")
+    tenant_id = UUID(owner["tenant"]["id"])
+    repository = dependencies.get_repository()
+    vendor = repository.add_vendor(tenant_id, "SuperStore")
+    _seed_invoice(repository, tenant_id, vendor.vendor_id, "INV-SUPERSTORE", supplier_name="SuperStore")
+    headers = _auth_headers(owner["access_token"])
+
+    created = client.post(
+        "/vendor/accesses",
+        json={"tenant_id": str(tenant_id), "vendor_name": "SuperStore", "email": "ap@superstore.example"},
+        headers=headers,
+    )
+    listed = client.get(
+        f"/vendor/invoices?tenant_id={tenant_id}&access_token={created.json()['access_token']}",
+    )
+
+    assert created.status_code == 200
+    assert created.json()["access_url"].startswith(f"{settings.public_app_url.rstrip('/')}/vendor?tenant_id={tenant_id}")
+    assert created.json()["matching_invoice_count"] == 1
+    assert listed.status_code == 200
+    assert [invoice["invoice_number"] for invoice in listed.json()] == ["INV-SUPERSTORE"]
+
+
+def test_vendor_access_normalized_supplier_name_matching_is_safe(auth_enabled):
+    client = TestClient(create_app())
+    owner = _register(client, "vendor-access-normalized@example.com")
+    tenant_id = UUID(owner["tenant"]["id"])
+    repository = dependencies.get_repository()
+    vendor = repository.add_vendor(tenant_id, "Super Store")
+    other_vendor = repository.add_vendor(tenant_id, "Different Supplier")
+    _seed_invoice(repository, tenant_id, vendor.vendor_id, "INV-NORMALIZED", supplier_name="SuperStore")
+    _seed_invoice(repository, tenant_id, other_vendor.vendor_id, "INV-DIFFERENT", supplier_name="Different Supplier")
+    headers = _auth_headers(owner["access_token"])
+
+    created = client.post(
+        "/vendor/accesses",
+        json={"tenant_id": str(tenant_id), "vendor_name": "SuperStore", "email": "ap@superstore.example"},
+        headers=headers,
+    )
+    listed = client.get(
+        f"/vendor/invoices?tenant_id={tenant_id}&access_token={created.json()['access_token']}",
+    )
+
+    assert created.status_code == 200
+    assert created.json()["matching_invoice_count"] == 1
+    assert listed.status_code == 200
+    assert [invoice["invoice_number"] for invoice in listed.json()] == ["INV-NORMALIZED"]
+
+
+def test_vendor_access_zero_match_supplier_is_empty_but_valid(auth_enabled):
+    client = TestClient(create_app())
+    owner = _register(client, "vendor-access-empty@example.com")
+    tenant_id = UUID(owner["tenant"]["id"])
+    headers = _auth_headers(owner["access_token"])
+
+    created = client.post(
+        "/vendor/accesses",
+        json={"tenant_id": str(tenant_id), "vendor_name": "No Invoice Supplier", "email": "empty@example.com"},
+        headers=headers,
+    )
+    listed = client.get(
+        f"/vendor/invoices?tenant_id={tenant_id}&access_token={created.json()['access_token']}",
+    )
+
+    assert created.status_code == 200
+    assert created.json()["matching_invoice_count"] == 0
+    assert listed.status_code == 200
+    assert listed.json() == []
+
+
 def test_vendor_access_revoke_and_rotate(auth_enabled):
     client = TestClient(create_app())
     owner = _register(client, "vendor-access-rotate@example.com")
@@ -494,12 +566,12 @@ def test_product_readiness_reflects_vendor_access_foundation(auth_enabled):
     assert checks["vendor_access_expiry_revocation_available"]["status"] == "pass"
 
 
-def _seed_invoice(repository, tenant_id, vendor_id, invoice_number):
+def _seed_invoice(repository, tenant_id, vendor_id, invoice_number, supplier_name="Northstar Components"):
     output = InvoiceNormalizationOutput(
         tenant_id=tenant_id,
         canonical_invoice=CanonicalInvoice(
             invoice_number=invoice_number,
-            supplier_name="Northstar Components",
+            supplier_name=supplier_name,
             supplier_tax_id="TAX-12345",
             invoice_date="2026-05-06",
             currency="USD",

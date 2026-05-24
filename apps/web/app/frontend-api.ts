@@ -237,6 +237,7 @@ export type VendorAccessRead = {
   tenant_id: string;
   vendor_id: string;
   vendor_name?: string | null;
+  matching_invoice_count: number;
   email: string;
   label?: string | null;
   status: string;
@@ -249,6 +250,38 @@ export type VendorAccessRead = {
   token_prefix?: string | null;
   created_at: string;
   updated_at?: string | null;
+};
+
+export type VendorSafePaymentStatus = {
+  invoice_id: string;
+  invoice_number: string;
+  status: string;
+  safe_status_label: string;
+  safe_message: string;
+  amount_due?: number | null;
+  amount_paid?: number | null;
+  currency: string;
+  scheduled_payment_date?: string | null;
+  paid_at?: string | null;
+};
+
+export type VendorInvoiceListItem = {
+  invoice_id: string;
+  invoice_number: string;
+  supplier_name: string;
+  invoice_date: string;
+  currency: string;
+  grand_total: number;
+  status: string;
+  payment_status?: string | null;
+};
+
+export type VendorInvoiceStatus = VendorInvoiceListItem & {
+  due_date?: string | null;
+  public_message: string;
+  missing_information: string[];
+  line_item_count: number;
+  payment_status_detail?: VendorSafePaymentStatus | null;
 };
 
 export type VendorAccessCreatedResponse = VendorAccessRead & {
@@ -625,6 +658,27 @@ export function rotateVendorAccess(
     apiBaseUrl,
     `/vendor/accesses/${encodeURIComponent(accessId)}/rotate?tenant_id=${encodeURIComponent(tenantId)}`,
     { method: "POST", token, action: "Rotate vendor access" }
+  );
+}
+
+export function listVendorInvoices(apiBaseUrl: string, tenantId: string, accessToken: string) {
+  return apiFetch<VendorInvoiceListItem[]>(
+    apiBaseUrl,
+    `/vendor/invoices?tenant_id=${encodeURIComponent(tenantId)}&access_token=${encodeURIComponent(accessToken)}`,
+    { action: "Load vendor invoices" }
+  );
+}
+
+export function getVendorInvoicePreview(
+  apiBaseUrl: string,
+  tenantId: string,
+  accessToken: string,
+  invoiceId: string
+) {
+  return apiFetch<VendorInvoiceStatus>(
+    apiBaseUrl,
+    `/vendor/invoices/${encodeURIComponent(invoiceId)}?tenant_id=${encodeURIComponent(tenantId)}&access_token=${encodeURIComponent(accessToken)}`,
+    { action: "Load vendor invoice preview" }
   );
 }
 

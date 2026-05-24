@@ -285,6 +285,7 @@ Vendor access endpoints create and manage tokenized supplier self-service access
 - `GET /vendor/accesses/{access_id}?tenant_id={uuid}` reads one access record without raw token or token hash.
 - `POST /vendor/accesses/{access_id}/revoke?tenant_id={uuid}` revokes an access token.
 - `POST /vendor/accesses/{access_id}/rotate?tenant_id={uuid}` revokes the old token and returns one replacement token.
+- Created/rotated responses include an `access_url` when `PUBLIC_APP_URL` is configured. The browser route is `/vendor?tenant_id={uuid}&access_token={token}`.
 
 Example create request:
 
@@ -299,6 +300,10 @@ Example create request:
 ```
 
 Vendor-facing endpoints continue to use `X-Vendor-Access-Token` or `access_token` query parameters. Tokens must be active, unexpired, and scoped to the invoice vendor. Vendor responses include only safe invoice and payment-status fields.
+
+Supplier matching is intentionally conservative: APFlow matches invoices by vendor ID first, then by exact normalized supplier name so values like `SuperStore` and `Super Store` can resolve when OCR/demo data created separate vendor rows. Broad fuzzy matching is not used.
+
+If the token is valid but no invoices match the supplier, `GET /vendor/invoices` returns an empty list and the frontend vendor page explains that no vendor-visible invoices are available yet.
 
 Example Priority mapping payload:
 
