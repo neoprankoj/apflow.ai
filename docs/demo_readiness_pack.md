@@ -88,13 +88,14 @@ Intentionally disabled or deferred:
 15. Confirm the approval message explains the next action.
 16. Open Vendor-safe preview and confirm internal fraud/risk details are hidden.
 17. Open Vendor Access Management and show that supplier access tokens are one-time, revocable, and rotatable.
-18. Export to mock ERP.
-19. Confirm the export success message and external mock ERP ID.
-20. Open Payment Status.
-21. Run Mock Payment Sync and explain it updates APFlow only.
-22. Open Vendor-safe preview and show the safe payment message.
-23. Open Audit Trail.
-24. Show approval/export/payment/vendor access events as proof of what happened.
+18. Open the generated `/vendor` link and confirm it shows only that supplier's vendor-safe invoice/payment status, or a safe empty state if no invoices match.
+19. Export to mock ERP.
+20. Confirm the export success message and external mock ERP ID.
+21. Open Payment Status.
+22. Run Mock Payment Sync and explain it updates APFlow only.
+23. Open Vendor-safe preview and show the safe payment message.
+24. Open Audit Trail.
+25. Show approval/export/payment/vendor access events as proof of what happened.
 
 Avoid saying that mock ERP export is a real ERP write. Say: "This proves the export handoff path using the mock adapter; real ERP write enablement is intentionally gated."
 

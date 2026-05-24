@@ -1,4 +1,5 @@
 import hashlib
+import re
 import secrets
 from uuid import UUID
 
@@ -28,8 +29,20 @@ def hash_vendor_access_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
-def invoice_is_visible_to_vendor(invoice: InvoiceRecord, vendor_id: UUID) -> bool:
-    return invoice.vendor_id == vendor_id
+def normalize_supplier_key(name: str | None) -> str:
+    if not name:
+        return ""
+    return re.sub(r"[^a-z0-9]+", "", name.casefold())
+
+
+def invoice_is_visible_to_vendor(invoice: InvoiceRecord, vendor_id: UUID, vendor_name: str | None = None) -> bool:
+    if invoice.vendor_id == vendor_id:
+        return True
+    if not vendor_name:
+        return False
+    invoice_supplier_key = normalize_supplier_key(invoice.canonical_invoice.supplier_name)
+    vendor_key = normalize_supplier_key(vendor_name)
+    return bool(invoice_supplier_key and vendor_key and invoice_supplier_key == vendor_key)
 
 
 def map_vendor_invoice_status(

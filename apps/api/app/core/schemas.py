@@ -1247,6 +1247,7 @@ class VendorAccessRead(APFlowModel):
     tenant_id: UUID
     vendor_id: UUID
     vendor_name: str | None = None
+    matching_invoice_count: int = 0
     email: str
     label: str | None = None
     status: str

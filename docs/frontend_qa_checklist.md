@@ -95,6 +95,10 @@ Use this short checklist before merging frontend UI changes.
 
 - [ ] Vendor Access Management loads for users with ERP sync/config/admin permission.
 - [ ] Create Access returns a one-time token and warns that it will not be shown again.
+- [ ] Generated access link opens the browser-friendly `/vendor` page instead of a 404 route.
+- [ ] Vendor access created for a supplier with invoices, for example `SuperStore`, shows that supplier's vendor-safe invoice list.
+- [ ] Supplier names that differ only by case, punctuation, or whitespace still match conservatively.
+- [ ] A valid token with no matching invoices shows a safe empty state.
 - [ ] Access list shows token prefix only, never raw token or token hash.
 - [ ] Vendor token can list only that supplier's safe invoices/payment statuses.
 - [ ] Rotate revokes the old token and shows one replacement token.
