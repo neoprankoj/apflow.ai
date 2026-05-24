@@ -5,18 +5,17 @@ from app.agents.interface.vendor_communication_agent import VendorCommunicationA
 from app.agents.observability.audit_logging_agent import AuditLoggingAgent
 from app.agents.observability.error_handler_agent import ErrorHandlerAgent
 from app.agents.observability.monitoring_agent import MonitoringAgent
-from app.core.repositories import InMemoryAPRepository, InvoiceRecord
+from app.core.repositories import InMemoryAPRepository
 from app.core.schemas import (
     ActorType,
     AuditEventInput,
     ErrorCategory,
     MetricEventInput,
-    VendorChatIntent,
     VendorChatRequest,
     VendorChatResponse,
     WorkflowErrorInput,
 )
-from app.core.vendor_portal import invoice_is_visible_to_vendor, vendor_invoice_status
+from app.services.vendor_payment_chatbot_service import VendorPaymentChatbotService
 
 
 class PaymentStatusChatbotAgent(BaseAgent[VendorChatRequest, VendorChatResponse]):
@@ -36,24 +35,24 @@ class PaymentStatusChatbotAgent(BaseAgent[VendorChatRequest, VendorChatResponse]
         self.monitoring_agent = monitoring_agent
         self.error_handler_agent = error_handler_agent
         self.vendor_communication_agent = vendor_communication_agent
+        self.chatbot_service = VendorPaymentChatbotService(repository)
 
-    def answer(self, request: VendorChatRequest, vendor_id: UUID) -> VendorChatResponse:
+    def answer(self, request: VendorChatRequest, vendor_id: UUID, vendor_name: str | None = None) -> VendorChatResponse:
         try:
-            intent = self._classify_intent(request.question)
-            invoice = self._resolve_invoice(request, vendor_id)
-            response = self._response_for(request, invoice, intent)
+            response = self.chatbot_service.answer(request, vendor_id, vendor_name)
             self.audit_agent.record(
                 AuditEventInput(
                     tenant_id=request.tenant_id,
                     actor_type=ActorType.VENDOR,
                     actor_id=request.sender_email or str(vendor_id),
-                    action="vendor.chat",
-                    entity_type="invoice" if invoice else "vendor",
-                    entity_id=invoice.invoice_id if invoice else vendor_id,
+                    action="vendor.chat_question_refused" if response.refused else "vendor.chat_question_answered",
+                    entity_type="invoice" if response.invoice_id else "vendor",
+                    entity_id=response.invoice_id or vendor_id,
                     metadata={
-                        "intent": str(intent),
-                        "invoice_id": str(invoice.invoice_id) if invoice else None,
-                        "escalated": response.escalated,
+                        "intent": str(response.intent),
+                        "matched_invoice_count": len(response.matched_invoice_ids),
+                        "refused": response.refused,
+                        "refusal_reason": response.refusal_reason,
                     },
                 )
             )
@@ -62,7 +61,7 @@ class PaymentStatusChatbotAgent(BaseAgent[VendorChatRequest, VendorChatResponse]
                     tenant_id=request.tenant_id,
                     metric_event="vendor.chat",
                     value=1,
-                    metadata={"intent": str(intent), "escalated": response.escalated},
+                    metadata={"intent": str(response.intent), "escalated": response.escalated},
                 )
             )
             return response
@@ -79,88 +78,3 @@ class PaymentStatusChatbotAgent(BaseAgent[VendorChatRequest, VendorChatResponse]
                 )
             )
             raise
-
-    def _resolve_invoice(self, request: VendorChatRequest, vendor_id: UUID) -> InvoiceRecord | None:
-        invoices = [
-            invoice
-            for invoice in self.repository.list_invoices(request.tenant_id)
-            if invoice_is_visible_to_vendor(invoice, vendor_id)
-        ]
-        if request.invoice_id is not None:
-            invoice = next((item for item in invoices if item.invoice_id == request.invoice_id), None)
-            if invoice is None:
-                raise PermissionError("invoice is outside vendor scope")
-            return invoice
-        if request.invoice_number:
-            return next(
-                (
-                    item
-                    for item in invoices
-                    if item.canonical_invoice.invoice_number.lower() == request.invoice_number.lower()
-                ),
-                None,
-            )
-        if len(invoices) == 1:
-            return invoices[0]
-        return None
-
-    def _response_for(
-        self,
-        request: VendorChatRequest,
-        invoice: InvoiceRecord | None,
-        intent: VendorChatIntent,
-    ) -> VendorChatResponse:
-        if intent == VendorChatIntent.UNKNOWN:
-            return VendorChatResponse(
-                intent=intent,
-                answer="I can only help with invoice receipt, review, missing information, and payment status. Please contact AP for this request.",
-                escalated=True,
-            )
-        if invoice is None:
-            return VendorChatResponse(
-                intent=intent,
-                answer="I cannot confirm that invoice from the available vendor records. Please contact AP with the invoice number.",
-                escalated=True,
-            )
-        status = vendor_invoice_status(self.repository, request.tenant_id, invoice)
-        invoice_number = status.invoice_number
-        if intent == VendorChatIntent.PAYMENT_STATUS:
-            if status.status in {"paid", "scheduled_for_payment"}:
-                answer = f"Invoice {invoice_number} is {status.status.replace('_', ' ')}."
-            else:
-                answer = f"Invoice {invoice_number} is {status.status.replace('_', ' ')}; I cannot confirm a payment date yet."
-        elif intent == VendorChatIntent.MISSING_INFORMATION:
-            if status.missing_information:
-                fields = ", ".join(status.missing_information)
-                answer = f"Invoice {invoice_number} needs more information for: {fields}."
-            else:
-                answer = f"Invoice {invoice_number} does not show a current missing-information request."
-        elif intent == VendorChatIntent.REJECTION_REASON_PUBLIC:
-            answer = status.public_message
-        elif intent == VendorChatIntent.APPROVAL_STATUS:
-            answer = f"Invoice {invoice_number} is {status.status.replace('_', ' ')}."
-        else:
-            answer = f"Invoice {invoice_number} was received and is currently {status.status.replace('_', ' ')}."
-        return VendorChatResponse(
-            intent=intent,
-            answer=answer,
-            invoice_id=invoice.invoice_id,
-            status=status.status,
-            escalated=False,
-        )
-
-    def _classify_intent(self, question: str) -> VendorChatIntent:
-        normalized = question.lower()
-        if any(term in normalized for term in ("fraud", "risk", "audit", "approval policy", "erp log")):
-            return VendorChatIntent.UNKNOWN
-        if any(term in normalized for term in ("paid", "payment", "pay date", "scheduled")):
-            return VendorChatIntent.PAYMENT_STATUS
-        if any(term in normalized for term in ("approved", "approval", "review")):
-            return VendorChatIntent.APPROVAL_STATUS
-        if any(term in normalized for term in ("missing", "information", "documents", "correction")):
-            return VendorChatIntent.MISSING_INFORMATION
-        if any(term in normalized for term in ("reject", "rejected", "declined")):
-            return VendorChatIntent.REJECTION_REASON_PUBLIC
-        if any(term in normalized for term in ("received", "submitted", "got my invoice", "invoice")):
-            return VendorChatIntent.INVOICE_RECEIVED
-        return VendorChatIntent.UNKNOWN

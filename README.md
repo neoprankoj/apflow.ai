@@ -55,9 +55,9 @@ Real invoice documents can be uploaded through `POST /documents/invoices/upload`
 
 Authentication defaults to demo-friendly local development with `AUTH_ENABLED=false` and `DEMO_MODE=true`. Set `AUTH_ENABLED=true` to require local JWT bearer tokens, tenant membership checks, and role permissions for protected ERP, review, audit, invoice processing, and tenant admin routes.
 
-Vendor portal access now has a production-shaped lifecycle foundation: admin-created supplier access, browser-friendly `/vendor` links, hashed tokens, one-time raw token display, expiration, revocation, rotation, last-used tracking, audit events, and strict vendor-safe invoice/payment filtering. Real email invitation delivery is not connected yet; see `docs/vendor_access.md`.
+Vendor portal access now has a production-shaped lifecycle foundation: admin-created supplier access, browser-friendly `/vendor` links, hashed tokens, one-time raw token display, expiration, revocation, rotation, last-used tracking, audit events, strict vendor-safe invoice/payment filtering, and a deterministic vendor payment-status chatbot. Real email invitation delivery is not connected yet; see `docs/vendor_access.md` and `docs/vendor_payment_chatbot.md`.
 
-Payment status tracking has a tenant-scoped manual/mock foundation for invoice payment lifecycle visibility. AP managers can run a mock payment sync, update internal APFlow payment state, see safe payment status in Vendor Preview, and audit changes. No real bank, payment provider, or ERP payment-status sync is connected yet; see `docs/payment_status.md`.
+Payment status tracking has a tenant-scoped manual/mock foundation for invoice payment lifecycle visibility. AP managers can run a mock payment sync, update internal APFlow payment state, see safe payment status in Vendor Preview, let vendors ask rules-based payment-status questions, and audit changes. No real bank, payment provider, or ERP payment-status sync is connected yet; see `docs/payment_status.md`.
 
 ## Local Layout
 
@@ -209,6 +209,7 @@ Demo materials:
 - `docs/production_readiness_checklist.md` for Demo/Pilot/Production readiness gates and current blockers.
 - `docs/production_security.md` for production access, demo-mode, tenant isolation, RBAC, and vendor-safe guardrails.
 - `docs/vendor_access.md` for vendor access lifecycle, token handling, revocation, rotation, and vendor-safe data boundaries.
+- `docs/vendor_payment_chatbot.md` for the rules-based vendor payment-status chatbot and refusal rules.
 - `docs/demo_script.md` for the live presenter flow.
 - `docs/demo_qa_checklist.md` for pre-demo validation.
 - `samples/demo` for synthetic scenario notes and expected outcomes.

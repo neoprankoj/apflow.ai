@@ -305,6 +305,19 @@ Supplier matching is intentionally conservative: APFlow matches invoices by vend
 
 If the token is valid but no invoices match the supplier, `GET /vendor/invoices` returns an empty list and the frontend vendor page explains that no vendor-visible invoices are available yet.
 
+`POST /vendor/chat` is a rules-based vendor payment-status chatbot endpoint. It accepts a vendor token by header, query string, or request body and answers only from vendor-safe invoice/payment data:
+
+```json
+{
+  "tenant_id": "11111111-1111-1111-1111-111111111111",
+  "access_token": "shown-once-token",
+  "question": "When is payment scheduled?",
+  "invoice_number": "40100"
+}
+```
+
+Responses include `answer`, `intent`, `confidence`, `matched_invoice_ids`, `matched_invoices`, `safe_suggestions`, `refused`, and optional `refusal_reason`. Unsafe questions about fraud/risk, audit, approval policy, ERP config/logs, internal notes, tenant internals, or token details are refused safely.
+
 Example Priority mapping payload:
 
 ```json

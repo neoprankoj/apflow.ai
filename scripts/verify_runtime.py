@@ -225,7 +225,7 @@ def verify_mock_pipeline_flow(context: RuntimeContext, ocr_provider: str = "mock
     assert export["status"] == "success"
     assert any(item["invoice_id"] == invoice_id for item in vendor_invoices)
     assert message["status"] == "submitted"
-    assert chat["intent"] == "payment_status"
+    assert chat["intent"] in {"payment_status", "invoice_payment_status"}
     return {
         "workflow_status": pipeline["workflow_status"],
         "review_status": pipeline.get("review_status"),

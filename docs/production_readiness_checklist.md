@@ -19,6 +19,7 @@ Required:
 - Vendor-safe preview works.
 - Mock ERP export works.
 - Payment status foundation is available for manual/mock APFlow tracking.
+- Vendor payment-status chatbot foundation is available and rules-based, but production escalation and abuse controls are still needed.
 - Audit Trail proves the workflow.
 - Demo readiness docs and runbook are available.
 - Priority writes are disabled.
@@ -38,7 +39,7 @@ Current pilot blockers:
 - Domain/HTTPS are intentionally deferred.
 - Vendor access lifecycle foundation now exists: token hashing, one-time token display, expiration, revocation, rotation, last-used tracking, and audit events.
 - Real vendor invitation delivery and support operations are still missing.
-- Payment status foundation exists, but real ERP payment status sync is missing.
+- Payment status and vendor chatbot foundations exist, but real ERP payment status sync is missing.
 - Real notification delivery is missing.
 - Real customer Priority mapping/write flow is not live.
 
@@ -84,5 +85,6 @@ Use the Product Readiness Gate in the Admin area before demos, pilots, or produc
 - [Production Security Guardrails](production_security.md)
 - [Frontend QA Checklist](frontend_qa_checklist.md)
 - [Payment Status Foundation](payment_status.md)
+- [Vendor Payment-Status Chatbot](vendor_payment_chatbot.md)
 - [Staging Operations](operations_staging.md)
 - [Staging Release Checklist](staging_release_checklist.md)

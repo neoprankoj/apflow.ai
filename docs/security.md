@@ -20,9 +20,9 @@ APFlow AI is tenant-first and deny-by-default.
 - Vendor access supports expiration, revocation, rotation, safe token prefixes, last-used tracking, and audit events. Token hashes and raw tokens must never appear in logs, audit metadata, or normal API responses.
 - Generated vendor links open the browser-friendly `/vendor` page with tenant and one-time token query values. Treat those links as secrets; if one appears in a screenshot, chat, log, or support note, revoke or rotate it immediately.
 - Vendor users can only retrieve invoices linked to their `vendor_id` or an exact normalized supplier-name match used for OCR/demo data. Broad fuzzy matching is not allowed.
-- Vendor invoice and chatbot responses exclude fraud scores, internal risk reasons, audit logs, ERP sync logs, approval-policy internals, and other vendors' invoices.
+- Vendor invoice and chatbot responses exclude fraud scores, internal risk reasons, audit logs, ERP sync logs, approval-policy internals, internal payment notes, token details, tenant internals, and other vendors' invoices.
 - Vendor-safe payment status responses may show safe labels, safe messages, amounts, and dates, but must not expose `internal_note`, raw provider payloads, audit metadata, or internal payment references.
-- Vendor chatbot responses are deterministic and based only on vendor-safe invoice/payment fields. Unsupported or internal questions are deflected to AP contact.
+- Vendor chatbot responses are deterministic and based only on vendor-safe invoice/payment fields. Unsupported or internal questions are refused with safe copy and deflected to AP contact.
 - Production-like Docker runs should set `USE_IN_MEMORY_REPOSITORIES=false` and use PostgreSQL persistence.
 - Change `AUTH_SECRET_KEY` before enabling auth outside local development.
 - `/ready` exposes operational status only; it must not include credentials, raw tokens, or secrets.

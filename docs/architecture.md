@@ -92,11 +92,11 @@ The dashboard now reads `/auth/me` in demo mode and shows the current tenant, us
 
 ## Phase 8 Vendor Portal And Chatbot
 
-Phase 8 adds `VendorCommunicationAgent` and `PaymentStatusChatbotAgent`. Vendor access is represented by tenant-scoped portal records with hashed random tokens. The vendor API resolves access before every invoice, message, and chat request and filters invoices by the linked `vendor_id`.
+Phase 8 adds `VendorCommunicationAgent` and `PaymentStatusChatbotAgent`. Vendor access is represented by tenant-scoped portal records with hashed random tokens. The vendor API resolves access before every invoice, message, and chat request and filters invoices by the linked `vendor_id` or an exact normalized supplier-name match for OCR/demo records.
 
 Vendor-safe status mapping converts internal workflow and payment signals into public states: `received`, `under_review`, `needs_information`, `approved`, `scheduled_for_payment`, `paid`, and `rejected`. The mapper uses only invoice records, review task presence, approval task status, and mocked ERP payment status details.
 
-The chatbot is deterministic and retrieval-limited. It classifies questions into invoice receipt, approval status, payment status, public rejection reason, missing information, or unknown. Unknown or internal questions are deflected to AP contact instead of exposing risk, audit, ERP sync, or approval-policy data.
+The chatbot is deterministic and retrieval-limited. It classifies questions into invoice payment status, scheduled/paid status, pending/paid/disputed invoice lists, invoice receipt, approval status, public rejection reason, missing information, help, or unsafe/unsupported. Unsafe or internal questions are refused and deflected to AP contact instead of exposing risk, audit, ERP sync, payment internals, token details, or approval-policy data. It does not call external LLM APIs.
 
 ## Phase 9 Runtime
 

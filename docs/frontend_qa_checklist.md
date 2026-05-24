@@ -101,6 +101,11 @@ Use this short checklist before merging frontend UI changes.
 - [ ] A valid token with no matching invoices shows a safe empty state.
 - [ ] Access list shows token prefix only, never raw token or token hash.
 - [ ] Vendor token can list only that supplier's safe invoices/payment statuses.
+- [ ] Vendor chatbot appears on `/vendor` and explains it only answers vendor-safe invoice/payment questions.
+- [ ] Chatbot answers `What is the status of invoice [number]?` using visible invoice/payment data.
+- [ ] Chatbot answers pending, paid, scheduled, and disputed invoice questions.
+- [ ] Chatbot refuses unsafe questions such as fraud score, audit logs, ERP config, internal notes, or token details.
+- [ ] Chatbot cannot reveal another supplier's invoice by invoice number.
 - [ ] Rotate revokes the old token and shows one replacement token.
 - [ ] Revoke prevents the token from working.
 - [ ] Audit Trail records create, rotate, revoke, use, and safe preview events.
