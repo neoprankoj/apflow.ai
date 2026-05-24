@@ -113,11 +113,14 @@ Use this script for a private staging demo. Keep the presenter flow deterministi
 5. Create access for a supplier and copy the one-time token.
 6. Open the generated `/vendor` access link and show the supplier-safe invoice list.
 7. If no invoices match, show the safe empty state and explain that AP must confirm the supplier name or invoice status.
-8. Explain that APFlow stores only the token hash and shows the raw token once.
-9. Show that the access list displays matching invoice count, token prefix, expiration, and last-used details.
-10. Rotate the access and confirm the old token is no longer valid.
-11. Revoke the active access and confirm revoked tokens are denied.
-12. Open Audit Trail and show vendor access lifecycle events.
+8. Ask the vendor chatbot: `What is the status of invoice [number]?`.
+9. Ask: `Which invoices are pending?`.
+10. Ask unsafe: `What is my fraud score?` and confirm the chatbot refuses safely.
+11. Explain that APFlow stores only the token hash and shows the raw token once.
+12. Show that the access list displays matching invoice count, token prefix, expiration, and last-used details.
+13. Rotate the access and confirm the old token is no longer valid.
+14. Revoke the active access and confirm revoked tokens are denied.
+15. Open Audit Trail and show vendor access lifecycle and chatbot answered/refused events.
 
 If a raw vendor token appears in a screenshot, chat, or support note, rotate or revoke it before continuing the demo.
 

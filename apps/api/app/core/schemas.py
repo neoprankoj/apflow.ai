@@ -198,8 +198,17 @@ class VendorChatIntent(StrEnum):
     INVOICE_RECEIVED = "invoice_received"
     APPROVAL_STATUS = "approval_status"
     PAYMENT_STATUS = "payment_status"
+    INVOICE_PAYMENT_STATUS = "invoice_payment_status"
+    INVOICE_DUE_OR_SCHEDULED_DATE = "invoice_due_or_scheduled_date"
+    INVOICE_PAID_STATUS = "invoice_paid_status"
+    LIST_PENDING_INVOICES = "list_pending_invoices"
+    LIST_PAID_INVOICES = "list_paid_invoices"
+    LIST_DISPUTED_INVOICES = "list_disputed_invoices"
+    LIST_ALL_VISIBLE_INVOICES = "list_all_visible_invoices"
+    HELP = "help"
     REJECTION_REASON_PUBLIC = "rejection_reason_public"
     MISSING_INFORMATION = "missing_information"
+    UNSUPPORTED_OR_UNSAFE = "unsupported_or_unsafe"
     UNKNOWN = "unknown"
 
 
@@ -1334,6 +1343,7 @@ class VendorChatRequest(APFlowModel):
     question: str = Field(min_length=1, max_length=1000)
     invoice_id: UUID | None = None
     invoice_number: str | None = None
+    access_token: str | None = None
     sender_email: str | None = None
 
 
@@ -1344,4 +1354,10 @@ class VendorChatResponse(APFlowModel):
     answer: str
     invoice_id: UUID | None = None
     status: VendorSafeStatus | None = None
+    confidence: str = "medium"
+    matched_invoice_ids: list[UUID] = Field(default_factory=list)
+    matched_invoices: list[VendorInvoiceListItem] = Field(default_factory=list)
+    safe_suggestions: list[str] = Field(default_factory=list)
+    refused: bool = False
+    refusal_reason: str | None = None
     escalated: bool = False

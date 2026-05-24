@@ -284,6 +284,22 @@ export type VendorInvoiceStatus = VendorInvoiceListItem & {
   payment_status_detail?: VendorSafePaymentStatus | null;
 };
 
+export type VendorChatResponse = {
+  session_id: string;
+  message_id: string;
+  intent: string;
+  answer: string;
+  invoice_id?: string | null;
+  status?: string | null;
+  confidence: string;
+  matched_invoice_ids: string[];
+  matched_invoices: VendorInvoiceListItem[];
+  safe_suggestions: string[];
+  refused: boolean;
+  refusal_reason?: string | null;
+  escalated: boolean;
+};
+
 export type VendorAccessCreatedResponse = VendorAccessRead & {
   access_token: string;
   access_url?: string | null;
@@ -680,6 +696,27 @@ export function getVendorInvoicePreview(
     `/vendor/invoices/${encodeURIComponent(invoiceId)}?tenant_id=${encodeURIComponent(tenantId)}&access_token=${encodeURIComponent(accessToken)}`,
     { action: "Load vendor invoice preview" }
   );
+}
+
+export function vendorChat(
+  apiBaseUrl: string,
+  tenantId: string,
+  accessToken: string,
+  question: string,
+  options: { invoiceNumber?: string | null; invoiceId?: string | null } = {}
+) {
+  return apiFetch<VendorChatResponse>(apiBaseUrl, "/vendor/chat", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      tenant_id: tenantId,
+      access_token: accessToken,
+      question,
+      invoice_number: options.invoiceNumber ?? null,
+      invoice_id: options.invoiceId ?? null
+    }),
+    action: "Ask vendor payment-status assistant"
+  });
 }
 
 async function readResponseDetail(response: Response) {

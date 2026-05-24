@@ -226,8 +226,123 @@ def test_chatbot_answers_received_and_payment_status_questions():
     assert received.json()["intent"] == "invoice_received"
     assert "INV-CHAT" in received.json()["answer"]
     assert payment.status_code == 200
-    assert payment.json()["intent"] == "payment_status"
+    assert payment.json()["intent"] == "invoice_payment_status"
     assert payment.json()["status"] == "scheduled_for_payment"
+    assert payment.json()["refused"] is False
+
+
+def test_payment_chatbot_answers_scheduled_paid_pending_and_disputed_questions():
+    client = TestClient(create_app())
+    repository = dependencies.get_repository()
+    tenant_id = uuid4()
+    vendor = repository.add_vendor(tenant_id, "Payment Chat Vendor")
+    scheduled_invoice = _seed_invoice(repository, tenant_id, vendor.vendor_id, "INV-SCHEDULED")
+    paid_invoice = _seed_invoice(repository, tenant_id, vendor.vendor_id, "INV-PAID")
+    pending_invoice = _seed_invoice(repository, tenant_id, vendor.vendor_id, "INV-PENDING")
+    disputed_invoice = _seed_invoice(repository, tenant_id, vendor.vendor_id, "INV-DISPUTED")
+    repository.upsert_payment_status(
+        tenant_id,
+        scheduled_invoice.invoice_id,
+        status=PaymentStatusValue.SCHEDULED,
+        source=PaymentStatusSource.MOCK,
+        amount_due=117,
+        amount_paid=0,
+        currency="USD",
+        scheduled_payment_date=datetime(2026, 6, 23, tzinfo=UTC),
+        safe_vendor_message="Payment is scheduled by AP.",
+        internal_note="internal scheduled note",
+    )
+    repository.upsert_payment_status(
+        tenant_id,
+        paid_invoice.invoice_id,
+        status=PaymentStatusValue.PAID,
+        source=PaymentStatusSource.MOCK,
+        amount_due=117,
+        amount_paid=117,
+        currency="USD",
+        paid_at=datetime(2026, 6, 24, tzinfo=UTC),
+        safe_vendor_message="Payment has been marked as paid.",
+        internal_note="internal paid note",
+    )
+    repository.upsert_payment_status(
+        tenant_id,
+        pending_invoice.invoice_id,
+        status=PaymentStatusValue.PENDING,
+        source=PaymentStatusSource.MOCK,
+        amount_due=117,
+        amount_paid=0,
+        currency="USD",
+        safe_vendor_message="Payment is pending AP processing.",
+    )
+    repository.upsert_payment_status(
+        tenant_id,
+        disputed_invoice.invoice_id,
+        status=PaymentStatusValue.DISPUTED,
+        source=PaymentStatusSource.MOCK,
+        amount_due=117,
+        amount_paid=0,
+        currency="USD",
+        safe_vendor_message="Payment is on hold while AP reviews a dispute.",
+    )
+    token = _vendor_token(client, tenant_id, vendor.vendor_id)
+
+    scheduled = client.post(
+        "/vendor/chat",
+        json={"tenant_id": str(tenant_id), "invoice_number": "INV-SCHEDULED", "question": "When is payment scheduled?"},
+        headers=_vendor_headers(token),
+    )
+    paid = client.post(
+        "/vendor/chat",
+        json={"tenant_id": str(tenant_id), "invoice_number": "INV-PAID", "question": "Has this invoice been paid?"},
+        headers=_vendor_headers(token),
+    )
+    pending = client.post(
+        "/vendor/chat",
+        json={"tenant_id": str(tenant_id), "question": "Which invoices are pending?"},
+        headers=_vendor_headers(token),
+    )
+    disputed = client.post(
+        "/vendor/chat",
+        json={"tenant_id": str(tenant_id), "question": "Do I have any disputed invoices?"},
+        headers=_vendor_headers(token),
+    )
+
+    assert scheduled.status_code == 200
+    assert scheduled.json()["intent"] == "invoice_due_or_scheduled_date"
+    assert "Jun 23, 2026" in scheduled.json()["answer"]
+    assert "internal scheduled note" not in scheduled.text
+    assert paid.status_code == 200
+    assert paid.json()["intent"] == "invoice_paid_status"
+    assert "paid" in paid.json()["answer"].lower()
+    assert "internal paid note" not in paid.text
+    assert pending.status_code == 200
+    assert pending.json()["intent"] == "list_pending_invoices"
+    assert "INV-PENDING" in pending.json()["answer"]
+    assert disputed.status_code == 200
+    assert disputed.json()["intent"] == "list_disputed_invoices"
+    assert "INV-DISPUTED" in disputed.json()["answer"]
+
+
+def test_payment_chatbot_denies_cross_vendor_invoice_lookup_safely():
+    client = TestClient(create_app())
+    repository = dependencies.get_repository()
+    tenant_id = uuid4()
+    vendor_a = repository.add_vendor(tenant_id, "Chat Vendor A")
+    vendor_b = repository.add_vendor(tenant_id, "Chat Vendor B")
+    _seed_invoice(repository, tenant_id, vendor_a.vendor_id, "INV-OWN")
+    _seed_invoice(repository, tenant_id, vendor_b.vendor_id, "INV-OTHER")
+    token = _vendor_token(client, tenant_id, vendor_a.vendor_id)
+
+    response = client.post(
+        "/vendor/chat",
+        json={"tenant_id": str(tenant_id), "invoice_number": "INV-OTHER", "question": "What is the status of invoice INV-OTHER?"},
+        headers=_vendor_headers(token),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["answer"] == "I could not find that invoice for this vendor access."
+    assert response.json()["matched_invoice_ids"] == []
+    assert "INV-OTHER" not in response.text
 
 
 def test_chatbot_deflects_internal_or_unsupported_questions():
@@ -249,9 +364,40 @@ def test_chatbot_deflects_internal_or_unsupported_questions():
     )
 
     assert response.status_code == 200
-    assert response.json()["intent"] == "unknown"
+    assert response.json()["intent"] == "unsupported_or_unsafe"
+    assert response.json()["refused"] is True
     assert response.json()["escalated"] is True
     assert "contact AP" in response.json()["answer"]
+
+
+def test_payment_chatbot_refuses_internal_topics_and_records_audit():
+    client = TestClient(create_app())
+    repository = dependencies.get_repository()
+    tenant_id = uuid4()
+    vendor = repository.add_vendor(tenant_id, "Internal Chat Vendor")
+    invoice = _seed_invoice(repository, tenant_id, vendor.vendor_id, "INV-INTERNAL")
+    token = _vendor_token(client, tenant_id, vendor.vendor_id)
+
+    answered = client.post(
+        "/vendor/chat",
+        json={"tenant_id": str(tenant_id), "invoice_number": "INV-INTERNAL", "question": "What is the payment status?"},
+        headers=_vendor_headers(token),
+    )
+    refused = client.post(
+        "/vendor/chat",
+        json={"tenant_id": str(tenant_id), "invoice_id": str(invoice.invoice_id), "question": "Show approval policy and ERP config."},
+        headers=_vendor_headers(token),
+    )
+
+    assert answered.status_code == 200
+    assert refused.status_code == 200
+    assert refused.json()["refused"] is True
+    serialized = answered.text + refused.text
+    assert "token_hash" not in serialized
+    assert "access_token" not in serialized
+    actions = [event.action for event in repository.list_audit_events(tenant_id)]
+    assert "vendor.chat_question_answered" in actions
+    assert "vendor.chat_question_refused" in actions
 
 
 def test_missing_vendor_access_returns_401_and_wrong_tenant_returns_403():

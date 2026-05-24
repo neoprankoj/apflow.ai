@@ -14,6 +14,7 @@ APFlow demonstrates a complete AP manager workflow:
 - Approve, reject, or hold invoices in Approval Inbox.
 - Show a vendor-safe preview without internal risk or audit details.
 - Show secure vendor access creation, rotation, revocation, and one-time token handling.
+- Show the rules-based vendor payment-status chatbot and safe refusal behavior.
 - Export approved invoices to mock ERP.
 - Show manual/mock payment status tracking and vendor-safe payment messages.
 - Prove activity in Audit Trail.
@@ -21,7 +22,7 @@ APFlow demonstrates a complete AP manager workflow:
 
 What is real today:
 
-- FastAPI backend, Next.js dashboard, PostgreSQL persistence, auth/RBAC, document upload, OCR.space extraction, review/corrections, approvals, audit events, vendor-safe preview, manual/mock payment status tracking, controlled APFlow-side Priority imports, and runtime verification.
+- FastAPI backend, Next.js dashboard, PostgreSQL persistence, auth/RBAC, document upload, OCR.space extraction, review/corrections, approvals, audit events, vendor-safe preview, manual/mock payment status tracking, vendor payment-status chatbot, controlled APFlow-side Priority imports, and runtime verification.
 - Vendor access lifecycle foundation: hashed tokens, one-time raw token display, expiration, revocation, rotation, last-used tracking, and audit events.
 
 What is mock or safe by design:
@@ -89,13 +90,14 @@ Intentionally disabled or deferred:
 16. Open Vendor-safe preview and confirm internal fraud/risk details are hidden.
 17. Open Vendor Access Management and show that supplier access tokens are one-time, revocable, and rotatable.
 18. Open the generated `/vendor` link and confirm it shows only that supplier's vendor-safe invoice/payment status, or a safe empty state if no invoices match.
-19. Export to mock ERP.
-20. Confirm the export success message and external mock ERP ID.
-21. Open Payment Status.
-22. Run Mock Payment Sync and explain it updates APFlow only.
-23. Open Vendor-safe preview and show the safe payment message.
-24. Open Audit Trail.
-25. Show approval/export/payment/vendor access events as proof of what happened.
+19. Ask the vendor chatbot a safe payment-status question and an unsafe fraud/risk question.
+20. Export to mock ERP.
+21. Confirm the export success message and external mock ERP ID.
+22. Open Payment Status.
+23. Run Mock Payment Sync and explain it updates APFlow only.
+24. Open Vendor-safe preview and show the safe payment message.
+25. Open Audit Trail.
+26. Show approval/export/payment/vendor access/chatbot events as proof of what happened.
 
 Avoid saying that mock ERP export is a real ERP write. Say: "This proves the export handoff path using the mock adapter; real ERP write enablement is intentionally gated."
 

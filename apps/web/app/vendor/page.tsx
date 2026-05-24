@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, FileText, RefreshCw, ShieldCheck } from "lucide-react";
+import { AlertTriangle, FileText, MessageCircle, RefreshCw, Send, ShieldCheck } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardHeader } from "../../components/ui/card";
 import { EmptyState } from "../../components/ui/empty-state";
@@ -12,6 +12,8 @@ import {
   getApiBaseUrl,
   getVendorInvoicePreview,
   listVendorInvoices,
+  vendorChat,
+  type VendorChatResponse,
   type VendorInvoiceListItem,
   type VendorInvoiceStatus
 } from "../frontend-api";
@@ -26,6 +28,10 @@ export default function VendorPortalPage() {
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isDetailLoading, setIsDetailLoading] = useState(false);
+  const [chatQuestion, setChatQuestion] = useState("");
+  const [chatResponse, setChatResponse] = useState<VendorChatResponse | null>(null);
+  const [isChatLoading, setIsChatLoading] = useState(false);
+  const [chatError, setChatError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const canLoad = Boolean(apiBaseUrl && tenantId && accessToken);
@@ -75,6 +81,26 @@ export default function VendorPortalPage() {
     () => invoices.find((invoice) => invoice.invoice_id === selectedInvoiceId) ?? null,
     [invoices, selectedInvoiceId]
   );
+
+  async function handleChatSubmit(questionOverride?: string) {
+    const question = (questionOverride ?? chatQuestion).trim();
+    if (!apiBaseUrl || !tenantId || !accessToken || !question) return;
+    setIsChatLoading(true);
+    setChatError(null);
+    try {
+      const result = await vendorChat(apiBaseUrl, tenantId, accessToken, question, {
+        invoiceId: selectedInvoice?.invoice_id ?? selectedInvoiceId ?? undefined,
+        invoiceNumber: selectedInvoice?.invoice_number ?? selectedListItem?.invoice_number ?? undefined
+      });
+      setChatQuestion(question);
+      setChatResponse(result);
+    } catch (err) {
+      setChatError(readVendorError(err));
+      setChatResponse(null);
+    } finally {
+      setIsChatLoading(false);
+    }
+  }
 
   return (
     <main className="min-h-screen bg-background px-4 py-8 text-foreground">
@@ -227,6 +253,74 @@ export default function VendorPortalPage() {
                 )}
               </CardContent>
             </Card>
+
+            <Card className="lg:col-span-2">
+              <CardHeader>
+                <div className="flex items-center gap-2">
+                  <MessageCircle className="h-4 w-4 text-primary" />
+                  <h2 className="text-base font-semibold">Ask about payment status</h2>
+                </div>
+                <p className="mt-1 text-sm text-muted">
+                  This assistant only answers vendor-safe invoice and payment-status questions. It cannot show internal AP notes, audit logs, ERP details, risk scores, or token details.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex flex-wrap gap-2">
+                  {exampleQuestions(selectedInvoice?.invoice_number ?? selectedListItem?.invoice_number).map((question) => (
+                    <Button
+                      disabled={isChatLoading}
+                      key={question}
+                      onClick={() => void handleChatSubmit(question)}
+                      size="sm"
+                      variant="secondary"
+                    >
+                      {question}
+                    </Button>
+                  ))}
+                </div>
+
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <input
+                    className="min-h-10 flex-1 rounded-md border border-border px-3 py-2 text-sm"
+                    onChange={(event) => setChatQuestion(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") void handleChatSubmit();
+                    }}
+                    placeholder="Ask about invoice or payment status"
+                    value={chatQuestion}
+                  />
+                  <Button disabled={isChatLoading || !chatQuestion.trim()} onClick={() => void handleChatSubmit()} variant="primary">
+                    <Send className="h-4 w-4" />
+                    Ask
+                  </Button>
+                </div>
+
+                {chatError ? (
+                  <p className="rounded-md border border-danger/30 bg-danger/5 px-3 py-2 text-sm text-danger">{chatError}</p>
+                ) : null}
+
+                {chatResponse ? (
+                  <div className="rounded-md border border-border p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <p className="text-sm font-semibold">Answer</p>
+                      <StatusBadge status={chatResponse.refused ? "refused" : chatResponse.intent} />
+                    </div>
+                    <p className="mt-2 text-sm text-muted">{chatResponse.answer}</p>
+                    {chatResponse.matched_invoices.length ? (
+                      <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                        {chatResponse.matched_invoices.slice(0, 4).map((invoice) => (
+                          <div className="rounded-md border border-border p-3 text-sm" key={invoice.invoice_id}>
+                            <p className="font-medium">{invoice.invoice_number}</p>
+                            <p className="text-muted">{invoice.supplier_name}</p>
+                            <p className="mt-1">{formatMoney(invoice.grand_total, invoice.currency)}</p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+              </CardContent>
+            </Card>
           </div>
         ) : null}
       </div>
@@ -284,4 +378,14 @@ function readVendorError(error: unknown) {
   }
   if (error instanceof Error) return error.message;
   return "Vendor invoices could not be loaded.";
+}
+
+function exampleQuestions(invoiceNumber?: string | null) {
+  const number = invoiceNumber ?? "40100";
+  return [
+    `What is the status of invoice ${number}?`,
+    "Which invoices are pending?",
+    "Has this invoice been paid?",
+    "When is payment scheduled?"
+  ];
 }

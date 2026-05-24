@@ -1,6 +1,6 @@
 # Vendor Access Model
 
-APFlow supports a production-shaped vendor portal access foundation for supplier self-service. It is designed for safe invoice and payment-status visibility, and later vendor chatbot access.
+APFlow supports a production-shaped vendor portal access foundation for supplier self-service. It is designed for safe invoice and payment-status visibility, including the rules-based vendor payment-status chatbot.
 
 ## What It Provides
 
@@ -9,13 +9,14 @@ APFlow supports a production-shaped vendor portal access foundation for supplier
 - Token hashes stored in APFlow; raw tokens are shown only once.
 - Safe token prefix for admin identification.
 - Browser-friendly vendor links at `/vendor?tenant_id=...&access_token=...`.
+- Vendor-safe payment-status chatbot access through the same token.
 - Expiration, revocation, rotation, and last-used tracking.
 - Audit events for create, revoke, rotate, use, and vendor-safe preview.
 - Strict vendor/invoice filtering.
 
 ## What Vendors Can See
 
-Vendor tokens can only access invoices linked to that token's vendor. APFlow first matches by vendor ID, then by exact normalized supplier name for demo/OCR data where the vendor record and invoice supplier text may differ only by case, whitespace, or punctuation. Responses include vendor-safe fields such as invoice number, public status, total, currency, and safe payment status/message when available.
+Vendor tokens can only access invoices linked to that token's vendor. APFlow first matches by vendor ID, then by exact normalized supplier name for demo/OCR data where the vendor record and invoice supplier text may differ only by case, whitespace, or punctuation. Responses include vendor-safe fields such as invoice number, public status, total, currency, and safe payment status/message when available. The chatbot uses the same vendor-safe projection and refuses internal questions.
 
 If a supplier has no matching invoices, the vendor page shows a safe empty state instead of exposing whether another supplier has invoices.
 
@@ -39,5 +40,5 @@ No real email delivery is included yet. Operators must not paste vendor tokens i
 
 - Real invite email delivery.
 - Supplier support workflow.
-- Vendor chatbot bound to this access model.
+- Production escalation and abuse controls for the vendor chatbot.
 - Domain/HTTPS before real external supplier access.

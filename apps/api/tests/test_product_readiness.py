@@ -97,6 +97,7 @@ def test_payment_and_vendor_gaps_are_pilot_or_production_blockers(auth_enabled):
     assert checks["vendor_access_lifecycle_available"]["status"] == "pass"
     assert checks["vendor_access_token_hashing_available"]["status"] == "pass"
     assert checks["vendor_access_expiry_revocation_available"]["status"] == "pass"
+    assert checks["vendor_payment_chatbot_available"]["status"] == "pass"
     assert checks["production_vendor_access_ready"]["status"] == "warning"
     assert "Production access hardening" in body["pilot_ready"]["blockers"]
     assert "Payment status sync" in body["pilot_ready"]["blockers"]

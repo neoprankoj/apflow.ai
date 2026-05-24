@@ -320,8 +320,13 @@ def vendor_chat(
     chatbot_agent: PaymentStatusChatbotAgent = Depends(get_payment_status_chatbot_agent),
     audit_agent: AuditLoggingAgent = Depends(get_audit_agent),
 ) -> VendorChatResponse:
-    access = _resolve_vendor_access(payload.tenant_id, x_vendor_access_token or access_token, repository, audit_agent)
-    return chatbot_agent.answer(payload, access.vendor_id)
+    access = _resolve_vendor_access(
+        payload.tenant_id,
+        x_vendor_access_token or access_token or payload.access_token,
+        repository,
+        audit_agent,
+    )
+    return chatbot_agent.answer(payload, access.vendor_id, _vendor_name(repository, payload.tenant_id, access.vendor_id))
 
 
 @router.get("/messages", response_model=list[VendorMessageResult])

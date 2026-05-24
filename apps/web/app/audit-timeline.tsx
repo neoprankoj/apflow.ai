@@ -357,6 +357,8 @@ function titleForAuditAction(action: string) {
     "vendor.access_rotated": "Vendor access rotated",
     "vendor.access_used": "Vendor access used",
     "vendor.invoice_preview_viewed": "Vendor-safe preview viewed",
+    "vendor.chat_question_answered": "Vendor question answered",
+    "vendor.chat_question_refused": "Vendor question refused",
     "vendor.message_submitted": "Vendor message received",
     "payment.status_created": "Payment status created",
     "payment.status_updated": "Payment status updated",
@@ -390,6 +392,8 @@ function descriptionForAuditAction(action: string, metadata: Record<string, unkn
   if (action === "vendor.access_rotated") return "Supplier portal access was rotated and the old token was revoked.";
   if (action === "vendor.access_used") return "A supplier token was used for vendor-safe access.";
   if (action === "vendor.invoice_preview_viewed") return "A vendor-safe invoice preview was viewed.";
+  if (action === "vendor.chat_question_answered") return "A vendor-safe payment-status question was answered.";
+  if (action === "vendor.chat_question_refused") return "A vendor chatbot question was refused because it was outside the safe invoice/payment scope.";
   if (action.startsWith("erp.")) return "ERP activity was recorded.";
   if (action === "notification.sent") {
     const type = readMetadataText(metadata, "notification_type");
