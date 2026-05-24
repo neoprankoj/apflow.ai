@@ -352,7 +352,11 @@ function titleForAuditAction(action: string) {
     "invoice.approval_hold": "Invoice placed on hold",
     "review.inspected": "Human review inspected",
     "review.corrected": "Corrections submitted",
-    "vendor.access_created": "Vendor-safe preview generated",
+    "vendor.access_created": "Vendor access created",
+    "vendor.access_revoked": "Vendor access revoked",
+    "vendor.access_rotated": "Vendor access rotated",
+    "vendor.access_used": "Vendor access used",
+    "vendor.invoice_preview_viewed": "Vendor-safe preview viewed",
     "vendor.message_submitted": "Vendor message received",
     "payment.status_created": "Payment status created",
     "payment.status_updated": "Payment status updated",
@@ -381,6 +385,11 @@ function descriptionForAuditAction(action: string, metadata: Record<string, unkn
     return status ? `Payment status updated to ${humanize(status)}.` : "Payment status was updated.";
   }
   if (action === "payment.mock_sync_run") return "Mock payment sync updated APFlow payment statuses only.";
+  if (action === "vendor.access_created") return "Supplier portal access was created. The raw token was shown once.";
+  if (action === "vendor.access_revoked") return "Supplier portal access was revoked.";
+  if (action === "vendor.access_rotated") return "Supplier portal access was rotated and the old token was revoked.";
+  if (action === "vendor.access_used") return "A supplier token was used for vendor-safe access.";
+  if (action === "vendor.invoice_preview_viewed") return "A vendor-safe invoice preview was viewed.";
   if (action.startsWith("erp.")) return "ERP activity was recorded.";
   if (action === "notification.sent") {
     const type = readMetadataText(metadata, "notification_type");

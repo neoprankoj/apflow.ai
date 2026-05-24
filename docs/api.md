@@ -276,6 +276,30 @@ Payment status endpoints are internal APFlow APIs for manual/mock invoice paymen
 
 Mock sync records audit events and changes APFlow payment-status records only. It does not contact Priority, a bank, or any payment provider.
 
+## Vendor Access
+
+Vendor access endpoints create and manage tokenized supplier self-service access. Raw tokens are shown only in create/rotate responses and are never returned by list/read endpoints.
+
+- `POST /vendor/accesses` creates access for a vendor/supplier. Requires an AP manager/admin-style ERP sync permission.
+- `GET /vendor/accesses?tenant_id={uuid}` lists access records without raw tokens or token hashes.
+- `GET /vendor/accesses/{access_id}?tenant_id={uuid}` reads one access record without raw token or token hash.
+- `POST /vendor/accesses/{access_id}/revoke?tenant_id={uuid}` revokes an access token.
+- `POST /vendor/accesses/{access_id}/rotate?tenant_id={uuid}` revokes the old token and returns one replacement token.
+
+Example create request:
+
+```json
+{
+  "tenant_id": "11111111-1111-1111-1111-111111111111",
+  "vendor_name": "Northstar Components",
+  "email": "ap@northstar.example",
+  "label": "Northstar supplier portal access",
+  "ttl_days": 30
+}
+```
+
+Vendor-facing endpoints continue to use `X-Vendor-Access-Token` or `access_token` query parameters. Tokens must be active, unexpired, and scoped to the invoice vendor. Vendor responses include only safe invoice and payment-status fields.
+
 Example Priority mapping payload:
 
 ```json

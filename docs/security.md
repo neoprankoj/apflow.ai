@@ -16,7 +16,8 @@ APFlow AI is tenant-first and deny-by-default.
 - Local auth uses PBKDF2 password hashing and signed JWT access tokens. `AUTH_SECRET_KEY` must be changed outside local development.
 - Roles are mapped to explicit permissions. Sensitive ERP, audit, review, invoice export, and tenant admin actions are protected by FastAPI RBAC dependencies.
 - Missing or invalid auth returns `401`; valid users without tenant membership or permission receive `403`.
-- Vendor portal tokens are stored only as SHA-256 hashes. Raw tokens are returned once by the demo access endpoint.
+- Vendor portal tokens are stored only as hashes. Raw tokens are returned once by create/rotate responses and are never returned by list/read APIs.
+- Vendor access supports expiration, revocation, rotation, safe token prefixes, last-used tracking, and audit events. Token hashes and raw tokens must never appear in logs, audit metadata, or normal API responses.
 - Vendor users can only retrieve invoices linked to their `vendor_id`.
 - Vendor invoice and chatbot responses exclude fraud scores, internal risk reasons, audit logs, ERP sync logs, approval-policy internals, and other vendors' invoices.
 - Vendor-safe payment status responses may show safe labels, safe messages, amounts, and dates, but must not expose `internal_note`, raw provider payloads, audit metadata, or internal payment references.

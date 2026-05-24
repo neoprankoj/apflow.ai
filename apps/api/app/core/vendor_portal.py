@@ -20,6 +20,10 @@ def generate_vendor_access_token() -> str:
     return secrets.token_urlsafe(32)
 
 
+def vendor_access_token_prefix(token: str) -> str:
+    return token[:10]
+
+
 def hash_vendor_access_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 

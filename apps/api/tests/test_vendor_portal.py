@@ -1,9 +1,12 @@
-from uuid import uuid4
+from collections.abc import Iterator
+from datetime import UTC, datetime, timedelta
+from uuid import UUID, uuid4
 
 import pytest
 from fastapi.testclient import TestClient
 
 from app.api import dependencies
+from app.core.config import settings
 from app.core.schemas import (
     ApprovalRoute,
     ApprovalTaskStatus,
@@ -16,6 +19,9 @@ from app.core.schemas import (
     HumanReviewTask,
     InvoiceLineItem,
     InvoiceNormalizationOutput,
+    PaymentStatusSource,
+    PaymentStatusValue,
+    UserRole,
     VendorSafeStatus,
 )
 from app.core.vendor_portal import map_vendor_invoice_status
@@ -43,6 +49,16 @@ def clear_dependency_caches():
         dependencies.get_payment_status_chatbot_agent,
     ):
         provider.cache_clear()
+
+
+@pytest.fixture
+def auth_enabled() -> Iterator[None]:
+    previous_auth_enabled = settings.auth_enabled
+    settings.auth_enabled = True
+    try:
+        yield
+    finally:
+        settings.auth_enabled = previous_auth_enabled
 
 
 def test_vendor_safe_status_mapping():
@@ -286,6 +302,198 @@ def test_needs_information_status_for_vendor_review_task():
     assert response.json()["missing_information"] == ["supplier_tax_id"]
 
 
+def test_admin_vendor_access_lifecycle_shows_raw_token_once_and_hides_hash(auth_enabled):
+    client = TestClient(create_app())
+    owner = _register(client, "vendor-access-owner@example.com")
+    tenant_id = UUID(owner["tenant"]["id"])
+    repository = dependencies.get_repository()
+    vendor = repository.add_vendor(tenant_id, "Lifecycle Vendor")
+    headers = _auth_headers(owner["access_token"])
+
+    created = client.post(
+        "/vendor/accesses",
+        json={
+            "tenant_id": str(tenant_id),
+            "vendor_id": str(vendor.vendor_id),
+            "email": "vendor@example.com",
+            "label": "Lifecycle portal access",
+            "ttl_days": 7,
+        },
+        headers=headers,
+    )
+    listed = client.get(f"/vendor/accesses?tenant_id={tenant_id}", headers=headers)
+
+    assert created.status_code == 200
+    body = created.json()
+    assert body["access_token"]
+    assert body["token_prefix"]
+    assert body["access_token"].startswith(body["token_prefix"])
+    assert "token_hash" not in body
+    assert "access_token_hash" not in body
+    assert listed.status_code == 200
+    assert listed.json()[0]["token_prefix"] == body["token_prefix"]
+    assert "access_token" not in listed.json()[0]
+    assert "access_token_hash" not in listed.json()[0]
+    stored = repository.get_vendor_portal_access(tenant_id, UUID(body["id"]))
+    assert stored.access_token_hash
+    assert stored.access_token_hash != body["access_token"]
+
+
+def test_vendor_access_revoke_and_rotate(auth_enabled):
+    client = TestClient(create_app())
+    owner = _register(client, "vendor-access-rotate@example.com")
+    tenant_id = UUID(owner["tenant"]["id"])
+    repository = dependencies.get_repository()
+    vendor = repository.add_vendor(tenant_id, "Rotate Vendor")
+    invoice = _seed_invoice(repository, tenant_id, vendor.vendor_id, "INV-ROTATE")
+    headers = _auth_headers(owner["access_token"])
+    created = client.post(
+        "/vendor/accesses",
+        json={"tenant_id": str(tenant_id), "vendor_id": str(vendor.vendor_id), "email": "rotate@example.com"},
+        headers=headers,
+    ).json()
+    old_token = created["access_token"]
+
+    rotate = client.post(f"/vendor/accesses/{created['id']}/rotate?tenant_id={tenant_id}", headers=headers)
+    old_after_rotate = client.get(
+        f"/vendor/invoices/{invoice.invoice_id}?tenant_id={tenant_id}",
+        headers=_vendor_headers(old_token),
+    )
+    new_token = rotate.json()["access_token"]
+    new_after_rotate = client.get(
+        f"/vendor/invoices/{invoice.invoice_id}?tenant_id={tenant_id}",
+        headers=_vendor_headers(new_token),
+    )
+    revoke = client.post(
+        f"/vendor/accesses/{rotate.json()['new_access']['id']}/revoke?tenant_id={tenant_id}",
+        headers=headers,
+    )
+    new_after_revoke = client.get(
+        f"/vendor/invoices/{invoice.invoice_id}?tenant_id={tenant_id}",
+        headers=_vendor_headers(new_token),
+    )
+
+    assert rotate.status_code == 200
+    assert old_after_rotate.status_code == 403
+    assert new_after_rotate.status_code == 200
+    assert revoke.status_code == 200
+    assert new_after_revoke.status_code == 403
+
+
+def test_vendor_access_expired_token_denied_and_last_used_updates(auth_enabled):
+    client = TestClient(create_app())
+    owner = _register(client, "vendor-access-expire@example.com")
+    tenant_id = UUID(owner["tenant"]["id"])
+    repository = dependencies.get_repository()
+    vendor = repository.add_vendor(tenant_id, "Expire Vendor")
+    invoice = _seed_invoice(repository, tenant_id, vendor.vendor_id, "INV-EXPIRE")
+    headers = _auth_headers(owner["access_token"])
+    expired = client.post(
+        "/vendor/accesses",
+        json={
+            "tenant_id": str(tenant_id),
+            "vendor_id": str(vendor.vendor_id),
+            "email": "expired@example.com",
+            "expires_at": (datetime.now(UTC) - timedelta(minutes=1)).isoformat(),
+        },
+        headers=headers,
+    ).json()
+    active = client.post(
+        "/vendor/accesses",
+        json={"tenant_id": str(tenant_id), "vendor_id": str(vendor.vendor_id), "email": "active@example.com"},
+        headers=headers,
+    ).json()
+
+    expired_response = client.get(
+        f"/vendor/invoices/{invoice.invoice_id}?tenant_id={tenant_id}",
+        headers=_vendor_headers(expired["access_token"]),
+    )
+    active_response = client.get(
+        f"/vendor/invoices/{invoice.invoice_id}?tenant_id={tenant_id}",
+        headers=_vendor_headers(active["access_token"]),
+    )
+    listed = client.get(f"/vendor/accesses?tenant_id={tenant_id}", headers=headers).json()
+    active_record = next(item for item in listed if item["id"] == active["id"])
+
+    assert expired_response.status_code == 403
+    assert active_response.status_code == 200
+    assert active_record["last_used_at"] is not None
+
+
+def test_vendor_access_is_vendor_scoped_and_payment_safe(auth_enabled):
+    client = TestClient(create_app())
+    owner = _register(client, "vendor-access-scope@example.com")
+    tenant_id = UUID(owner["tenant"]["id"])
+    repository = dependencies.get_repository()
+    vendor_a = repository.add_vendor(tenant_id, "Vendor Scope A")
+    vendor_b = repository.add_vendor(tenant_id, "Vendor Scope B")
+    own_invoice = _seed_invoice(repository, tenant_id, vendor_a.vendor_id, "INV-SCOPE-A")
+    other_invoice = _seed_invoice(repository, tenant_id, vendor_b.vendor_id, "INV-SCOPE-B")
+    repository.upsert_payment_status(
+        tenant_id,
+        own_invoice.invoice_id,
+        status=PaymentStatusValue.SCHEDULED,
+        source=PaymentStatusSource.MANUAL,
+        amount_due=117,
+        amount_paid=0,
+        currency="USD",
+        safe_vendor_message="Payment is scheduled by AP.",
+        internal_note="Do not expose this internal note.",
+        external_payment_reference="INTERNAL-REF-123",
+    )
+    headers = _auth_headers(owner["access_token"])
+    created = client.post(
+        "/vendor/accesses",
+        json={"tenant_id": str(tenant_id), "vendor_id": str(vendor_a.vendor_id), "email": "scope@example.com"},
+        headers=headers,
+    ).json()
+
+    own = client.get(
+        f"/vendor/invoices/{own_invoice.invoice_id}?tenant_id={tenant_id}",
+        headers=_vendor_headers(created["access_token"]),
+    )
+    other = client.get(
+        f"/vendor/invoices/{other_invoice.invoice_id}?tenant_id={tenant_id}",
+        headers=_vendor_headers(created["access_token"]),
+    )
+
+    assert own.status_code == 200
+    assert other.status_code == 403
+    serialized = str(own.json()).lower()
+    assert "payment is scheduled by ap" in serialized
+    assert "internal note" not in serialized
+    assert "internal-ref-123" not in serialized
+    assert "risk_score" not in serialized
+
+
+def test_viewer_cannot_manage_vendor_access(auth_enabled):
+    client = TestClient(create_app())
+    owner = _register(client, "vendor-access-viewer-owner@example.com")
+    viewer = _create_member(client, owner, "vendor-access-viewer@example.com", UserRole.VIEWER)
+    tenant_id = owner["tenant"]["id"]
+
+    response = client.post(
+        "/vendor/accesses",
+        json={"tenant_id": tenant_id, "vendor_name": "Viewer Vendor", "email": "viewer@example.com"},
+        headers=_auth_headers(viewer["token"]),
+    )
+
+    assert response.status_code == 403
+
+
+def test_product_readiness_reflects_vendor_access_foundation(auth_enabled):
+    client = TestClient(create_app())
+    owner = _register(client, "vendor-access-readiness@example.com")
+
+    response = client.get("/ready/product", headers=_auth_headers(owner["access_token"]))
+
+    assert response.status_code == 200
+    checks = {check["key"]: check for check in response.json()["checks"]}
+    assert checks["vendor_access_lifecycle_available"]["status"] == "pass"
+    assert checks["vendor_access_token_hashing_available"]["status"] == "pass"
+    assert checks["vendor_access_expiry_revocation_available"]["status"] == "pass"
+
+
 def _seed_invoice(repository, tenant_id, vendor_id, invoice_number):
     output = InvoiceNormalizationOutput(
         tenant_id=tenant_id,
@@ -326,3 +534,39 @@ def _vendor_token(client, tenant_id, vendor_id) -> str:
 
 def _vendor_headers(token: str) -> dict[str, str]:
     return {"X-Vendor-Access-Token": token}
+
+
+def _register(client: TestClient, email: str) -> dict:
+    response = client.post(
+        "/auth/register-demo-tenant",
+        json={
+            "tenant_name": f"Tenant {email}",
+            "tenant_slug": email.split("@")[0],
+            "email": email,
+            "full_name": "Owner User",
+            "password": "password-123",
+        },
+    )
+    assert response.status_code == 200
+    return response.json()
+
+
+def _create_member(client: TestClient, owner: dict, email: str, role: UserRole) -> dict:
+    created = client.post(
+        "/admin/users",
+        json={
+            "email": email,
+            "full_name": "Tenant Member",
+            "password": "password-123",
+            "role": role,
+        },
+        headers=_auth_headers(owner["access_token"]),
+    )
+    assert created.status_code == 200
+    login = client.post("/auth/login", json={"email": email, "password": "password-123"})
+    assert login.status_code == 200
+    return {"token": login.json()["access_token"], "user": created.json()["user"]}
+
+
+def _auth_headers(token: str) -> dict[str, str]:
+    return {"Authorization": f"Bearer {token}"}

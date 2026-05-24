@@ -109,6 +109,12 @@ Use this script for a private staging demo. Keep the presenter flow deterministi
 1. Use the vendor preview section or create a vendor access token through the demo flow.
 2. Show the vendor-safe invoice status.
 3. Confirm that fraud scores, audit logs, ERP sync logs, approval-policy internals, and risk reasons are not exposed.
+4. Open `Vendor Access Management`.
+5. Create access for a supplier and copy the one-time token.
+6. Explain that APFlow stores only the token hash and shows the raw token once.
+7. Rotate the access and confirm the old token is no longer valid.
+8. Revoke the active access and confirm revoked tokens are denied.
+9. Open Audit Trail and show vendor access lifecycle events.
 
 ## J. Demo Path 9 - Audit Trail
 
