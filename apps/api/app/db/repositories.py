@@ -34,6 +34,10 @@ from app.core.schemas import (
     InvoiceLineItem,
     InvoiceNormalizationOutput,
     NotificationType,
+    NotificationChannel,
+    NotificationDeliveryRead,
+    NotificationDeliveryStatus,
+    NotificationRecipientType,
     PaymentStatusRead,
     PaymentStatusSource,
     PaymentStatusSummary,
@@ -53,6 +57,7 @@ from app.db import models as dbm
 
 
 DEMO_OPERATIONAL_CLEANUP_MODELS = (
+    dbm.NotificationDelivery,
     dbm.VendorMessage,
     dbm.VendorPortalAccess,
     dbm.HumanReviewTask,
@@ -851,6 +856,74 @@ class SQLAlchemyAPRepository:
         ).all()
         return [self._notification_record(row) for row in rows]
 
+    def store_notification_delivery(
+        self,
+        tenant_id: UUID,
+        event_type: str,
+        channel: NotificationChannel,
+        provider: str,
+        recipient_type: NotificationRecipientType,
+        recipient_label: str,
+        status: NotificationDeliveryStatus,
+        *,
+        recipient_address_redacted: str | None = None,
+        subject: str | None = None,
+        body_preview: str | None = None,
+        reason: str | None = None,
+        related_invoice_id: UUID | None = None,
+        related_payment_status_id: UUID | None = None,
+        related_vendor_access_id: UUID | None = None,
+        delivery_metadata: dict | None = None,
+        created_by_user_id: UUID | None = None,
+        delivered_at: datetime | None = None,
+        delivery_id: UUID | None = None,
+    ) -> NotificationDeliveryRead:
+        self._ensure_tenant(tenant_id)
+        row = dbm.NotificationDelivery(
+            id=delivery_id or uuid4(),
+            tenant_id=tenant_id,
+            event_type=event_type,
+            channel=str(channel),
+            provider=provider,
+            recipient_type=str(recipient_type),
+            recipient_label=recipient_label,
+            recipient_address_redacted=recipient_address_redacted,
+            subject=subject,
+            body_preview=body_preview,
+            status=str(status),
+            reason=reason,
+            related_invoice_id=related_invoice_id,
+            related_payment_status_id=related_payment_status_id,
+            related_vendor_access_id=related_vendor_access_id,
+            delivery_metadata=delivery_metadata or {},
+            created_by_user_id=created_by_user_id,
+            delivered_at=delivered_at,
+        )
+        self.session.add(row)
+        self.session.commit()
+        return self._notification_delivery(row)
+
+    def list_notification_deliveries(
+        self,
+        tenant_id: UUID,
+        *,
+        status: str | None = None,
+        channel: str | None = None,
+        event_type: str | None = None,
+        related_invoice_id: UUID | None = None,
+    ) -> list[NotificationDeliveryRead]:
+        query = select(dbm.NotificationDelivery).where(dbm.NotificationDelivery.tenant_id == tenant_id)
+        if status:
+            query = query.where(dbm.NotificationDelivery.status == status)
+        if channel:
+            query = query.where(dbm.NotificationDelivery.channel == channel)
+        if event_type:
+            query = query.where(dbm.NotificationDelivery.event_type == event_type)
+        if related_invoice_id:
+            query = query.where(dbm.NotificationDelivery.related_invoice_id == related_invoice_id)
+        rows = self.session.scalars(query.order_by(dbm.NotificationDelivery.created_at.asc())).all()
+        return [self._notification_delivery(row) for row in rows]
+
     def store_audit_event(self, event: AuditEventInput, audit_event_id: UUID) -> None:
         self._ensure_tenant(event.tenant_id)
         self.session.add(
@@ -1284,6 +1357,30 @@ class SQLAlchemyAPRepository:
             status=row.status,
             channel=row.channel,
             payload=row.payload,
+        )
+
+    def _notification_delivery(self, row: dbm.NotificationDelivery) -> NotificationDeliveryRead:
+        return NotificationDeliveryRead(
+            id=row.id,
+            tenant_id=row.tenant_id,
+            event_type=row.event_type,
+            channel=NotificationChannel(row.channel),
+            provider=row.provider,
+            recipient_type=NotificationRecipientType(row.recipient_type),
+            recipient_label=row.recipient_label,
+            recipient_address_redacted=row.recipient_address_redacted,
+            subject=row.subject,
+            body_preview=row.body_preview,
+            status=NotificationDeliveryStatus(row.status),
+            reason=row.reason,
+            related_invoice_id=row.related_invoice_id,
+            related_payment_status_id=row.related_payment_status_id,
+            related_vendor_access_id=row.related_vendor_access_id,
+            delivery_metadata=row.delivery_metadata,
+            created_by_user_id=row.created_by_user_id,
+            created_at=row.created_at,
+            updated_at=row.updated_at,
+            delivered_at=row.delivered_at,
         )
 
     def _review_task(self, row: dbm.HumanReviewTask) -> HumanReviewTask:

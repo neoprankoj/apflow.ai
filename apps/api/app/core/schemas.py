@@ -141,6 +141,30 @@ class NotificationType(StrEnum):
     VENDOR_MESSAGE_RECEIVED = "vendor_message_received"
 
 
+class NotificationChannel(StrEnum):
+    MOCK = "mock"
+    EMAIL = "email"
+    SLACK = "slack"
+    TEAMS = "teams"
+    WEBHOOK = "webhook"
+
+
+class NotificationDeliveryStatus(StrEnum):
+    QUEUED = "queued"
+    SENT = "sent"
+    FAILED = "failed"
+    SKIPPED = "skipped"
+    DISABLED = "disabled"
+
+
+class NotificationRecipientType(StrEnum):
+    INTERNAL_USER = "internal_user"
+    VENDOR = "vendor"
+    APPROVER = "approver"
+    ADMIN = "admin"
+    SYSTEM = "system"
+
+
 class ERPAdapterType(StrEnum):
     PRIORITY = "priority"
     ODOO = "odoo"
@@ -797,6 +821,58 @@ class NotificationOutput(APFlowModel):
     channel: str = "mock"
     notification_type: NotificationType
     recipient_role: str
+
+
+class NotificationProviderRead(APFlowModel):
+    provider: str
+    channel: NotificationChannel
+    configured: bool
+    enabled: bool
+    mode: str
+    safe_message: str
+
+
+class NotificationTestRequest(APFlowModel):
+    tenant_id: UUID
+    channel: NotificationChannel = NotificationChannel.MOCK
+    recipient_label: str | None = None
+    recipient_address: str | None = None
+    subject: str | None = None
+    message: str | None = None
+
+
+class NotificationDeliveryRead(APFlowModel):
+    id: UUID = Field(default_factory=uuid4)
+    tenant_id: UUID
+    event_type: str
+    channel: NotificationChannel
+    provider: str
+    recipient_type: NotificationRecipientType
+    recipient_label: str
+    recipient_address_redacted: str | None = None
+    subject: str | None = None
+    body_preview: str | None = None
+    status: NotificationDeliveryStatus
+    reason: str | None = None
+    related_invoice_id: UUID | None = None
+    related_payment_status_id: UUID | None = None
+    related_vendor_access_id: UUID | None = None
+    delivery_metadata: dict[str, Any] = Field(default_factory=dict)
+    created_by_user_id: UUID | None = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    delivered_at: datetime | None = None
+
+
+class NotificationSummary(APFlowModel):
+    total: int = 0
+    sent: int = 0
+    queued: int = 0
+    failed: int = 0
+    skipped: int = 0
+    disabled: int = 0
+    by_channel: dict[str, int] = Field(default_factory=dict)
+    latest_deliveries: list[NotificationDeliveryRead] = Field(default_factory=list)
 
 
 class OCRProviderMetadata(APFlowModel):

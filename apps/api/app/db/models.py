@@ -199,6 +199,38 @@ class Notification(Base, TenantScopedMixin, TimestampMixin):
     status: Mapped[str] = mapped_column(String(64), nullable=False, default="queued")
 
 
+class NotificationDelivery(Base, TenantScopedMixin, TimestampMixin):
+    __tablename__ = "notification_deliveries"
+
+    id: Mapped[PyUUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    event_type: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    channel: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    provider: Mapped[str] = mapped_column(String(128), nullable=False)
+    recipient_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    recipient_label: Mapped[str] = mapped_column(String(255), nullable=False)
+    recipient_address_redacted: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    subject: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    body_preview: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    related_invoice_id: Mapped[PyUUID | None] = mapped_column(Uuid, ForeignKey("invoices.id"), nullable=True, index=True)
+    related_payment_status_id: Mapped[PyUUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("payment_statuses.id"),
+        nullable=True,
+        index=True,
+    )
+    related_vendor_access_id: Mapped[PyUUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("vendor_portal_access.id"),
+        nullable=True,
+        index=True,
+    )
+    delivery_metadata: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    created_by_user_id: Mapped[PyUUID | None] = mapped_column(Uuid, nullable=True)
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class AuditEvent(Base):
     __tablename__ = "audit_events"
 

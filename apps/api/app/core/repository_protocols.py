@@ -16,6 +16,10 @@ from app.core.schemas import (
     InvoiceIngestionOutput,
     InvoiceNormalizationOutput,
     NotificationType,
+    NotificationChannel,
+    NotificationDeliveryRead,
+    NotificationDeliveryStatus,
+    NotificationRecipientType,
     PurchaseOrderLine,
 )
 
@@ -93,6 +97,28 @@ class NotificationRepository(Protocol):
     ) -> NotificationEventRecord: ...
 
     def list_notification_events(self, tenant_id: UUID) -> list[NotificationEventRecord]: ...
+
+    def store_notification_delivery(
+        self,
+        tenant_id: UUID,
+        event_type: str,
+        channel: NotificationChannel,
+        provider: str,
+        recipient_type: NotificationRecipientType,
+        recipient_label: str,
+        status: NotificationDeliveryStatus,
+        **kwargs,
+    ) -> NotificationDeliveryRead: ...
+
+    def list_notification_deliveries(
+        self,
+        tenant_id: UUID,
+        *,
+        status: str | None = None,
+        channel: str | None = None,
+        event_type: str | None = None,
+        related_invoice_id: UUID | None = None,
+    ) -> list[NotificationDeliveryRead]: ...
 
 
 class AuditRepository(Protocol):

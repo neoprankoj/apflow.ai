@@ -23,6 +23,8 @@ APFlow AI is tenant-first and deny-by-default.
 - Vendor invoice and chatbot responses exclude fraud scores, internal risk reasons, audit logs, ERP sync logs, approval-policy internals, internal payment notes, token details, tenant internals, and other vendors' invoices.
 - Vendor-safe payment status responses may show safe labels, safe messages, amounts, and dates, but must not expose `internal_note`, raw provider payloads, audit metadata, or internal payment references.
 - Vendor chatbot responses are deterministic and based only on vendor-safe invoice/payment fields. Unsupported or internal questions are refused with safe copy and deflected to AP contact.
+- Notification delivery supports mock-only internal delivery history plus Email, Slack, and Teams placeholders. Placeholder providers must not send externally until server-only secrets, retries, and support ownership are configured.
+- Notification provider readiness and delivery history must never expose API keys, webhook URLs, auth headers, raw provider payloads, or full sensitive message bodies. Recipient addresses are redacted and body previews are truncated.
 - Production-like Docker runs should set `USE_IN_MEMORY_REPOSITORIES=false` and use PostgreSQL persistence.
 - Change `AUTH_SECRET_KEY` before enabling auth outside local development.
 - `/ready` exposes operational status only; it must not include credentials, raw tokens, or secrets.

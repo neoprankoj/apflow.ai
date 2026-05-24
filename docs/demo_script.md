@@ -131,14 +131,24 @@ If a raw vendor token appears in a screenshot, chat, or support note, rotate or 
 3. Use the filters to isolate approval, review, and ERP activity.
 4. Explain that the timeline proves what happened without exposing raw technical logs to the presenter.
 
-## K. Demo Path 10 - AP Manager Demo Checklist
+## K. Demo Path 10 - Notification Settings
+
+1. Open Admin -> Notification Settings.
+2. Confirm Mock provider is configured and Email, Slack, and Teams are not configured.
+3. Send a mock test notification.
+4. Confirm Delivery History records the mock delivery.
+5. Try the Email placeholder and confirm APFlow says the provider is not configured.
+6. Explain that no external email, Slack, or Teams message is sent in this demo.
+7. Open Audit Trail and show notification activity.
+
+## L. Demo Path 11 - AP Manager Demo Checklist
 
 1. Expand the `Demo checklist` in the AP Workflow Guide.
 2. Walk through each checklist item as a presenter rehearsal path.
 3. Confirm key action messages point to the next step and to Audit Trail proof.
 4. Confirm Priority connector copy separates dry run, import plan, controlled import, and imported records.
 
-## L. AP User Acceptance Pass
+## M. AP User Acceptance Pass
 
 1. Start from the top of the dashboard and confirm the AP manager can identify the next recommended action.
 2. Confirm upload, OCR, review, process, approval, ERP export, and Audit Trail use consistent finance-friendly labels.
@@ -148,7 +158,7 @@ If a raw vendor token appears in a screenshot, chat, or support note, rotate or 
 6. Confirm imported vendors and purchase orders are visible after controlled import.
 7. Confirm no Priority data is changed during sample preview, import plan, controlled import, or readiness checks.
 
-## M. Demo Cleanup
+## N. Demo Cleanup
 
 1. Enable `ALLOW_DEMO_RESET=true` only when needed on private staging.
 2. Use the dashboard reset action or `POST /admin/demo/reset`.

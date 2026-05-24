@@ -39,6 +39,9 @@ from app.core.schemas import (
     InvoiceSource,
     InvoiceValidationInput,
     NotificationInput,
+    NotificationChannel,
+    NotificationDeliveryStatus,
+    NotificationRecipientType,
     NotificationType,
     PurchaseOrderLine,
     PurchaseOrderMatchingInput,
@@ -84,6 +87,7 @@ def test_sqlalchemy_models_create_phase4_tables():
     assert "approval_policies" in tables
     assert "approval_tasks" in tables
     assert "notification_events" in tables
+    assert "notification_deliveries" in tables
     assert "audit_events" in tables
     assert "workflow_states" in tables
     assert "erp_connection_configs" in tables
@@ -202,6 +206,31 @@ def test_sql_repository_persists_notification_events(sql_repository):
 
     assert sql_repository.list_notification_events(tenant_id)[0] == event
     assert sql_repository.list_notification_events(uuid4()) == []
+
+
+def test_sql_repository_persists_notification_deliveries(sql_repository):
+    tenant = sql_repository.create_tenant("Notification Delivery Tenant", "notification-delivery")
+
+    delivery = sql_repository.store_notification_delivery(
+        tenant.id,
+        event_type="notification.test",
+        channel=NotificationChannel.MOCK,
+        provider="mock",
+        recipient_type=NotificationRecipientType.ADMIN,
+        recipient_label="AP Manager",
+        status=NotificationDeliveryStatus.SENT,
+        recipient_address_redacted="ma***@example.local",
+        subject="Test",
+        body_preview="Safe preview",
+    )
+
+    stored = sql_repository.list_notification_deliveries(tenant.id)[0]
+    assert stored.id == delivery.id
+    assert stored.status == NotificationDeliveryStatus.SENT
+    assert stored.recipient_address_redacted == "ma***@example.local"
+    assert sql_repository.list_notification_deliveries(uuid4()) == []
+    assert sql_repository.list_notification_deliveries(tenant.id, status="sent")[0].id == delivery.id
+    assert sql_repository.list_notification_deliveries(tenant.id, channel="email") == []
 
 
 def test_sql_repository_persists_audit_events(sql_repository):
@@ -350,12 +379,14 @@ def test_sql_repository_clears_demo_operational_data_without_removing_tenant_fix
     assert sql_repository.list_invoices(tenant_id) == []
     assert sql_repository.list_approval_tasks(tenant_id) == []
     assert sql_repository.list_notification_events(tenant_id) == []
+    assert sql_repository.list_notification_deliveries(tenant_id) == []
     assert sql_repository.list_review_tasks(tenant_id) == []
     assert sql_repository.list_uploaded_documents(tenant_id) == []
     assert sql_repository.list_workflow_states(tenant_id) == []
     assert len(sql_repository.list_vendors(tenant_id)) == 1
     assert len(sql_repository.list_purchase_orders(tenant_id)) == 1
     assert cleared["notification_events"] == 1
+    assert "notification_deliveries" in cleared
     assert cleared["invoices"] == 1
 
 
@@ -363,6 +394,7 @@ def test_sql_repository_demo_cleanup_targets_only_migrated_tables():
     cleanup_tables = {model.__tablename__ for model in DEMO_OPERATIONAL_CLEANUP_MODELS}
 
     assert "notification_events" in cleanup_tables
+    assert "notification_deliveries" in cleanup_tables
     assert "notifications" not in cleanup_tables
     assert "approval_flows" not in cleanup_tables
 

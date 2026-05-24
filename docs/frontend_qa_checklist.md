@@ -122,6 +122,18 @@ Use this short checklist before merging frontend UI changes.
 - [ ] Audit Trail records payment status changes.
 - [ ] Copy clearly says no bank, payment provider, or real ERP payment sync is connected.
 
+## Notifications
+
+- [ ] Notification Settings loads in the Admin area.
+- [ ] Mock provider shows configured/enabled.
+- [ ] Email, Slack, and Teams show not configured.
+- [ ] Sending a mock test notification records a delivery inside APFlow only.
+- [ ] Email/Slack/Teams tests return safe not-configured messages and do not send externally.
+- [ ] Delivery History shows status, channel, event type, redacted recipient, preview, and timestamp.
+- [ ] View-only users can read provider readiness if permitted but cannot send test notifications.
+- [ ] Audit Trail records notification test/delivery activity.
+- [ ] UI copy clearly says no external emails, Slack messages, or Teams messages are sent.
+
 ## ERP Export
 
 - [ ] Export action is available only when the invoice is export-ready.
