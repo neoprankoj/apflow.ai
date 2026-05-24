@@ -1213,6 +1213,8 @@ class VendorPortalAccessCreate(APFlowModel):
     vendor_id: UUID | None = None
     vendor_name: str | None = None
     expires_at: datetime | None = None
+    ttl_days: int | None = Field(default=None, ge=1, le=365)
+    label: str | None = None
 
 
 class VendorPortalAccessResult(APFlowModel):
@@ -1222,8 +1224,71 @@ class VendorPortalAccessResult(APFlowModel):
     email: str
     status: str
     access_token: str | None = None
+    token_prefix: str | None = None
+    label: str | None = None
+    access_url: str | None = None
     expires_at: datetime | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class VendorAccessCreateRequest(APFlowModel):
+    tenant_id: UUID
+    email: str
+    vendor_id: UUID | None = None
+    vendor_name: str | None = None
+    supplier_name: str | None = None
+    label: str | None = None
+    expires_at: datetime | None = None
+    ttl_days: int | None = Field(default=30, ge=1, le=365)
+
+
+class VendorAccessRead(APFlowModel):
+    id: UUID
+    tenant_id: UUID
+    vendor_id: UUID
+    vendor_name: str | None = None
+    email: str
+    label: str | None = None
+    status: str
+    expires_at: datetime | None = None
+    revoked_at: datetime | None = None
+    revoked_by_user_id: UUID | None = None
+    created_by_user_id: UUID | None = None
+    rotated_from_access_id: UUID | None = None
+    last_used_at: datetime | None = None
+    token_prefix: str | None = None
+    created_at: datetime
+    updated_at: datetime | None = None
+
+
+class VendorAccessCreatedResponse(VendorAccessRead):
+    access_token: str
+    access_url: str | None = None
+    message: str = "Copy this token now. It will not be shown again."
+
+
+class VendorAccessRotateResponse(APFlowModel):
+    old_access: VendorAccessRead
+    new_access: VendorAccessRead
+    access_token: str
+    access_url: str | None = None
+    message: str = "Copy this replacement token now. It will not be shown again."
+
+
+class VendorAccessRevokeResponse(APFlowModel):
+    id: UUID
+    status: str
+    revoked_at: datetime | None = None
+    message: str
+
+
+class VendorAccessValidationResult(APFlowModel):
+    valid: bool
+    status: str
+    reason: str | None = None
+    tenant_id: UUID | None = None
+    vendor_id: UUID | None = None
+    vendor_name: str | None = None
 
 
 class VendorInvoiceListItem(APFlowModel):

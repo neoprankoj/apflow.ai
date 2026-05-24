@@ -423,11 +423,12 @@ Never log passwords or bearer tokens. Rotate `AUTH_SECRET_KEY` before using anyt
 
 ## Vendor Portal
 
-1. Create demo access with `POST /vendor/access` for a tenant, vendor, and email.
-2. Send the returned token in `X-Vendor-Access-Token` for vendor invoice, message, and chat calls.
-3. Use `GET /vendor/invoices` to confirm only the linked vendor invoices are visible.
-4. Use `POST /vendor/messages` for invoice/payment questions that should create an AP notification event.
-5. Use `POST /vendor/chat` for deterministic status answers.
-6. If the chatbot returns `escalated=true`, route the request to AP review or vendor communication follow-up.
+1. Use Vendor Access Management or `POST /vendor/accesses` to create access for a tenant vendor/supplier.
+2. Copy the returned token immediately. APFlow will not show it again.
+3. Send the token in `X-Vendor-Access-Token` for vendor invoice, message, and chat calls.
+4. Use `GET /vendor/invoices` to confirm only the linked vendor invoices are visible.
+5. Use `POST /vendor/accesses/{access_id}/rotate` when a supplier contact changes.
+6. Use `POST /vendor/accesses/{access_id}/revoke` when access should stop.
+7. Use Audit Trail to confirm create, use, rotate, revoke, and vendor-safe preview events.
 
-Do not paste vendor tokens into logs or support tickets. Revoke or expire portal access records when a supplier contact changes.
+Do not paste vendor tokens into logs or support tickets. Raw tokens are shown once, token hashes are never returned, and revoked/expired tokens should fail.

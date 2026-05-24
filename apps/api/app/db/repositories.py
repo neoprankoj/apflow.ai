@@ -1,4 +1,5 @@
 from decimal import Decimal
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from sqlalchemy import delete, select
@@ -225,8 +226,14 @@ class SQLAlchemyAPRepository:
         status: str = "active",
         expires_at=None,
         access_id: UUID | None = None,
+        token_prefix: str | None = None,
+        label: str | None = None,
+        created_by_user_id: UUID | None = None,
+        rotated_from_access_id: UUID | None = None,
     ) -> VendorPortalAccessRecord:
         self._ensure_tenant(tenant_id)
+        if not any(vendor.vendor_id == vendor_id for vendor in self.list_vendors(tenant_id)):
+            raise KeyError("vendor is outside tenant scope")
         row = dbm.VendorPortalAccess(
             id=access_id or uuid4(),
             tenant_id=tenant_id,
@@ -235,6 +242,10 @@ class SQLAlchemyAPRepository:
             access_token_hash=access_token_hash,
             status=status,
             expires_at=expires_at,
+            token_prefix=token_prefix,
+            label=label,
+            created_by_user_id=created_by_user_id,
+            rotated_from_access_id=rotated_from_access_id,
         )
         self.session.add(row)
         self.session.commit()
@@ -245,6 +256,12 @@ class SQLAlchemyAPRepository:
             select(dbm.VendorPortalAccess).where(dbm.VendorPortalAccess.tenant_id == tenant_id)
         ).all()
         return [self._vendor_access_record(row) for row in rows]
+
+    def get_vendor_portal_access(self, tenant_id: UUID, access_id: UUID) -> VendorPortalAccessRecord:
+        row = self.session.get(dbm.VendorPortalAccess, access_id)
+        if row is None or row.tenant_id != tenant_id:
+            raise KeyError("vendor access is outside tenant scope")
+        return self._vendor_access_record(row)
 
     def get_vendor_access_by_hash(
         self,
@@ -264,6 +281,29 @@ class SQLAlchemyAPRepository:
             return None
         if row.expires_at is not None and row.expires_at < datetime.now(UTC):
             return None
+        return self._vendor_access_record(row)
+
+    def revoke_vendor_portal_access(
+        self,
+        tenant_id: UUID,
+        access_id: UUID,
+        revoked_by_user_id: UUID | None = None,
+    ) -> VendorPortalAccessRecord:
+        row = self.session.get(dbm.VendorPortalAccess, access_id)
+        if row is None or row.tenant_id != tenant_id:
+            raise KeyError("vendor access is outside tenant scope")
+        row.status = "revoked"
+        row.revoked_at = datetime.now(UTC)
+        row.revoked_by_user_id = revoked_by_user_id
+        self.session.commit()
+        return self._vendor_access_record(row)
+
+    def mark_vendor_access_used(self, tenant_id: UUID, access_id: UUID) -> VendorPortalAccessRecord:
+        row = self.session.get(dbm.VendorPortalAccess, access_id)
+        if row is None or row.tenant_id != tenant_id:
+            raise KeyError("vendor access is outside tenant scope")
+        row.last_used_at = datetime.now(UTC)
+        self.session.commit()
         return self._vendor_access_record(row)
 
     def store_vendor_message(self, message: VendorMessageResult) -> VendorMessageResult:
@@ -1300,6 +1340,13 @@ class SQLAlchemyAPRepository:
             status=row.status,
             created_at=row.created_at,
             expires_at=row.expires_at,
+            token_prefix=row.token_prefix,
+            label=row.label,
+            revoked_at=row.revoked_at,
+            revoked_by_user_id=row.revoked_by_user_id,
+            created_by_user_id=row.created_by_user_id,
+            rotated_from_access_id=row.rotated_from_access_id,
+            last_used_at=row.last_used_at,
         )
 
     def _vendor_message_result(self, row: dbm.VendorMessage) -> VendorMessageResult:

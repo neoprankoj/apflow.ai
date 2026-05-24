@@ -124,6 +124,13 @@ class VendorPortalAccessRecord:
     status: str
     created_at: datetime
     expires_at: datetime | None = None
+    token_prefix: str | None = None
+    label: str | None = None
+    revoked_at: datetime | None = None
+    revoked_by_user_id: UUID | None = None
+    created_by_user_id: UUID | None = None
+    rotated_from_access_id: UUID | None = None
+    last_used_at: datetime | None = None
 
 
 @dataclass
@@ -275,7 +282,14 @@ class InMemoryAPRepository:
         status: str = "active",
         expires_at: datetime | None = None,
         access_id: UUID | None = None,
+        token_prefix: str | None = None,
+        label: str | None = None,
+        created_by_user_id: UUID | None = None,
+        rotated_from_access_id: UUID | None = None,
     ) -> VendorPortalAccessRecord:
+        self.get_tenant(tenant_id)
+        if not any(vendor.vendor_id == vendor_id for vendor in self.list_vendors(tenant_id)):
+            raise KeyError("vendor is outside tenant scope")
         record = VendorPortalAccessRecord(
             access_id=access_id or uuid4(),
             tenant_id=tenant_id,
@@ -285,12 +299,26 @@ class InMemoryAPRepository:
             status=status,
             created_at=datetime.now(UTC),
             expires_at=expires_at,
+            token_prefix=token_prefix,
+            label=label,
+            created_by_user_id=created_by_user_id,
+            rotated_from_access_id=rotated_from_access_id,
         )
         self.vendor_portal_access[record.access_id] = record
         return record
 
     def list_vendor_portal_access(self, tenant_id: UUID) -> list[VendorPortalAccessRecord]:
-        return [record for record in self.vendor_portal_access.values() if record.tenant_id == tenant_id]
+        return sorted(
+            [record for record in self.vendor_portal_access.values() if record.tenant_id == tenant_id],
+            key=lambda record: record.created_at,
+            reverse=True,
+        )
+
+    def get_vendor_portal_access(self, tenant_id: UUID, access_id: UUID) -> VendorPortalAccessRecord:
+        record = self.vendor_portal_access[access_id]
+        if record.tenant_id != tenant_id:
+            raise KeyError("vendor access is outside tenant scope")
+        return record
 
     def get_vendor_access_by_hash(
         self,
@@ -305,6 +333,28 @@ class InMemoryAPRepository:
                 continue
             return record
         return None
+
+    def revoke_vendor_portal_access(
+        self,
+        tenant_id: UUID,
+        access_id: UUID,
+        revoked_by_user_id: UUID | None = None,
+    ) -> VendorPortalAccessRecord:
+        record = self.get_vendor_portal_access(tenant_id, access_id)
+        updated = replace(
+            record,
+            status="revoked",
+            revoked_at=datetime.now(UTC),
+            revoked_by_user_id=revoked_by_user_id,
+        )
+        self.vendor_portal_access[access_id] = updated
+        return updated
+
+    def mark_vendor_access_used(self, tenant_id: UUID, access_id: UUID) -> VendorPortalAccessRecord:
+        record = self.get_vendor_portal_access(tenant_id, access_id)
+        updated = replace(record, last_used_at=datetime.now(UTC))
+        self.vendor_portal_access[access_id] = updated
+        return updated
 
     def store_vendor_message(self, message: VendorMessageResult) -> VendorMessageResult:
         self.vendor_messages[message.message_id] = message

@@ -232,6 +232,57 @@ export type PaymentStatusUpdate = {
   external_payment_reference?: string | null;
 };
 
+export type VendorAccessRead = {
+  id: string;
+  tenant_id: string;
+  vendor_id: string;
+  vendor_name?: string | null;
+  email: string;
+  label?: string | null;
+  status: string;
+  expires_at?: string | null;
+  revoked_at?: string | null;
+  revoked_by_user_id?: string | null;
+  created_by_user_id?: string | null;
+  rotated_from_access_id?: string | null;
+  last_used_at?: string | null;
+  token_prefix?: string | null;
+  created_at: string;
+  updated_at?: string | null;
+};
+
+export type VendorAccessCreatedResponse = VendorAccessRead & {
+  access_token: string;
+  access_url?: string | null;
+  message: string;
+};
+
+export type VendorAccessRotateResponse = {
+  old_access: VendorAccessRead;
+  new_access: VendorAccessRead;
+  access_token: string;
+  access_url?: string | null;
+  message: string;
+};
+
+export type VendorAccessRevokeResponse = {
+  id: string;
+  status: string;
+  revoked_at?: string | null;
+  message: string;
+};
+
+export type VendorAccessCreatePayload = {
+  tenant_id: string;
+  email: string;
+  vendor_id?: string | null;
+  vendor_name?: string | null;
+  supplier_name?: string | null;
+  label?: string | null;
+  ttl_days?: number | null;
+  expires_at?: string | null;
+};
+
 export function getApiBaseUrl() {
   const value = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
   if (!value) return null;
@@ -527,6 +578,54 @@ export function runMockPaymentSync(
     body: JSON.stringify({ tenant_id: tenantId, mode: "mock", invoice_id: invoiceId ?? null }),
     action: "Run mock payment sync"
   });
+}
+
+export function listVendorAccesses(apiBaseUrl: string, token: string, tenantId: string) {
+  return apiFetch<VendorAccessRead[]>(
+    apiBaseUrl,
+    `/vendor/accesses?tenant_id=${encodeURIComponent(tenantId)}`,
+    { token, action: "Load vendor access records" }
+  );
+}
+
+export function createVendorAccess(
+  apiBaseUrl: string,
+  token: string,
+  payload: VendorAccessCreatePayload
+) {
+  return apiFetch<VendorAccessCreatedResponse>(apiBaseUrl, "/vendor/accesses", {
+    method: "POST",
+    token,
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+    action: "Create vendor access"
+  });
+}
+
+export function revokeVendorAccess(
+  apiBaseUrl: string,
+  token: string,
+  tenantId: string,
+  accessId: string
+) {
+  return apiFetch<VendorAccessRevokeResponse>(
+    apiBaseUrl,
+    `/vendor/accesses/${encodeURIComponent(accessId)}/revoke?tenant_id=${encodeURIComponent(tenantId)}`,
+    { method: "POST", token, action: "Revoke vendor access" }
+  );
+}
+
+export function rotateVendorAccess(
+  apiBaseUrl: string,
+  token: string,
+  tenantId: string,
+  accessId: string
+) {
+  return apiFetch<VendorAccessRotateResponse>(
+    apiBaseUrl,
+    `/vendor/accesses/${encodeURIComponent(accessId)}/rotate?tenant_id=${encodeURIComponent(tenantId)}`,
+    { method: "POST", token, action: "Rotate vendor access" }
+  );
 }
 
 async function readResponseDetail(response: Response) {

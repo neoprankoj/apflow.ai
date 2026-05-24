@@ -55,7 +55,7 @@ Real invoice documents can be uploaded through `POST /documents/invoices/upload`
 
 Authentication defaults to demo-friendly local development with `AUTH_ENABLED=false` and `DEMO_MODE=true`. Set `AUTH_ENABLED=true` to require local JWT bearer tokens, tenant membership checks, and role permissions for protected ERP, review, audit, invoice processing, and tenant admin routes.
 
-Vendor portal access uses random demo tokens whose hashes are stored tenant-scoped. Vendor APIs only return vendor-safe invoice/payment fields and deterministic chatbot answers; no external LLM or real email is used.
+Vendor portal access now has a production-shaped lifecycle foundation: admin-created supplier access, hashed tokens, one-time raw token display, expiration, revocation, rotation, last-used tracking, audit events, and strict vendor-safe invoice/payment filtering. Real email invitation delivery is not connected yet; see `docs/vendor_access.md`.
 
 Payment status tracking has a tenant-scoped manual/mock foundation for invoice payment lifecycle visibility. AP managers can run a mock payment sync, update internal APFlow payment state, see safe payment status in Vendor Preview, and audit changes. No real bank, payment provider, or ERP payment-status sync is connected yet; see `docs/payment_status.md`.
 
@@ -208,6 +208,7 @@ Demo materials:
 - `docs/demo_readiness_pack.md` for the complete staging demo readiness, walkthrough, safety, and troubleshooting pack.
 - `docs/production_readiness_checklist.md` for Demo/Pilot/Production readiness gates and current blockers.
 - `docs/production_security.md` for production access, demo-mode, tenant isolation, RBAC, and vendor-safe guardrails.
+- `docs/vendor_access.md` for vendor access lifecycle, token handling, revocation, rotation, and vendor-safe data boundaries.
 - `docs/demo_script.md` for the live presenter flow.
 - `docs/demo_qa_checklist.md` for pre-demo validation.
 - `samples/demo` for synthetic scenario notes and expected outcomes.

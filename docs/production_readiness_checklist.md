@@ -36,7 +36,8 @@ Current pilot blockers:
 - Production access hardening is not complete.
 - Tenant isolation and vendor-safe guardrail tests must stay in the release gate.
 - Domain/HTTPS are intentionally deferred.
-- Production vendor access lifecycle is not complete.
+- Vendor access lifecycle foundation now exists: token hashing, one-time token display, expiration, revocation, rotation, last-used tracking, and audit events.
+- Real vendor invitation delivery and support operations are still missing.
 - Payment status foundation exists, but real ERP payment status sync is missing.
 - Real notification delivery is missing.
 - Real customer Priority mapping/write flow is not live.

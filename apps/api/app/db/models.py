@@ -335,6 +335,13 @@ class VendorPortalAccess(Base, TenantScopedMixin, TimestampMixin):
     access_token_hash: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
     status: Mapped[str] = mapped_column(String(64), nullable=False, default="active")
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    token_prefix: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_by_user_id: Mapped[PyUUID | None] = mapped_column(Uuid, nullable=True)
+    created_by_user_id: Mapped[PyUUID | None] = mapped_column(Uuid, nullable=True)
+    rotated_from_access_id: Mapped[PyUUID | None] = mapped_column(Uuid, nullable=True)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class VendorMessage(Base, TenantScopedMixin, TimestampMixin):

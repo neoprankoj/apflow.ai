@@ -91,6 +91,17 @@ Use this short checklist before merging frontend UI changes.
 - [ ] Safe payment status appears when available.
 - [ ] Internal payment notes and raw payment references are not exposed.
 
+## Vendor Access Management
+
+- [ ] Vendor Access Management loads for users with ERP sync/config/admin permission.
+- [ ] Create Access returns a one-time token and warns that it will not be shown again.
+- [ ] Access list shows token prefix only, never raw token or token hash.
+- [ ] Vendor token can list only that supplier's safe invoices/payment statuses.
+- [ ] Rotate revokes the old token and shows one replacement token.
+- [ ] Revoke prevents the token from working.
+- [ ] Audit Trail records create, rotate, revoke, use, and safe preview events.
+- [ ] View-only users cannot create, rotate, or revoke vendor access.
+
 ## Payment Status
 
 - [ ] Payment Status section loads after sign-in.

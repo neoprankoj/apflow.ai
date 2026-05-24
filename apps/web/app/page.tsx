@@ -43,6 +43,7 @@ import { InvoiceUploadPanel } from "./invoice-upload-panel";
 import { PaymentStatusPanel } from "./payment-status-panel";
 import { PriorityMappingAdmin } from "./priority-mapping-admin";
 import { ProductReadinessPanel } from "./product-readiness-panel";
+import { VendorAccessAdmin } from "./vendor-access-admin";
 
 const DEMO_EMAIL = "demo-owner@apflow.local";
 const DEMO_PASSWORD = "password-123";
@@ -216,6 +217,7 @@ export default function Dashboard() {
   const canReview = permissions.has("review:correct");
   const canAudit = permissions.has("audit:read");
   const canDemoReset = canAdmin;
+  const canManageVendorAccess = canAdmin || canConfigureErp || canSyncErp;
 
   const loadPublicData = useCallback(async () => {
     if (!apiBaseUrl) {
@@ -521,6 +523,7 @@ export default function Dashboard() {
     { id: "approvals", label: "Approvals" },
     { id: "erp-export", label: "ERP Export" },
     { id: "vendor-portal-preview", label: "Vendor Portal Preview" },
+    { id: "vendor-access-admin", label: "Vendor Access" },
     { id: "product-readiness", label: "Readiness" },
     { id: "admin", label: "Admin" }
   ];
@@ -1086,6 +1089,13 @@ export default function Dashboard() {
             accessToken={accessToken}
             apiBaseUrl={apiBaseUrl}
             canAdmin={canAdmin}
+          />
+
+          <VendorAccessAdmin
+            accessToken={accessToken}
+            apiBaseUrl={apiBaseUrl}
+            canManageVendorAccess={canManageVendorAccess}
+            tenantId={tenantId}
           />
 
           <PriorityMappingAdmin
