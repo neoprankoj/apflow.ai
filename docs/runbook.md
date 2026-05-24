@@ -152,6 +152,7 @@ python scripts/seed_demo_data.py --api-base-url http://127.0.0.1:8000 --mode ven
 4. Use `approval-ready` for the stable presenter path and `review-required` for the human-review path.
 5. Set `ALLOW_DEMO_RESET=false` again after cleanup and restart the API service.
 6. Use `docs/demo_script.md` and `docs/demo_qa_checklist.md` before live demos.
+7. For notification demos, use Admin -> Notification Settings. Mock delivery records events inside APFlow only; Email, Slack, and Teams placeholders must remain not configured unless a real provider rollout has been approved.
 
 ## Before Demo
 

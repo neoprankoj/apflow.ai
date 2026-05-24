@@ -59,6 +59,8 @@ Vendor portal access now has a production-shaped lifecycle foundation: admin-cre
 
 Payment status tracking has a tenant-scoped manual/mock foundation for invoice payment lifecycle visibility. AP managers can run a mock payment sync, update internal APFlow payment state, see safe payment status in Vendor Preview, let vendors ask rules-based payment-status questions, and audit changes. No real bank, payment provider, or ERP payment-status sync is connected yet; see `docs/payment_status.md`.
 
+Notification delivery now has a mock/provider abstraction foundation. Admins can view provider readiness, send mock test notifications, and inspect tenant-scoped delivery history. Email, Slack, and Teams remain safe placeholders and do not send externally; see `docs/notifications.md`.
+
 ## Local Layout
 
 ```text
@@ -210,6 +212,7 @@ Demo materials:
 - `docs/production_security.md` for production access, demo-mode, tenant isolation, RBAC, and vendor-safe guardrails.
 - `docs/vendor_access.md` for vendor access lifecycle, token handling, revocation, rotation, and vendor-safe data boundaries.
 - `docs/vendor_payment_chatbot.md` for the rules-based vendor payment-status chatbot and refusal rules.
+- `docs/notifications.md` for mock notification delivery, placeholder providers, and future Email/Slack/Teams extension points.
 - `docs/demo_script.md` for the live presenter flow.
 - `docs/demo_qa_checklist.md` for pre-demo validation.
 - `samples/demo` for synthetic scenario notes and expected outcomes.

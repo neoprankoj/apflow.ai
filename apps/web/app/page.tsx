@@ -40,6 +40,7 @@ import { ApprovalInbox } from "./approval-inbox";
 import { APWorkflowGuide } from "./ap-workflow-guide";
 import { AuditTimeline, type AuditEvent } from "./audit-timeline";
 import { InvoiceUploadPanel } from "./invoice-upload-panel";
+import { NotificationSettingsPanel } from "./notification-settings-panel";
 import { PaymentStatusPanel } from "./payment-status-panel";
 import { PriorityMappingAdmin } from "./priority-mapping-admin";
 import { ProductReadinessPanel } from "./product-readiness-panel";
@@ -218,6 +219,7 @@ export default function Dashboard() {
   const canAudit = permissions.has("audit:read");
   const canDemoReset = canAdmin;
   const canManageVendorAccess = canAdmin || canConfigureErp || canSyncErp;
+  const canSendNotifications = canReview || canApproveInvoice || canAdmin;
 
   const loadPublicData = useCallback(async () => {
     if (!apiBaseUrl) {
@@ -520,6 +522,7 @@ export default function Dashboard() {
     { id: "ocr-review", label: "OCR Review" },
     { id: "approval-inbox", label: "Approval Inbox" },
     { id: "payment-status", label: "Payment Status" },
+    { id: "notification-settings", label: "Notifications" },
     { id: "approvals", label: "Approvals" },
     { id: "erp-export", label: "ERP Export" },
     { id: "vendor-portal-preview", label: "Vendor Portal Preview" },
@@ -1095,6 +1098,13 @@ export default function Dashboard() {
             accessToken={accessToken}
             apiBaseUrl={apiBaseUrl}
             canManageVendorAccess={canManageVendorAccess}
+            tenantId={tenantId}
+          />
+
+          <NotificationSettingsPanel
+            accessToken={accessToken}
+            apiBaseUrl={apiBaseUrl}
+            canSendNotifications={canSendNotifications}
             tenantId={tenantId}
           />
 

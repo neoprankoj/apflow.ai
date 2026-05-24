@@ -318,6 +318,17 @@ If the token is valid but no invoices match the supplier, `GET /vendor/invoices`
 
 Responses include `answer`, `intent`, `confidence`, `matched_invoice_ids`, `matched_invoices`, `safe_suggestions`, `refused`, and optional `refusal_reason`. Unsafe questions about fraud/risk, audit, approval policy, ERP config/logs, internal notes, tenant internals, or token details are refused safely.
 
+## Notifications
+
+Notification delivery endpoints are authenticated and tenant-scoped.
+
+- `GET /notifications/providers?tenant_id={uuid}` returns safe provider readiness for mock, email, Slack, and Teams.
+- `POST /notifications/test` records a mock test delivery or a safe not-configured placeholder result.
+- `GET /notifications/deliveries?tenant_id={uuid}` lists tenant delivery attempts with optional filters for status, channel, event type, and invoice.
+- `GET /notifications/summary?tenant_id={uuid}` returns counts by status/channel and recent deliveries.
+
+The mock provider records delivery attempts inside APFlow only. Email, Slack, and Teams are placeholders and do not send externally. Responses redact recipient addresses, truncate body previews, and never include provider secrets, webhook URLs, auth headers, or API keys.
+
 Example Priority mapping payload:
 
 ```json

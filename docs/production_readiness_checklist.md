@@ -59,7 +59,7 @@ Current production blockers:
 - Production secret rotation and operational controls must be finalized.
 - Public DB/Redis/MinIO exposure must be hardened.
 - Production vendor access is not ready.
-- Real notification provider is not configured.
+- Notification abstraction and mock delivery exist, but real email/Slack/Teams providers are not configured.
 - Real ERP payment status sync is missing.
 - Billing and usage metering are missing.
 - Accuracy analytics are missing.
@@ -86,5 +86,6 @@ Use the Product Readiness Gate in the Admin area before demos, pilots, or produc
 - [Frontend QA Checklist](frontend_qa_checklist.md)
 - [Payment Status Foundation](payment_status.md)
 - [Vendor Payment-Status Chatbot](vendor_payment_chatbot.md)
+- [Notification Delivery Abstraction](notifications.md)
 - [Staging Operations](operations_staging.md)
 - [Staging Release Checklist](staging_release_checklist.md)

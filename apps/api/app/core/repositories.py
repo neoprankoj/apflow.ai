@@ -20,6 +20,10 @@ from app.core.schemas import (
     InvoiceIngestionOutput,
     InvoiceNormalizationOutput,
     NotificationType,
+    NotificationChannel,
+    NotificationDeliveryRead,
+    NotificationDeliveryStatus,
+    NotificationRecipientType,
     PaymentStatusRead,
     PaymentStatusSource,
     PaymentStatusSummary,
@@ -143,6 +147,7 @@ class InMemoryAPRepository:
     approval_policies: dict[UUID, ApprovalPolicyRecord] = field(default_factory=dict)
     approval_tasks: dict[UUID, ApprovalTaskRecord] = field(default_factory=dict)
     notification_events: dict[UUID, NotificationEventRecord] = field(default_factory=dict)
+    notification_deliveries: dict[UUID, NotificationDeliveryRead] = field(default_factory=dict)
     audit_events: dict[UUID, AuditEventRecord] = field(default_factory=dict)
     workflow_states: dict[UUID, WorkflowState] = field(default_factory=dict)
     erp_connection_configs: dict[UUID, ERPConnectionConfigRecord] = field(default_factory=dict)
@@ -756,6 +761,74 @@ class InMemoryAPRepository:
     def list_notification_events(self, tenant_id: UUID) -> list[NotificationEventRecord]:
         return [record for record in self.notification_events.values() if record.tenant_id == tenant_id]
 
+    def store_notification_delivery(
+        self,
+        tenant_id: UUID,
+        event_type: str,
+        channel: NotificationChannel,
+        provider: str,
+        recipient_type: NotificationRecipientType,
+        recipient_label: str,
+        status: NotificationDeliveryStatus,
+        *,
+        recipient_address_redacted: str | None = None,
+        subject: str | None = None,
+        body_preview: str | None = None,
+        reason: str | None = None,
+        related_invoice_id: UUID | None = None,
+        related_payment_status_id: UUID | None = None,
+        related_vendor_access_id: UUID | None = None,
+        delivery_metadata: dict | None = None,
+        created_by_user_id: UUID | None = None,
+        delivered_at: datetime | None = None,
+        delivery_id: UUID | None = None,
+    ) -> NotificationDeliveryRead:
+        now = datetime.now(UTC)
+        record = NotificationDeliveryRead(
+            id=delivery_id or uuid4(),
+            tenant_id=tenant_id,
+            event_type=event_type,
+            channel=channel,
+            provider=provider,
+            recipient_type=recipient_type,
+            recipient_label=recipient_label,
+            recipient_address_redacted=recipient_address_redacted,
+            subject=subject,
+            body_preview=body_preview,
+            status=status,
+            reason=reason,
+            related_invoice_id=related_invoice_id,
+            related_payment_status_id=related_payment_status_id,
+            related_vendor_access_id=related_vendor_access_id,
+            delivery_metadata=delivery_metadata or {},
+            created_by_user_id=created_by_user_id,
+            created_at=now,
+            updated_at=now,
+            delivered_at=delivered_at,
+        )
+        self.notification_deliveries[record.id] = record
+        return record
+
+    def list_notification_deliveries(
+        self,
+        tenant_id: UUID,
+        *,
+        status: str | None = None,
+        channel: str | None = None,
+        event_type: str | None = None,
+        related_invoice_id: UUID | None = None,
+    ) -> list[NotificationDeliveryRead]:
+        records = [record for record in self.notification_deliveries.values() if record.tenant_id == tenant_id]
+        if status:
+            records = [record for record in records if str(record.status) == status]
+        if channel:
+            records = [record for record in records if str(record.channel) == channel]
+        if event_type:
+            records = [record for record in records if record.event_type == event_type]
+        if related_invoice_id:
+            records = [record for record in records if record.related_invoice_id == related_invoice_id]
+        return sorted(records, key=lambda record: record.created_at)
+
     def store_audit_event(self, event: AuditEventInput, audit_event_id: UUID) -> None:
         self.audit_events[audit_event_id] = AuditEventRecord(
             tenant_id=event.tenant_id,
@@ -889,6 +962,9 @@ class InMemoryAPRepository:
         invoice_ids = {record.invoice_id for record in self.list_invoices(tenant_id)}
         cleared = {
             "payment_statuses": sum(record.tenant_id == tenant_id for record in self.payment_statuses.values()),
+            "notification_deliveries": sum(
+                record.tenant_id == tenant_id for record in self.notification_deliveries.values()
+            ),
             "vendor_messages": sum(message.tenant_id == tenant_id for message in self.vendor_messages.values()),
             "vendor_portal_access": sum(
                 record.tenant_id == tenant_id for record in self.vendor_portal_access.values()
@@ -940,6 +1016,11 @@ class InMemoryAPRepository:
         self.notification_events = {
             notification_id: record
             for notification_id, record in self.notification_events.items()
+            if record.tenant_id != tenant_id
+        }
+        self.notification_deliveries = {
+            delivery_id: record
+            for delivery_id, record in self.notification_deliveries.items()
             if record.tenant_id != tenant_id
         }
         self.workflow_states = {

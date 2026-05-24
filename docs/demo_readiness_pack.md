@@ -22,7 +22,7 @@ APFlow demonstrates a complete AP manager workflow:
 
 What is real today:
 
-- FastAPI backend, Next.js dashboard, PostgreSQL persistence, auth/RBAC, document upload, OCR.space extraction, review/corrections, approvals, audit events, vendor-safe preview, manual/mock payment status tracking, vendor payment-status chatbot, controlled APFlow-side Priority imports, and runtime verification.
+- FastAPI backend, Next.js dashboard, PostgreSQL persistence, auth/RBAC, document upload, OCR.space extraction, review/corrections, approvals, audit events, vendor-safe preview, manual/mock payment status tracking, mock notification delivery history, vendor payment-status chatbot, controlled APFlow-side Priority imports, and runtime verification.
 - Vendor access lifecycle foundation: hashed tokens, one-time raw token display, expiration, revocation, rotation, last-used tracking, and audit events.
 
 What is mock or safe by design:
@@ -36,7 +36,7 @@ Intentionally disabled or deferred:
 
 - Real Priority writes.
 - Real ERP/bank payment status sync.
-- Real vendor invitation email delivery.
+- Real vendor invitation email/Slack/Teams delivery.
 - Domain and HTTPS.
 - Public production access.
 - Demo reset unless explicitly enabled for controlled cleanup.

@@ -232,6 +232,58 @@ export type PaymentStatusUpdate = {
   external_payment_reference?: string | null;
 };
 
+export type NotificationProviderRead = {
+  provider: string;
+  channel: string;
+  configured: boolean;
+  enabled: boolean;
+  mode: string;
+  safe_message: string;
+};
+
+export type NotificationDeliveryRead = {
+  id: string;
+  tenant_id: string;
+  event_type: string;
+  channel: string;
+  provider: string;
+  recipient_type: string;
+  recipient_label: string;
+  recipient_address_redacted?: string | null;
+  subject?: string | null;
+  body_preview?: string | null;
+  status: string;
+  reason?: string | null;
+  related_invoice_id?: string | null;
+  related_payment_status_id?: string | null;
+  related_vendor_access_id?: string | null;
+  delivery_metadata: Record<string, unknown>;
+  created_by_user_id?: string | null;
+  created_at: string;
+  updated_at: string;
+  delivered_at?: string | null;
+};
+
+export type NotificationSummary = {
+  total: number;
+  sent: number;
+  queued: number;
+  failed: number;
+  skipped: number;
+  disabled: number;
+  by_channel: Record<string, number>;
+  latest_deliveries: NotificationDeliveryRead[];
+};
+
+export type NotificationTestPayload = {
+  tenant_id: string;
+  channel: string;
+  recipient_label?: string | null;
+  recipient_address?: string | null;
+  subject?: string | null;
+  message?: string | null;
+};
+
 export type VendorAccessRead = {
   id: string;
   tenant_id: string;
@@ -627,6 +679,49 @@ export function runMockPaymentSync(
     body: JSON.stringify({ tenant_id: tenantId, mode: "mock", invoice_id: invoiceId ?? null }),
     action: "Run mock payment sync"
   });
+}
+
+export function listNotificationProviders(apiBaseUrl: string, token: string, tenantId: string) {
+  return apiFetch<NotificationProviderRead[]>(
+    apiBaseUrl,
+    `/notifications/providers?tenant_id=${encodeURIComponent(tenantId)}`,
+    { token, action: "Load notification providers" }
+  );
+}
+
+export function sendTestNotification(apiBaseUrl: string, token: string, payload: NotificationTestPayload) {
+  return apiFetch<NotificationDeliveryRead>(apiBaseUrl, "/notifications/test", {
+    method: "POST",
+    token,
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+    action: "Send test notification"
+  });
+}
+
+export function listNotificationDeliveries(
+  apiBaseUrl: string,
+  token: string,
+  tenantId: string,
+  filters: { status?: string; channel?: string; eventType?: string; relatedInvoiceId?: string } = {}
+) {
+  const params = new URLSearchParams({ tenant_id: tenantId });
+  if (filters.status) params.set("status", filters.status);
+  if (filters.channel) params.set("channel", filters.channel);
+  if (filters.eventType) params.set("event_type", filters.eventType);
+  if (filters.relatedInvoiceId) params.set("related_invoice_id", filters.relatedInvoiceId);
+  return apiFetch<NotificationDeliveryRead[]>(apiBaseUrl, `/notifications/deliveries?${params.toString()}`, {
+    token,
+    action: "Load notification deliveries"
+  });
+}
+
+export function getNotificationSummary(apiBaseUrl: string, token: string, tenantId: string) {
+  return apiFetch<NotificationSummary>(
+    apiBaseUrl,
+    `/notifications/summary?tenant_id=${encodeURIComponent(tenantId)}`,
+    { token, action: "Load notification summary" }
+  );
 }
 
 export function listVendorAccesses(apiBaseUrl: string, token: string, tenantId: string) {

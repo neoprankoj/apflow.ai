@@ -12,6 +12,7 @@ from app.api.routes.documents import router as documents_router
 from app.api.routes.erp import router as erp_router
 from app.api.routes.health import router as health_router
 from app.api.routes.invoices import router as invoices_router
+from app.api.routes.notifications import router as notifications_router
 from app.api.routes.ocr import router as ocr_router
 from app.api.routes.payments import router as payments_router
 from app.api.routes.review import router as review_router
@@ -57,6 +58,7 @@ def create_app() -> FastAPI:
     app.include_router(demo_admin_router, prefix="/admin", tags=["admin"])
     app.include_router(erp_router, prefix="/erp", tags=["erp"])
     app.include_router(ocr_router, prefix="/ocr", tags=["ocr"])
+    app.include_router(notifications_router, prefix="/notifications", tags=["notifications"])
     app.include_router(payments_router, prefix="/payments", tags=["payments"])
     app.include_router(review_router, prefix="/review", tags=["review"])
     app.include_router(vendor_router, prefix="/vendor", tags=["vendor"])

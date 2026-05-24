@@ -363,7 +363,10 @@ function titleForAuditAction(action: string) {
     "payment.status_created": "Payment status created",
     "payment.status_updated": "Payment status updated",
     "payment.mock_sync_run": "Mock payment sync run",
-    "notification.sent": "Notification created"
+    "notification.sent": "Notification created",
+    "notification.test_sent": "Mock notification sent",
+    "notification.test_not_delivered": "Notification test not delivered",
+    "notification.delivery_recorded": "Notification delivery recorded"
   };
   if (action.startsWith("erp.")) return titleForErpAction(action);
   return labels[action] ?? "Activity recorded";
@@ -387,6 +390,9 @@ function descriptionForAuditAction(action: string, metadata: Record<string, unkn
     return status ? `Payment status updated to ${humanize(status)}.` : "Payment status was updated.";
   }
   if (action === "payment.mock_sync_run") return "Mock payment sync updated APFlow payment statuses only.";
+  if (action === "notification.test_sent") return "Mock notification test was recorded inside APFlow only.";
+  if (action === "notification.test_not_delivered") return "Notification test did not send because the provider is not configured.";
+  if (action === "notification.delivery_recorded") return "A notification delivery attempt was recorded without exposing provider secrets.";
   if (action === "vendor.access_created") return "Supplier portal access was created. The raw token was shown once.";
   if (action === "vendor.access_revoked") return "Supplier portal access was revoked.";
   if (action === "vendor.access_rotated") return "Supplier portal access was rotated and the old token was revoked.";
