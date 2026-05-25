@@ -141,14 +141,22 @@ If a raw vendor token appears in a screenshot, chat, or support note, rotate or 
 6. Explain that no external email, Slack, or Teams message is sent in this demo.
 7. Open Audit Trail and show notification activity.
 
-## L. Demo Path 11 - AP Manager Demo Checklist
+## L. Demo Path 11 - Accuracy & Exceptions
+
+1. Open `Accuracy & Exceptions`.
+2. Show total invoice volume, review-required rate, blocked invoices, mock ERP export success, payment status, vendor self-service, and notification delivery metrics.
+3. Explain that the dashboard summarizes existing APFlow data only; it does not use external analytics or expose raw audit metadata.
+4. Show Recommended Next Actions and explain how they point operators toward OCR cleanup, payment sync, vendor access follow-up, or notification setup.
+5. Confirm no vendor tokens, token hashes, OCR provider payloads, or secrets appear.
+
+## M. Demo Path 12 - AP Manager Demo Checklist
 
 1. Expand the `Demo checklist` in the AP Workflow Guide.
 2. Walk through each checklist item as a presenter rehearsal path.
 3. Confirm key action messages point to the next step and to Audit Trail proof.
 4. Confirm Priority connector copy separates dry run, import plan, controlled import, and imported records.
 
-## M. AP User Acceptance Pass
+## N. AP User Acceptance Pass
 
 1. Start from the top of the dashboard and confirm the AP manager can identify the next recommended action.
 2. Confirm upload, OCR, review, process, approval, ERP export, and Audit Trail use consistent finance-friendly labels.
@@ -158,7 +166,7 @@ If a raw vendor token appears in a screenshot, chat, or support note, rotate or 
 6. Confirm imported vendors and purchase orders are visible after controlled import.
 7. Confirm no Priority data is changed during sample preview, import plan, controlled import, or readiness checks.
 
-## N. Demo Cleanup
+## O. Demo Cleanup
 
 1. Enable `ALLOW_DEMO_RESET=true` only when needed on private staging.
 2. Use the dashboard reset action or `POST /admin/demo/reset`.

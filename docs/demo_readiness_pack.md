@@ -18,11 +18,12 @@ APFlow demonstrates a complete AP manager workflow:
 - Export approved invoices to mock ERP.
 - Show manual/mock payment status tracking and vendor-safe payment messages.
 - Prove activity in Audit Trail.
+- Show Accuracy & Exceptions metrics and recommendations after workflow activity.
 - Preview Priority ERP mapping, dry-run sync, import plans, controlled APFlow-side imports, and imported records.
 
 What is real today:
 
-- FastAPI backend, Next.js dashboard, PostgreSQL persistence, auth/RBAC, document upload, OCR.space extraction, review/corrections, approvals, audit events, vendor-safe preview, manual/mock payment status tracking, mock notification delivery history, vendor payment-status chatbot, controlled APFlow-side Priority imports, and runtime verification.
+- FastAPI backend, Next.js dashboard, PostgreSQL persistence, auth/RBAC, document upload, OCR.space extraction, review/corrections, approvals, audit events, vendor-safe preview, manual/mock payment status tracking, mock notification delivery history, vendor payment-status chatbot, Accuracy & Exceptions analytics, controlled APFlow-side Priority imports, and runtime verification.
 - Vendor access lifecycle foundation: hashed tokens, one-time raw token display, expiration, revocation, rotation, last-used tracking, and audit events.
 
 What is mock or safe by design:
@@ -96,8 +97,9 @@ Intentionally disabled or deferred:
 22. Open Payment Status.
 23. Run Mock Payment Sync and explain it updates APFlow only.
 24. Open Vendor-safe preview and show the safe payment message.
-25. Open Audit Trail.
-26. Show approval/export/payment/vendor access/chatbot events as proof of what happened.
+25. Open Accuracy & Exceptions and show workflow health, blockers, vendor self-service, notification outcomes, and recommended next actions.
+26. Open Audit Trail.
+27. Show approval/export/payment/vendor access/chatbot events as proof of what happened.
 
 Avoid saying that mock ERP export is a real ERP write. Say: "This proves the export handoff path using the mock adapter; real ERP write enablement is intentionally gated."
 

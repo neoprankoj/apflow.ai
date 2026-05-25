@@ -41,6 +41,7 @@ Current pilot blockers:
 - Real vendor invitation delivery and support operations are still missing.
 - Payment status and vendor chatbot foundations exist, but real ERP payment status sync is missing.
 - Real notification delivery is missing.
+- Foundational accuracy and exception analytics exist, but SLA trends and advanced operational reporting are still missing.
 - Real customer Priority mapping/write flow is not live.
 
 ### Production Ready
@@ -62,7 +63,7 @@ Current production blockers:
 - Notification abstraction and mock delivery exist, but real email/Slack/Teams providers are not configured.
 - Real ERP payment status sync is missing.
 - Billing and usage metering are missing.
-- Accuracy analytics are missing.
+- Foundational accuracy analytics exist, but advanced SLA, trend, and per-supplier analytics are not production-grade yet.
 - E-invoicing/tax compliance requirements are not complete.
 
 ## Why Domain + HTTPS Is Deferred
@@ -87,5 +88,6 @@ Use the Product Readiness Gate in the Admin area before demos, pilots, or produc
 - [Payment Status Foundation](payment_status.md)
 - [Vendor Payment-Status Chatbot](vendor_payment_chatbot.md)
 - [Notification Delivery Abstraction](notifications.md)
+- [Accuracy & Exception Analytics](analytics.md)
 - [Staging Operations](operations_staging.md)
 - [Staging Release Checklist](staging_release_checklist.md)

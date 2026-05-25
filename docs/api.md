@@ -329,6 +329,24 @@ Notification delivery endpoints are authenticated and tenant-scoped.
 
 The mock provider records delivery attempts inside APFlow only. Email, Slack, and Teams are placeholders and do not send externally. Responses redact recipient addresses, truncate body previews, and never include provider secrets, webhook URLs, auth headers, or API keys.
 
+## Analytics
+
+`GET /analytics/accuracy?tenant_id={uuid}` returns tenant-scoped Accuracy & Exceptions analytics.
+
+The response summarizes:
+
+- invoice volume
+- OCR/review health
+- approval health
+- exception breakdown
+- ERP export outcomes
+- payment status distribution
+- vendor self-service activity
+- notification delivery outcomes
+- deterministic recommendations
+
+Analytics are built from existing APFlow data. They do not expose raw vendor tokens, token hashes, provider secrets, raw OCR payloads, full audit metadata, or external analytics identifiers.
+
 Example Priority mapping payload:
 
 ```json

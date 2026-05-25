@@ -38,6 +38,7 @@ import {
 } from "./frontend-api";
 import { ApprovalInbox } from "./approval-inbox";
 import { APWorkflowGuide } from "./ap-workflow-guide";
+import { AnalyticsDashboardPanel } from "./analytics-dashboard-panel";
 import { AuditTimeline, type AuditEvent } from "./audit-timeline";
 import { InvoiceUploadPanel } from "./invoice-upload-panel";
 import { NotificationSettingsPanel } from "./notification-settings-panel";
@@ -517,6 +518,7 @@ export default function Dashboard() {
   const navItems = [
     { id: "overview", label: "Overview" },
     { id: "workflow-guide", label: "Workflow Guide" },
+    { id: "accuracy-analytics", label: "Analytics" },
     { id: "audit-trail", label: "Audit Trail" },
     { id: "upload-invoice", label: "Upload Invoice" },
     { id: "ocr-review", label: "OCR Review" },
@@ -1085,6 +1087,12 @@ export default function Dashboard() {
             apiBaseUrl={apiBaseUrl}
             canUpdatePaymentStatus={canReview || canApproveInvoice || canAdmin}
             invoices={invoices}
+            tenantId={tenantId}
+          />
+
+          <AnalyticsDashboardPanel
+            accessToken={accessToken}
+            apiBaseUrl={apiBaseUrl}
             tenantId={tenantId}
           />
 

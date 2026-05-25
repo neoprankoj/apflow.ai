@@ -284,6 +284,48 @@ export type NotificationTestPayload = {
   message?: string | null;
 };
 
+export type AnalyticsMetric = {
+  key: string;
+  label: string;
+  value: number;
+  unit?: string | null;
+  trend?: string | null;
+  status: string;
+  description?: string | null;
+};
+
+export type AnalyticsBreakdownItem = {
+  key: string;
+  label: string;
+  count: number;
+  percentage?: number | null;
+};
+
+export type AnalyticsExceptionItem = {
+  key: string;
+  label: string;
+  count: number;
+  severity: string;
+  next_step?: string | null;
+};
+
+export type AccuracyAnalyticsResponse = {
+  tenant_id: string;
+  generated_at: string;
+  date_range: Record<string, string | null>;
+  invoice_volume: AnalyticsMetric[];
+  ocr_accuracy: AnalyticsMetric[];
+  review_workload: AnalyticsMetric[];
+  approval_health: AnalyticsMetric[];
+  exception_breakdown: AnalyticsExceptionItem[];
+  erp_export_health: AnalyticsMetric[];
+  payment_status_health: AnalyticsBreakdownItem[];
+  vendor_self_service: AnalyticsMetric[];
+  notification_health: AnalyticsMetric[];
+  top_blockers: AnalyticsExceptionItem[];
+  recommendations: string[];
+};
+
 export type VendorAccessRead = {
   id: string;
   tenant_id: string;
@@ -721,6 +763,14 @@ export function getNotificationSummary(apiBaseUrl: string, token: string, tenant
     apiBaseUrl,
     `/notifications/summary?tenant_id=${encodeURIComponent(tenantId)}`,
     { token, action: "Load notification summary" }
+  );
+}
+
+export function getAccuracyAnalytics(apiBaseUrl: string, token: string, tenantId: string) {
+  return apiFetch<AccuracyAnalyticsResponse>(
+    apiBaseUrl,
+    `/analytics/accuracy?tenant_id=${encodeURIComponent(tenantId)}`,
+    { token, action: "Load accuracy analytics" }
   );
 }
 

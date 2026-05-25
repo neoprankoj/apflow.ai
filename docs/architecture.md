@@ -64,6 +64,8 @@ ERP sync logs and external references are tenant-scoped. Real ERP adapters can b
 
 Notification delivery is separated behind `NotificationService`. The current `mock` provider records tenant-scoped delivery attempts inside APFlow. Email, Slack, and Teams providers are placeholders that return safe disabled results until real provider credentials and retry/support policy are added.
 
+Accuracy and exception analytics are produced by `AnalyticsService` from existing tenant-scoped repositories and audit summaries. The service returns aggregate metrics, exception counts, and deterministic recommendations only; it does not expose raw audit metadata, vendor tokens, OCR provider payloads, notification secrets, or external analytics identifiers.
+
 ## Phase 6 OCR And Review
 
 `InvoiceExtractionAgent` now calls `OCRProviderFactory`, which selects an adapter from `OCR_PROVIDER`.

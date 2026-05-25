@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes.admin import router as admin_router
+from app.api.routes.analytics import router as analytics_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.demo_admin import router as demo_admin_router
 from app.api.routes.documents import router as documents_router
@@ -53,6 +54,7 @@ def create_app() -> FastAPI:
         allow_headers=["Authorization", "Content-Type", "X-Vendor-Access-Token"],
     )
     app.include_router(health_router)
+    app.include_router(analytics_router, prefix="/analytics", tags=["analytics"])
     app.include_router(auth_router, prefix="/auth", tags=["auth"])
     app.include_router(admin_router, prefix="/admin", tags=["admin"])
     app.include_router(demo_admin_router, prefix="/admin", tags=["admin"])
