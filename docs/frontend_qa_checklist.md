@@ -134,6 +134,15 @@ Use this short checklist before merging frontend UI changes.
 - [ ] Audit Trail records notification test/delivery activity.
 - [ ] UI copy clearly says no external emails, Slack messages, or Teams messages are sent.
 
+## Accuracy & Exceptions
+
+- [ ] Accuracy & Exceptions panel loads after sign-in.
+- [ ] Empty state is readable when no workflow data exists.
+- [ ] Total invoice, review rate, blocker, export, vendor, and notification summary cards render.
+- [ ] OCR & Review Health, Exception Breakdown, Approval Health, Payment Status, Vendor Self-Service, Notification Delivery, and Recommended Next Actions sections are readable.
+- [ ] Metrics update after invoice process, approval/export, payment sync, vendor access/chatbot, and mock notification actions.
+- [ ] Analytics do not show raw audit JSON, vendor tokens, token hashes, OCR provider payloads, or secrets.
+
 ## ERP Export
 
 - [ ] Export action is available only when the invoice is export-ready.

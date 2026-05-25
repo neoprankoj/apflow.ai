@@ -357,6 +357,9 @@ def _product_readiness_checks() -> list[ProductReadinessCheck]:
         _check("real_slack_provider_configured", "Real Slack provider configured", "warning", "pilot", "Slack notification provider is not configured.", "Configure only if Slack delivery is needed for a pilot."),
         _check("real_teams_provider_configured", "Real Teams provider configured", "warning", "pilot", "Teams notification provider is not configured.", "Configure only if Teams delivery is needed for a pilot."),
         _check("notification_delivery_configured", "Notification delivery configured", "fail", "pilot", "Notification abstraction exists, but real email/Slack/Teams delivery is not configured.", "Configure and test a real notification provider for pilots."),
+        _check("analytics_dashboard_available", "Analytics dashboard available", "pass", "pilot", "Accuracy and exception analytics are available from existing APFlow workflow data."),
+        _check("accuracy_exception_visibility_available", "Accuracy and exception visibility", "pass", "pilot", "AP managers can see review rates, blockers, export outcomes, payment status, vendor activity, and notification outcomes."),
+        _check("advanced_sla_analytics_ready", "Advanced SLA analytics", "warning", "pilot", "Basic operational analytics exist, but SLA trends and advanced historical analytics are not complete.", "Add time-series SLA trends after pilot data volume is available."),
         _check("app_env_production", "Production environment", "pass" if settings.app_env == "production" else "fail", "production", f"Current APP_ENV is `{settings.app_env}`.", "Deploy with APP_ENV=production only after production controls are complete."),
         _check("demo_mode_disabled_for_production", "Demo mode disabled for production", "pass" if not settings.demo_mode else "fail", "production", "Demo mode is disabled." if not settings.demo_mode else "Demo mode is enabled.", "Disable DEMO_MODE before production."),
         _check("demo_reset_disabled_for_production", "Demo reset disabled for production", "pass" if not settings.allow_demo_reset else "fail", "production", "Demo reset is disabled." if not settings.allow_demo_reset else "Demo reset is enabled.", "Keep ALLOW_DEMO_RESET=false outside controlled private staging cleanup."),
@@ -371,7 +374,7 @@ def _product_readiness_checks() -> list[ProductReadinessCheck]:
         _check("real_customer_erp_flow_ready", "Real customer ERP flow ready", "fail", "integrations", "Real customer Priority write flow is not live.", "Complete customer-specific mapping, read-only verification, write approval, and rollback plan."),
         _check("billing_configured", "Billing configured", "fail", "production", "Billing is not configured.", "Add commercial billing before production SaaS launch."),
         _check("usage_metering_configured", "Usage metering configured", "fail", "commercial", "Usage metering is missing.", "Add tenant usage metering for invoices, OCR, storage, and ERP sync."),
-        _check("accuracy_analytics_ready", "Accuracy analytics ready", "fail", "commercial", "OCR/review accuracy analytics are missing.", "Track extraction accuracy, correction rates, and review outcomes."),
+        _check("accuracy_analytics_ready", "Accuracy analytics ready", "pass", "commercial", "Foundational accuracy and exception analytics are available.", "Add trend history, per-supplier analytics, and SLA reporting after pilot data accumulates."),
         _check("einvoicing_compliance_ready", "E-invoicing compliance ready", "fail", "commercial", "E-invoicing compliance is not complete.", "Define regional e-invoicing and tax compliance requirements."),
     ]
 

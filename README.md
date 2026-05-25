@@ -61,6 +61,8 @@ Payment status tracking has a tenant-scoped manual/mock foundation for invoice p
 
 Notification delivery now has a mock/provider abstraction foundation. Admins can view provider readiness, send mock test notifications, and inspect tenant-scoped delivery history. Email, Slack, and Teams remain safe placeholders and do not send externally; see `docs/notifications.md`.
 
+Accuracy and exception analytics summarize APFlow workflow health from existing tenant-scoped data: invoice volume, review rate, blockers, OCR/provider issues, approvals, exports, payment status, vendor self-service, and notification outcomes. No external analytics service is connected; see `docs/analytics.md`.
+
 ## Local Layout
 
 ```text
@@ -213,6 +215,7 @@ Demo materials:
 - `docs/vendor_access.md` for vendor access lifecycle, token handling, revocation, rotation, and vendor-safe data boundaries.
 - `docs/vendor_payment_chatbot.md` for the rules-based vendor payment-status chatbot and refusal rules.
 - `docs/notifications.md` for mock notification delivery, placeholder providers, and future Email/Slack/Teams extension points.
+- `docs/analytics.md` for Accuracy & Exceptions metrics, safety boundaries, and future analytics path.
 - `docs/demo_script.md` for the live presenter flow.
 - `docs/demo_qa_checklist.md` for pre-demo validation.
 - `samples/demo` for synthetic scenario notes and expected outcomes.

@@ -312,6 +312,48 @@ class ProductReadinessResponse(APFlowModel):
     message: str
 
 
+class AnalyticsMetric(APFlowModel):
+    key: str
+    label: str
+    value: float | int
+    unit: str | None = None
+    trend: str | None = None
+    status: str = "neutral"
+    description: str | None = None
+
+
+class AnalyticsBreakdownItem(APFlowModel):
+    key: str
+    label: str
+    count: int
+    percentage: float | None = None
+
+
+class AnalyticsExceptionItem(APFlowModel):
+    key: str
+    label: str
+    count: int
+    severity: str = "medium"
+    next_step: str | None = None
+
+
+class AccuracyAnalyticsResponse(APFlowModel):
+    tenant_id: UUID
+    generated_at: datetime
+    date_range: dict[str, str | None] = Field(default_factory=dict)
+    invoice_volume: list[AnalyticsMetric] = Field(default_factory=list)
+    ocr_accuracy: list[AnalyticsMetric] = Field(default_factory=list)
+    review_workload: list[AnalyticsMetric] = Field(default_factory=list)
+    approval_health: list[AnalyticsMetric] = Field(default_factory=list)
+    exception_breakdown: list[AnalyticsExceptionItem] = Field(default_factory=list)
+    erp_export_health: list[AnalyticsMetric] = Field(default_factory=list)
+    payment_status_health: list[AnalyticsBreakdownItem] = Field(default_factory=list)
+    vendor_self_service: list[AnalyticsMetric] = Field(default_factory=list)
+    notification_health: list[AnalyticsMetric] = Field(default_factory=list)
+    top_blockers: list[AnalyticsExceptionItem] = Field(default_factory=list)
+    recommendations: list[str] = Field(default_factory=list)
+
+
 class AgentContext(APFlowModel):
     tenant_id: UUID | None = None
     actor_id: str = "system"
