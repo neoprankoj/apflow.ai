@@ -66,6 +66,8 @@ Notification delivery is separated behind `NotificationService`. The current `mo
 
 Accuracy and exception analytics are produced by `AnalyticsService` from existing tenant-scoped repositories and audit summaries. The service returns aggregate metrics, exception counts, and deterministic recommendations only; it does not expose raw audit metadata, vendor tokens, OCR provider payloads, notification secrets, or external analytics identifiers.
 
+Usage metering is separated behind `UsageMeteringService`. It records tenant-scoped `UsageEvent` rows for invoice, OCR, approval, mock export, payment, vendor access, chatbot, notification, and analytics activity. Plan data is static and warn-only; no billing provider, checkout flow, subscription lifecycle, or workflow-blocking limit enforcement is connected.
+
 ## Phase 6 OCR And Review
 
 `InvoiceExtractionAgent` now calls `OCRProviderFactory`, which selects an adapter from `OCR_PROVIDER`.

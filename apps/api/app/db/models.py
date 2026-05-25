@@ -231,6 +231,45 @@ class NotificationDelivery(Base, TenantScopedMixin, TimestampMixin):
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class UsageEvent(Base):
+    __tablename__ = "usage_events"
+
+    id: Mapped[PyUUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    tenant_id: Mapped[PyUUID] = mapped_column(Uuid, ForeignKey("tenants.id"), index=True, nullable=False)
+    event_type: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    source: Mapped[str] = mapped_column(String(64), nullable=False, default="system", index=True)
+    quantity: Mapped[int] = mapped_column(nullable=False, default=1)
+    unit: Mapped[str] = mapped_column(String(64), nullable=False, default="event")
+    related_invoice_id: Mapped[PyUUID | None] = mapped_column(Uuid, ForeignKey("invoices.id"), nullable=True, index=True)
+    related_document_id: Mapped[PyUUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("uploaded_invoice_documents.id"),
+        nullable=True,
+        index=True,
+    )
+    related_vendor_access_id: Mapped[PyUUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("vendor_portal_access.id"),
+        nullable=True,
+        index=True,
+    )
+    related_payment_status_id: Mapped[PyUUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("payment_statuses.id"),
+        nullable=True,
+        index=True,
+    )
+    related_notification_delivery_id: Mapped[PyUUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("notification_deliveries.id"),
+        nullable=True,
+        index=True,
+    )
+    metadata_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False)
+
+
 class AuditEvent(Base):
     __tablename__ = "audit_events"
 

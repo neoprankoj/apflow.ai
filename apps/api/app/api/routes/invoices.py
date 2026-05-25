@@ -61,8 +61,11 @@ from app.core.schemas import (
     PurchaseOrderMatchingInput,
     RiskLevel,
     SupplierIdentityInput,
+    UsageEventSource,
+    UsageEventType,
     WorkflowState,
 )
+from app.services.usage_metering_service import UsageMeteringService
 
 router = APIRouter()
 
@@ -472,6 +475,18 @@ def decide_invoice_approval(
                 current_agent="ApprovalRoutingAgent",
             )
         )
+    usage_event = {
+        ApprovalDecisionAction.APPROVE: UsageEventType.INVOICE_APPROVED,
+        ApprovalDecisionAction.REJECT: UsageEventType.INVOICE_REJECTED,
+        ApprovalDecisionAction.HOLD: UsageEventType.INVOICE_HELD,
+    }[payload.action]
+    UsageMeteringService(repository).record_usage_event(
+        payload.tenant_id,
+        usage_event,
+        source=UsageEventSource.USER,
+        related_invoice_id=invoice_id,
+        metadata={"approval_status": str(updated_task.status)},
+    )
     return ApprovalDecisionResult(
         invoice_id=invoice_id,
         approval_task_id=updated_task.approval_task_id,

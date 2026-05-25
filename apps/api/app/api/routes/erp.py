@@ -5,8 +5,9 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from app.agents.data.erp_connector_agent import ERPConnectorAgent
 from app.agents.observability.audit_logging_agent import AuditLoggingAgent
-from app.api.dependencies import get_audit_agent, get_erp_connector_agent, require_permission, resolve_tenant_id
+from app.api.dependencies import get_audit_agent, get_erp_connector_agent, get_repository, require_permission, resolve_tenant_id
 from app.core.config import settings
+from app.core.repositories import InMemoryAPRepository
 from app.core.schemas import (
     ActorType,
     AuditEventInput,
@@ -14,6 +15,7 @@ from app.core.schemas import (
     ERPConnectionConfig,
     ERPOperation,
     ERPAdapterType,
+    ERPSyncStatus,
     ERPSyncRequest,
     ERPSyncResult,
     Permission,
@@ -31,6 +33,8 @@ from app.core.schemas import (
     PrioritySyncPreviewResponse,
     PriorityMappingValidationRequest,
     PriorityMappingValidationResult,
+    UsageEventSource,
+    UsageEventType,
 )
 from app.integrations.erp.base import ERPAdapterError
 from app.integrations.erp.priority import PriorityODataAdapter
@@ -42,6 +46,7 @@ from app.integrations.erp.priority_mapping import (
     priority_sample_records,
     validate_priority_mapping_config,
 )
+from app.services.usage_metering_service import UsageMeteringService
 
 router = APIRouter()
 
@@ -479,11 +484,21 @@ def sync_erp_purchase_orders(
 def export_invoice_to_erp(
     request: ERPSyncRequest,
     erp_agent: ERPConnectorAgent = Depends(get_erp_connector_agent),
+    repository: InMemoryAPRepository = Depends(get_repository),
     context: CurrentUserContext = Depends(require_permission(Permission.INVOICE_EXPORT_ERP)),
 ) -> ERPSyncResult:
     _enforce_body_tenant(request.tenant_id, context)
     request.operation = ERPOperation.EXPORT_INVOICE
-    return erp_agent.run(request)
+    result = erp_agent.run(request)
+    if result.status == ERPSyncStatus.SUCCESS:
+        UsageMeteringService(repository).record_usage_event(
+            request.tenant_id,
+            UsageEventType.ERP_EXPORT_MOCKED,
+            source=UsageEventSource.USER,
+            related_invoice_id=request.invoice_id,
+            metadata={"adapter_type": str(request.adapter_type), "operation": str(request.operation)},
+        )
+    return result
 
 
 @router.post("/update-invoice-status", response_model=ERPSyncResult)

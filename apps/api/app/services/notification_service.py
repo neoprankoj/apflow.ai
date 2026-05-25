@@ -15,7 +15,10 @@ from app.core.schemas import (
     NotificationRecipientType,
     NotificationSummary,
     NotificationTestRequest,
+    UsageEventSource,
+    UsageEventType,
 )
+from app.services.usage_metering_service import UsageMeteringService
 
 
 MAX_PREVIEW_LENGTH = 280
@@ -188,6 +191,17 @@ class NotificationService:
                         "event_type": delivery.event_type,
                     },
                 )
+            )
+        if payload.channel == NotificationChannel.MOCK and status == NotificationDeliveryStatus.SENT:
+            UsageMeteringService(self.repository).record_usage_event(
+                tenant_id,
+                UsageEventType.NOTIFICATION_MOCK_SENT,
+                source=UsageEventSource.MOCK,
+                related_invoice_id=payload.related_invoice_id,
+                related_payment_status_id=payload.related_payment_status_id,
+                related_vendor_access_id=payload.related_vendor_access_id,
+                related_notification_delivery_id=delivery.id,
+                metadata={"event_type": payload.event_type, "recipient_type": str(payload.recipient_type)},
             )
         return delivery
 

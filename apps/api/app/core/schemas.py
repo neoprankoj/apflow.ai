@@ -165,6 +165,48 @@ class NotificationRecipientType(StrEnum):
     SYSTEM = "system"
 
 
+class UsageEventType(StrEnum):
+    INVOICE_UPLOADED = "invoice_uploaded"
+    OCR_EXTRACTION_ATTEMPTED = "ocr_extraction_attempted"
+    OCR_EXTRACTION_SUCCEEDED = "ocr_extraction_succeeded"
+    OCR_EXTRACTION_FAILED = "ocr_extraction_failed"
+    INVOICE_PROCESSED = "invoice_processed"
+    REVIEW_CORRECTION_SUBMITTED = "review_correction_submitted"
+    INVOICE_APPROVED = "invoice_approved"
+    INVOICE_REJECTED = "invoice_rejected"
+    INVOICE_HELD = "invoice_held"
+    ERP_EXPORT_MOCKED = "erp_export_mocked"
+    PAYMENT_STATUS_UPDATED = "payment_status_updated"
+    PAYMENT_MOCK_SYNC_RUN = "payment_mock_sync_run"
+    VENDOR_ACCESS_CREATED = "vendor_access_created"
+    VENDOR_ACCESS_USED = "vendor_access_used"
+    VENDOR_CHATBOT_QUESTION_ANSWERED = "vendor_chatbot_question_answered"
+    VENDOR_CHATBOT_QUESTION_REFUSED = "vendor_chatbot_question_refused"
+    NOTIFICATION_MOCK_SENT = "notification_mock_sent"
+    ANALYTICS_VIEWED = "analytics_viewed"
+    MANUAL_TEST = "manual_test"
+
+
+class UsageEventSource(StrEnum):
+    SYSTEM = "system"
+    USER = "user"
+    VENDOR = "vendor"
+    MOCK = "mock"
+
+
+class UsageOveragePolicy(StrEnum):
+    NONE = "none"
+    WARN_ONLY = "warn_only"
+    FUTURE_BILLING = "future_billing"
+
+
+class UsageMetricStatus(StrEnum):
+    OK = "ok"
+    WARNING = "warning"
+    EXCEEDED = "exceeded"
+    UNLIMITED = "unlimited"
+
+
 class ERPAdapterType(StrEnum):
     PRIORITY = "priority"
     ODOO = "odoo"
@@ -915,6 +957,68 @@ class NotificationSummary(APFlowModel):
     disabled: int = 0
     by_channel: dict[str, int] = Field(default_factory=dict)
     latest_deliveries: list[NotificationDeliveryRead] = Field(default_factory=list)
+
+
+class UsageEventRead(APFlowModel):
+    id: UUID = Field(default_factory=uuid4)
+    tenant_id: UUID
+    event_type: UsageEventType
+    source: UsageEventSource = UsageEventSource.SYSTEM
+    quantity: int = Field(default=1, ge=0)
+    unit: str = "event"
+    related_invoice_id: UUID | None = None
+    related_document_id: UUID | None = None
+    related_vendor_access_id: UUID | None = None
+    related_payment_status_id: UUID | None = None
+    related_notification_delivery_id: UUID | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    occurred_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class UsagePlanRead(APFlowModel):
+    plan_key: str
+    label: str
+    description: str
+    monthly_invoice_limit: int | None = None
+    monthly_ocr_limit: int | None = None
+    monthly_vendor_access_limit: int | None = None
+    monthly_chatbot_question_limit: int | None = None
+    monthly_notification_limit: int | None = None
+    overage_policy: UsageOveragePolicy = UsageOveragePolicy.WARN_ONLY
+    is_current: bool = False
+
+
+class UsageMetricRead(APFlowModel):
+    key: str
+    label: str
+    used: int
+    limit: int | None = None
+    unit: str = "event"
+    percentage: float | None = None
+    status: UsageMetricStatus
+    description: str | None = None
+
+
+class TenantUsageSummary(APFlowModel):
+    tenant_id: UUID
+    period_start: datetime
+    period_end: datetime
+    current_plan: UsagePlanRead
+    usage_by_event_type: dict[str, int] = Field(default_factory=dict)
+    usage_by_category: dict[str, int] = Field(default_factory=dict)
+    limits: list[UsageMetricRead] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    recommendations: list[str] = Field(default_factory=list)
+    recent_events: list[UsageEventRead] = Field(default_factory=list)
+
+
+class ManualUsageEventRequest(APFlowModel):
+    tenant_id: UUID
+    event_type: UsageEventType = UsageEventType.MANUAL_TEST
+    quantity: int = Field(default=1, ge=1, le=100)
+    source: UsageEventSource = UsageEventSource.USER
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class OCRProviderMetadata(APFlowModel):

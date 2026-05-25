@@ -143,6 +143,15 @@ Use this short checklist before merging frontend UI changes.
 - [ ] Metrics update after invoice process, approval/export, payment sync, vendor access/chatbot, and mock notification actions.
 - [ ] Analytics do not show raw audit JSON, vendor tokens, token hashes, OCR provider payloads, or secrets.
 
+## Usage & Plan
+
+- [ ] Usage & Plan panel loads after sign-in.
+- [ ] Current plan shows Demo and explains limits are warn-only.
+- [ ] Usage counters update after invoice/OCR/payment/vendor/chatbot/notification activity.
+- [ ] Recent usage events appear without tokens, token hashes, provider secrets, or raw payloads.
+- [ ] Plan placeholders show Demo, Starter, Growth, and Enterprise.
+- [ ] UI clearly says no Stripe, payment card, customer billing, or hard usage blocking is connected.
+
 ## ERP Export
 
 - [ ] Export action is available only when the invoice is export-ready.

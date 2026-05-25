@@ -1,4 +1,5 @@
 from typing import Protocol
+from datetime import datetime
 from uuid import UUID
 
 from app.core.repositories import (
@@ -21,6 +22,9 @@ from app.core.schemas import (
     NotificationDeliveryStatus,
     NotificationRecipientType,
     PurchaseOrderLine,
+    UsageEventRead,
+    UsageEventSource,
+    UsageEventType,
 )
 
 
@@ -127,6 +131,36 @@ class AuditRepository(Protocol):
     def list_audit_events(self, tenant_id: UUID): ...
 
 
+class UsageRepository(Protocol):
+    def create_usage_event(
+        self,
+        tenant_id: UUID,
+        event_type: UsageEventType | str,
+        *,
+        source: UsageEventSource | str = UsageEventSource.SYSTEM,
+        quantity: int = 1,
+        unit: str = "event",
+        related_invoice_id: UUID | None = None,
+        related_document_id: UUID | None = None,
+        related_vendor_access_id: UUID | None = None,
+        related_payment_status_id: UUID | None = None,
+        related_notification_delivery_id: UUID | None = None,
+        metadata: dict | None = None,
+        occurred_at: datetime | None = None,
+    ) -> UsageEventRead: ...
+
+    def list_usage_events(
+        self,
+        tenant_id: UUID,
+        *,
+        event_type: str | None = None,
+        source: str | None = None,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+        related_invoice_id: UUID | None = None,
+    ) -> list[UsageEventRead]: ...
+
+
 class WorkflowRepository(Protocol):
     def list_workflow_states(self, tenant_id: UUID): ...
 
@@ -137,6 +171,7 @@ class APRepository(
     ApprovalRepository,
     NotificationRepository,
     AuditRepository,
+    UsageRepository,
     WorkflowRepository,
     Protocol,
 ):
