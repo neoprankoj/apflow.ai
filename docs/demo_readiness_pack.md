@@ -44,6 +44,7 @@ Intentionally disabled or deferred:
 - Domain and HTTPS.
 - Public production access.
 - Demo reset unless explicitly enabled for controlled cleanup.
+- Demo seed profiles unless explicitly enabled for controlled tenant setup.
 
 ## B. Demo Environment
 
@@ -68,6 +69,7 @@ Intentionally disabled or deferred:
 - [ ] Confirm Demo Login succeeds.
 - [ ] Confirm Tenant Session shows Demo Owner / owner / API ready.
 - [ ] Confirm `ALLOW_DEMO_RESET=false` unless a reset is intentionally being performed.
+- [ ] If a seeded state is needed, choose the profile in [demo_seed_profiles.md](demo_seed_profiles.md) before the walkthrough.
 - [ ] Confirm mock ERP export works on an approval-ready invoice.
 - [ ] Confirm Priority mode is mock.
 - [ ] Confirm Priority writes are disabled.
@@ -137,6 +139,7 @@ Avoid saying that mock ERP export is a real ERP write. Say: "This proves the exp
 - Priority writes remain disabled by default.
 - Priority real read-only fetch is gated and GET-only when enabled.
 - Demo reset should be disabled after use.
+- Demo seed profiles should be disabled after use by setting `ALLOW_DEMO_RESET=false`.
 - Domain and HTTPS are deferred until real AP-user access and final security hardening are ready.
 - Do not paste credentials, API keys, bearer tokens, or invoice PII into public tickets, docs, or chat.
 
@@ -163,6 +166,11 @@ Demo reset fails with disabled message:
 
 - Cause: `ALLOW_DEMO_RESET=false`.
 - Fix: Enable it only for controlled staging cleanup, recreate/restart API, reset, set it back to false, and recreate/restart API again.
+
+Demo seed profile button is disabled or returns a blocked message:
+
+- Cause: `ALLOW_DEMO_RESET=false`, missing tenant admin permission, missing `SEED_DEMO_PROFILE` confirmation, or production guardrails.
+- Fix: Use only private staging, enable `ALLOW_DEMO_RESET=true` temporarily, recreate the API, run the selected profile, then disable the flag again.
 
 OCR shows invalid file signature:
 
@@ -200,6 +208,7 @@ Browser cache or stale UI:
 ## I. Post-Demo Checklist
 
 - [ ] Confirm `ALLOW_DEMO_RESET=false`.
+- [ ] Confirm no one-time vendor token from a seed profile remains in screenshots, chat, logs, or docs.
 - [ ] Confirm Priority writes are disabled.
 - [ ] Confirm Priority mode is still mock unless deliberately changed.
 - [ ] Confirm no secrets were exposed in screenshots, logs, chat, or docs.

@@ -23,6 +23,7 @@ Required:
 - Audit Trail proves the workflow.
 - Demo readiness docs and runbook are available.
 - Priority writes are disabled.
+- Deterministic demo seed profiles are available for repeatable AP manager, vendor, Priority, compliance, analytics-rich, and clean demos.
 
 Current expected staging result: Demo Ready should be ready or mostly ready.
 
@@ -43,6 +44,7 @@ Current pilot blockers:
 - Real notification delivery is missing.
 - Foundational accuracy and exception analytics exist, but SLA trends and advanced operational reporting are still missing.
 - Usage metering foundation exists, but real billing provider, subscriptions, invoices, and overage policy are not connected.
+- Pilot data packs exist for repeatable demos and QA, but real customer onboarding data governance is still needed.
 - Real customer Priority mapping/write flow is not live.
 
 ### Production Ready
@@ -92,5 +94,6 @@ Use the Product Readiness Gate in the Admin area before demos, pilots, or produc
 - [Accuracy & Exception Analytics](analytics.md)
 - [Usage Metering / Billing Foundation](usage_metering.md)
 - [E-Invoicing Compliance Validation](compliance_validation.md)
+- [Demo Seed Profiles](demo_seed_profiles.md)
 - [Staging Operations](operations_staging.md)
 - [Staging Release Checklist](staging_release_checklist.md)

@@ -70,6 +70,8 @@ Usage metering is separated behind `UsageMeteringService`. It records tenant-sco
 
 E-invoicing readiness is separated behind `ComplianceService`. It computes validation-only profile results from existing canonical invoice fields and never calls government, tax authority, PEPPOL, or certified e-invoicing networks. Results are tenant-scoped and read-only; invoice validation may record a small audit summary but does not change AP workflow state.
 
+Demo profile seeding is separated behind `DemoSeedService`. It provides tenant-scoped, deterministic data packs for clean, AP manager, vendor self-service, Priority connector, compliance, and analytics-rich demos. The admin route requires tenant admin permission, `ALLOW_DEMO_RESET=true`, explicit `SEED_DEMO_PROFILE` confirmation, and is blocked in production. Profiles may generate one-time vendor tokens, but raw tokens are never stored.
+
 ## Phase 6 OCR And Review
 
 `InvoiceExtractionAgent` now calls `OCRProviderFactory`, which selects an adapter from `OCR_PROVIDER`.
@@ -195,7 +197,7 @@ Docker remains practical:
 - `docker-compose.staging.yml` layers restart policies, staging env file usage, and an optional Caddy reverse proxy profile.
 - `deploy/Caddyfile` routes the frontend and API hosts to the `web` and `api` services and is ready for Let's Encrypt through Caddy.
 
-`scripts/seed_demo_data.py` seeds a demo tenant through the API without printing bearer tokens. Explicit seed modes call staging-only reset seed paths that create deterministic demo records without invoking live OCR. `scripts/verify_runtime.py` now checks health, readiness, dashboard reachability, mock pipeline, invoice upload/process, ERP export, vendor messages, chatbot, and vendor-safe invoice status.
+`scripts/seed_demo_data.py` seeds a demo tenant through the API without printing bearer tokens. Explicit seed modes call staging-only reset seed paths that create deterministic demo records without invoking live OCR. The dashboard Admin -> Demo Seed Profiles flow adds broader pilot data packs for repeatable demos. `scripts/verify_runtime.py` now checks health, readiness, dashboard reachability, mock pipeline, invoice upload/process, ERP export, vendor messages, chatbot, and vendor-safe invoice status.
 
 ## Phase 14 Azure OCR Validation
 

@@ -15,6 +15,8 @@ Initial endpoints:
 - `PATCH /admin/users/{user_id}/role`
 - `DELETE /admin/users/{user_id}`
 - `GET /admin/permissions`
+- `GET /admin/demo/seed-profiles`
+- `POST /admin/demo/seed-profile`
 - `POST /workflow/events`
 - `POST /invoices/mock-pipeline`
 - `POST /invoices/full-mock-pipeline`
@@ -80,6 +82,7 @@ Phase 7 permissions gate sensitive routes:
 - Review correction/approve/reject requires `review:correct`.
 - Audit event reads require `audit:read`.
 - Tenant admin routes require `tenant:admin`.
+- Demo seed profile writes require `tenant:admin`, `ALLOW_DEMO_RESET=true`, and `SEED_DEMO_PROFILE` confirmation.
 - Payment status reads require `invoice:read`.
 - Payment status updates and mock payment sync require `invoice:process`.
 
@@ -317,6 +320,27 @@ If the token is valid but no invoices match the supplier, `GET /vendor/invoices`
 ```
 
 Responses include `answer`, `intent`, `confidence`, `matched_invoice_ids`, `matched_invoices`, `safe_suggestions`, `refused`, and optional `refusal_reason`. Unsafe questions about fraud/risk, audit, approval policy, ERP config/logs, internal notes, tenant internals, or token details are refused safely.
+
+## Demo Seed Profiles
+
+Demo seed profile endpoints are admin-only and tenant-scoped. They reset deterministic demo data for the current tenant and are blocked in production.
+
+- `GET /admin/demo/seed-profiles` returns available profile metadata.
+- `POST /admin/demo/seed-profile` runs one profile when `ALLOW_DEMO_RESET=true` and the request includes `confirm_text: "SEED_DEMO_PROFILE"`.
+
+Available profiles are `clean_minimal`, `ap_manager_demo`, `vendor_self_service_demo`, `priority_connector_demo`, `compliance_demo`, and `analytics_rich_demo`.
+
+Example request:
+
+```json
+{
+  "tenant_id": "11111111-1111-1111-1111-111111111111",
+  "profile_key": "analytics_rich_demo",
+  "confirm_text": "SEED_DEMO_PROFILE"
+}
+```
+
+Responses include created counts, cleared counts, warnings, next steps, and one-time vendor links if generated. Token hashes are never returned, and raw vendor tokens are shown only once.
 
 ## Notifications
 

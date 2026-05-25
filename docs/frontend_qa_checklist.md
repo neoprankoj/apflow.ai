@@ -164,6 +164,19 @@ Use this short checklist before merging frontend UI changes.
 - [ ] Product Readiness shows compliance validation foundation available while certified e-invoicing remains blocked.
 - [ ] Compliance responses do not show raw OCR payloads, vendor tokens, token hashes, or secrets.
 
+## Demo Seed Profiles
+
+- [ ] Admin -> Demo Seed Profiles loads for owner/admin users.
+- [ ] Viewer users cannot run seed profiles.
+- [ ] Profile cards show Clean Minimal, AP Manager Demo, Vendor Self-Service Demo, Priority Connector Demo, Compliance Demo, and Analytics-Rich Demo.
+- [ ] Running a profile is disabled until `SEED_DEMO_PROFILE` is typed.
+- [ ] When `ALLOW_DEMO_RESET=false`, the UI shows a safe disabled/blocked message.
+- [ ] When seeding is enabled on private staging, a selected profile returns created counts, cleared counts, warnings, and next steps.
+- [ ] Vendor Self-Service Demo shows one-time vendor access token/link only in the seed result.
+- [ ] Token hashes are not visible.
+- [ ] Priority Connector Demo does not enable Priority writes.
+- [ ] Analytics-Rich Demo populates Analytics, Usage, Notifications, Vendor, Payment, and Compliance panels.
+
 ## ERP Export
 
 - [ ] Export action is available only when the invoice is export-ready.

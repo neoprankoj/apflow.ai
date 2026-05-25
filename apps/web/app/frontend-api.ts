@@ -194,6 +194,27 @@ export type ProductReadinessResponse = {
   message: string;
 };
 
+export type DemoSeedProfileRead = {
+  key: string;
+  label: string;
+  description: string;
+  recommended_for: string;
+  includes: string[];
+  destructive: boolean;
+};
+
+export type DemoSeedResult = {
+  tenant_id: string;
+  profile_key: string;
+  status: string;
+  created_counts: Record<string, number>;
+  skipped_counts: Record<string, number>;
+  warnings: string[];
+  next_steps: string[];
+  generated_vendor_links: VendorAccessCreatedResponse[];
+  message: string;
+};
+
 export type PaymentStatusRead = {
   id: string;
   tenant_id: string;
@@ -763,6 +784,29 @@ export function getProductReadiness(apiBaseUrl: string, token: string) {
   return apiFetch<ProductReadinessResponse>(apiBaseUrl, "/ready/product", {
     token,
     action: "Load product readiness"
+  });
+}
+
+export function listDemoSeedProfiles(apiBaseUrl: string, token: string) {
+  return apiFetch<DemoSeedProfileRead[]>(apiBaseUrl, "/admin/demo/seed-profiles", {
+    token,
+    action: "Load demo seed profiles"
+  });
+}
+
+export function runDemoSeedProfile(
+  apiBaseUrl: string,
+  token: string,
+  tenantId: string,
+  profileKey: string,
+  confirmText: string
+) {
+  return apiFetch<DemoSeedResult>(apiBaseUrl, "/admin/demo/seed-profile", {
+    method: "POST",
+    token,
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ tenant_id: tenantId, profile_key: profileKey, confirm_text: confirmText }),
+    action: "Run demo seed profile"
   });
 }
 

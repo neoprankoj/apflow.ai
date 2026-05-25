@@ -1042,6 +1042,33 @@ class ManualUsageEventRequest(APFlowModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class DemoSeedProfileRead(APFlowModel):
+    key: str
+    label: str
+    description: str
+    recommended_for: str
+    includes: list[str] = Field(default_factory=list)
+    destructive: bool = True
+
+
+class DemoSeedRequest(APFlowModel):
+    tenant_id: UUID
+    profile_key: str
+    confirm_text: str | None = None
+
+
+class DemoSeedResult(APFlowModel):
+    tenant_id: UUID
+    profile_key: str
+    status: str
+    created_counts: dict[str, int] = Field(default_factory=dict)
+    skipped_counts: dict[str, int] = Field(default_factory=dict)
+    warnings: list[str] = Field(default_factory=list)
+    next_steps: list[str] = Field(default_factory=list)
+    generated_vendor_links: list["VendorAccessCreatedResponse"] = Field(default_factory=list)
+    message: str
+
+
 class ComplianceProfileRead(APFlowModel):
     key: str
     label: str
