@@ -65,6 +65,8 @@ Accuracy and exception analytics summarize APFlow workflow health from existing 
 
 Usage metering now records tenant-scoped activity for invoices, OCR, approvals, mock exports, payment status, vendor access, chatbot questions, notifications, and analytics views. This is visibility-only: no Stripe, customer billing, payment cards, or hard usage enforcement is connected; see `docs/usage_metering.md`.
 
+E-invoicing compliance validation is available as a validation-only foundation. AP managers can check required/recommended invoice fields for starter profiles such as Generic B2B, Israel Basic, EU VAT Basic, and US Basic. APFlow does not submit invoices to any government, tax authority, PEPPOL network, or certified e-invoicing provider; see `docs/compliance_validation.md`.
+
 ## Local Layout
 
 ```text
@@ -219,6 +221,7 @@ Demo materials:
 - `docs/notifications.md` for mock notification delivery, placeholder providers, and future Email/Slack/Teams extension points.
 - `docs/analytics.md` for Accuracy & Exceptions metrics, safety boundaries, and future analytics path.
 - `docs/usage_metering.md` for usage events, warn-only plan placeholders, and future billing integration path.
+- `docs/compliance_validation.md` for validation-only e-invoicing readiness profiles and safety boundaries.
 - `docs/demo_script.md` for the live presenter flow.
 - `docs/demo_qa_checklist.md` for pre-demo validation.
 - `samples/demo` for synthetic scenario notes and expected outcomes.

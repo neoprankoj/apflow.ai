@@ -152,6 +152,18 @@ Use this short checklist before merging frontend UI changes.
 - [ ] Plan placeholders show Demo, Starter, Growth, and Enterprise.
 - [ ] UI clearly says no Stripe, payment card, customer billing, or hard usage blocking is connected.
 
+## E-Invoicing Compliance
+
+- [ ] E-Invoicing Compliance panel loads after sign-in.
+- [ ] Profile selector shows Generic B2B, Israel Basic, EU VAT Basic, and US Basic.
+- [ ] Summary cards show checked, ready, needs review, and not compliant counts.
+- [ ] Processed invoices appear in the invoice compliance list.
+- [ ] Validate Invoice shows pass/warning/fail checks and next steps.
+- [ ] Missing supplier tax/VAT fields produce warnings or failures for VAT-style profiles.
+- [ ] Copy clearly says validation-only and no government/tax authority/PEPPOL submission occurs.
+- [ ] Product Readiness shows compliance validation foundation available while certified e-invoicing remains blocked.
+- [ ] Compliance responses do not show raw OCR payloads, vendor tokens, token hashes, or secrets.
+
 ## ERP Export
 
 - [ ] Export action is available only when the invoice is export-ready.

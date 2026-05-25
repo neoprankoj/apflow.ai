@@ -157,14 +157,23 @@ If a raw vendor token appears in a screenshot, chat, or support note, rotate or 
 4. Explain that no Stripe, customer billing, payment cards, or hard usage enforcement is connected.
 5. Confirm Product Readiness still shows billing provider and subscription management as blockers.
 
-## N. Demo Path 13 - AP Manager Demo Checklist
+## N. Demo Path 13 - E-Invoicing Compliance
+
+1. Open `E-Invoicing Compliance`.
+2. Select `Generic B2B` and validate a processed invoice.
+3. Show which required fields pass and which recommended fields need review.
+4. Switch to `EU VAT Basic` or `Israel Basic` and show tax/VAT warnings if tax IDs or tax fields are missing.
+5. Explain that this is validation-only. No government, tax authority, PEPPOL, or certified e-invoicing submission happens.
+6. Confirm Product Readiness shows compliance validation foundation as available, while certified e-invoicing remains blocked.
+
+## O. Demo Path 14 - AP Manager Demo Checklist
 
 1. Expand the `Demo checklist` in the AP Workflow Guide.
 2. Walk through each checklist item as a presenter rehearsal path.
 3. Confirm key action messages point to the next step and to Audit Trail proof.
 4. Confirm Priority connector copy separates dry run, import plan, controlled import, and imported records.
 
-## O. AP User Acceptance Pass
+## P. AP User Acceptance Pass
 
 1. Start from the top of the dashboard and confirm the AP manager can identify the next recommended action.
 2. Confirm upload, OCR, review, process, approval, ERP export, and Audit Trail use consistent finance-friendly labels.
@@ -174,7 +183,7 @@ If a raw vendor token appears in a screenshot, chat, or support note, rotate or 
 6. Confirm imported vendors and purchase orders are visible after controlled import.
 7. Confirm no Priority data is changed during sample preview, import plan, controlled import, or readiness checks.
 
-## P. Demo Cleanup
+## Q. Demo Cleanup
 
 1. Enable `ALLOW_DEMO_RESET=true` only when needed on private staging.
 2. Use the dashboard reset action or `POST /admin/demo/reset`.

@@ -379,7 +379,11 @@ def _product_readiness_checks() -> list[ProductReadinessCheck]:
         _check("billing_configured", "Billing configured", "fail", "production", "Billing is not configured.", "Add commercial billing before production SaaS launch."),
         _check("usage_metering_configured", "Usage metering configured", "pass", "commercial", "Usage metering foundation is configured for core APFlow activity.", "Keep usage limits warn-only until billing is connected."),
         _check("accuracy_analytics_ready", "Accuracy analytics ready", "pass", "commercial", "Foundational accuracy and exception analytics are available.", "Add trend history, per-supplier analytics, and SLA reporting after pilot data accumulates."),
-        _check("einvoicing_compliance_ready", "E-invoicing compliance ready", "fail", "commercial", "E-invoicing compliance is not complete.", "Define regional e-invoicing and tax compliance requirements."),
+        _check("compliance_validation_foundation_available", "Compliance validation foundation", "pass", "commercial", "Validation-only e-invoicing readiness checks are available for starter profiles.", "Keep this separate from certified e-invoicing submission."),
+        _check("certified_einvoicing_submission_available", "Certified e-invoicing submission", "fail", "commercial", "APFlow does not submit invoices to certified e-invoicing networks or tax authorities.", "Integrate a certified provider only after country-specific requirements are approved."),
+        _check("country_specific_tax_authority_integration", "Tax authority integration", "fail", "commercial", "No live country-specific tax authority integration is configured.", "Add regional integrations only after legal and operational review."),
+        _check("peppol_network_integration", "PEPPOL network integration", "fail", "commercial", "No PEPPOL network integration is configured.", "Use a certified access point/provider for future PEPPOL submission."),
+        _check("einvoicing_compliance_ready", "E-invoicing compliance ready", "warning", "commercial", "Validation-only compliance checks exist, but certified e-invoicing is not complete.", "Define regional e-invoicing and tax compliance requirements."),
     ]
 
 

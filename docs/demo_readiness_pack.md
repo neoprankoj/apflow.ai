@@ -24,7 +24,7 @@ APFlow demonstrates a complete AP manager workflow:
 
 What is real today:
 
-- FastAPI backend, Next.js dashboard, PostgreSQL persistence, auth/RBAC, document upload, OCR.space extraction, review/corrections, approvals, audit events, vendor-safe preview, manual/mock payment status tracking, mock notification delivery history, vendor payment-status chatbot, Accuracy & Exceptions analytics, usage metering foundation, controlled APFlow-side Priority imports, and runtime verification.
+- FastAPI backend, Next.js dashboard, PostgreSQL persistence, auth/RBAC, document upload, OCR.space extraction, review/corrections, approvals, audit events, vendor-safe preview, manual/mock payment status tracking, mock notification delivery history, vendor payment-status chatbot, Accuracy & Exceptions analytics, usage metering foundation, validation-only e-invoicing compliance checks, controlled APFlow-side Priority imports, and runtime verification.
 - Vendor access lifecycle foundation: hashed tokens, one-time raw token display, expiration, revocation, rotation, last-used tracking, and audit events.
 
 What is mock or safe by design:
@@ -102,8 +102,10 @@ Intentionally disabled or deferred:
 24. Open Vendor-safe preview and show the safe payment message.
 25. Open Accuracy & Exceptions and show workflow health, blockers, vendor self-service, notification outcomes, and recommended next actions.
 26. Open Usage & Plan and explain that usage metering is visibility-only and warn-only.
-27. Open Audit Trail.
-28. Show approval/export/payment/vendor access/chatbot events as proof of what happened.
+27. Open E-Invoicing Compliance and validate the invoice against Generic B2B.
+28. Switch to a VAT-style profile and explain that tax/VAT warnings are validation-only.
+29. Open Audit Trail.
+30. Show approval/export/payment/vendor access/chatbot/compliance events as proof of what happened.
 
 Avoid saying that mock ERP export is a real ERP write. Say: "This proves the export handoff path using the mock adapter; real ERP write enablement is intentionally gated."
 
