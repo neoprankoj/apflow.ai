@@ -65,7 +65,7 @@ Current production blockers:
 - Real ERP payment status sync is missing.
 - Usage metering foundation exists, but billing provider, subscription management, customer invoices, and usage enforcement are missing.
 - Foundational accuracy analytics exist, but advanced SLA, trend, and per-supplier analytics are not production-grade yet.
-- E-invoicing/tax compliance requirements are not complete.
+- E-invoicing compliance validation foundation exists, but certified e-invoicing submission, PEPPOL, and tax-authority integrations are not connected.
 
 ## Why Domain + HTTPS Is Deferred
 
@@ -91,5 +91,6 @@ Use the Product Readiness Gate in the Admin area before demos, pilots, or produc
 - [Notification Delivery Abstraction](notifications.md)
 - [Accuracy & Exception Analytics](analytics.md)
 - [Usage Metering / Billing Foundation](usage_metering.md)
+- [E-Invoicing Compliance Validation](compliance_validation.md)
 - [Staging Operations](operations_staging.md)
 - [Staging Release Checklist](staging_release_checklist.md)

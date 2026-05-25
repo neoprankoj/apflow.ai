@@ -322,6 +322,7 @@ export type AccuracyAnalyticsResponse = {
   payment_status_health: AnalyticsBreakdownItem[];
   vendor_self_service: AnalyticsMetric[];
   notification_health: AnalyticsMetric[];
+  compliance_health: AnalyticsMetric[];
   top_blockers: AnalyticsExceptionItem[];
   recommendations: string[];
 };
@@ -378,6 +379,52 @@ export type TenantUsageSummary = {
   warnings: string[];
   recommendations: string[];
   recent_events: UsageEventRead[];
+};
+
+export type ComplianceProfileRead = {
+  key: string;
+  label: string;
+  country_or_region: string;
+  description: string;
+  validation_only: boolean;
+  certified_integration: boolean;
+  required_fields: string[];
+  recommended_fields: string[];
+};
+
+export type ComplianceCheckResult = {
+  key: string;
+  label: string;
+  status: "pass" | "warning" | "fail" | "not_applicable" | string;
+  severity: "low" | "medium" | "high" | string;
+  message: string;
+  field?: string | null;
+  next_step?: string | null;
+};
+
+export type InvoiceComplianceResult = {
+  tenant_id: string;
+  invoice_id: string;
+  profile_key: string;
+  status: "compliant_for_profile" | "needs_review" | "not_compliant" | "unknown" | string;
+  summary: string;
+  checks: ComplianceCheckResult[];
+  missing_required_fields: string[];
+  missing_recommended_fields: string[];
+  warnings: string[];
+  generated_at: string;
+  legal_disclaimer: string;
+};
+
+export type ComplianceSummary = {
+  tenant_id: string;
+  profile_key: string;
+  total_checked: number;
+  compliant_count: number;
+  needs_review_count: number;
+  not_compliant_count: number;
+  warnings_count: number;
+  common_missing_fields: Record<string, number>;
 };
 
 export type VendorAccessRead = {
@@ -858,6 +905,36 @@ export function listUsagePlans(apiBaseUrl: string, token: string, tenantId: stri
     `/usage/plans?tenant_id=${encodeURIComponent(tenantId)}`,
     { token, action: "Load usage plans" }
   );
+}
+
+export function listComplianceProfiles(apiBaseUrl: string, token: string) {
+  return apiFetch<ComplianceProfileRead[]>(apiBaseUrl, "/compliance/profiles", {
+    token,
+    action: "Load compliance profiles"
+  });
+}
+
+export function getInvoiceCompliance(
+  apiBaseUrl: string,
+  token: string,
+  tenantId: string,
+  invoiceId: string,
+  profileKey: string
+) {
+  const params = new URLSearchParams({ tenant_id: tenantId, profile_key: profileKey });
+  return apiFetch<InvoiceComplianceResult>(
+    apiBaseUrl,
+    `/compliance/invoices/${encodeURIComponent(invoiceId)}?${params.toString()}`,
+    { token, action: "Validate invoice compliance" }
+  );
+}
+
+export function getComplianceSummary(apiBaseUrl: string, token: string, tenantId: string, profileKey: string) {
+  const params = new URLSearchParams({ tenant_id: tenantId, profile_key: profileKey });
+  return apiFetch<ComplianceSummary>(apiBaseUrl, `/compliance/summary?${params.toString()}`, {
+    token,
+    action: "Load compliance summary"
+  });
 }
 
 export function listVendorAccesses(apiBaseUrl: string, token: string, tenantId: string) {

@@ -68,6 +68,8 @@ Accuracy and exception analytics are produced by `AnalyticsService` from existin
 
 Usage metering is separated behind `UsageMeteringService`. It records tenant-scoped `UsageEvent` rows for invoice, OCR, approval, mock export, payment, vendor access, chatbot, notification, and analytics activity. Plan data is static and warn-only; no billing provider, checkout flow, subscription lifecycle, or workflow-blocking limit enforcement is connected.
 
+E-invoicing readiness is separated behind `ComplianceService`. It computes validation-only profile results from existing canonical invoice fields and never calls government, tax authority, PEPPOL, or certified e-invoicing networks. Results are tenant-scoped and read-only; invoice validation may record a small audit summary but does not change AP workflow state.
+
 ## Phase 6 OCR And Review
 
 `InvoiceExtractionAgent` now calls `OCRProviderFactory`, which selects an adapter from `OCR_PROVIDER`.

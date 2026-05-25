@@ -14,6 +14,7 @@ from app.core.schemas import (
     NotificationDeliveryStatus,
     PaymentStatusValue,
 )
+from app.services.compliance_service import ComplianceService
 
 
 class AnalyticsService:
@@ -29,6 +30,7 @@ class AnalyticsService:
         payment_statuses = self.repository.list_payment_statuses(tenant_id)
         vendor_accesses = self.repository.list_vendor_portal_access(tenant_id)
         notification_deliveries = self.repository.list_notification_deliveries(tenant_id)
+        compliance_summary = ComplianceService(self.repository).get_compliance_summary(tenant_id, "generic_b2b")
 
         total_invoices = len(invoices)
         review_required_ids = {
@@ -144,6 +146,12 @@ class AnalyticsService:
                 _metric("failed_notifications", "Failed notifications", notification_counter.get(str(NotificationDeliveryStatus.FAILED), 0), "critical"),
                 _metric("disabled_notifications", "Disabled/placeholders", notification_counter.get(str(NotificationDeliveryStatus.DISABLED), 0), "warning"),
                 _metric("placeholder_channels", "Email/Slack/Teams placeholders", placeholder_notifications, "warning" if placeholder_notifications else "neutral"),
+            ],
+            compliance_health=[
+                _metric("compliance_checked", "Compliance checked", compliance_summary.total_checked, "neutral"),
+                _metric("compliance_ready", "Compliance-ready invoices", compliance_summary.compliant_count, "good" if compliance_summary.compliant_count else "neutral"),
+                _metric("compliance_needs_review", "Compliance needs review", compliance_summary.needs_review_count, "warning" if compliance_summary.needs_review_count else "good"),
+                _metric("compliance_not_compliant", "Compliance not ready", compliance_summary.not_compliant_count, "critical" if compliance_summary.not_compliant_count else "good"),
             ],
             top_blockers=sorted(exceptions, key=lambda item: (-item.count, item.severity))[:5],
             recommendations=self._recommendations(

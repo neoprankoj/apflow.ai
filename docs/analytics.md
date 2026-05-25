@@ -15,6 +15,7 @@ The dashboard summarizes existing APFlow data only. It does not use external BI 
 - Payment status distribution.
 - Vendor self-service activity: active/used vendor links, vendor-safe preview views, chatbot answered/refused counts.
 - Notification delivery outcomes from APFlow's mock/placeholder delivery history.
+- Validation-only e-invoicing compliance readiness counts.
 
 ## What It Does Not Measure Yet
 
@@ -41,9 +42,10 @@ The dashboard summarizes existing APFlow data only. It does not use external BI 
 3. Run mock payment sync.
 4. Create vendor access and ask one vendor chatbot question.
 5. Send a mock notification.
-6. Open `Accuracy & Exceptions`.
-7. Confirm metrics and recommendations update.
-8. Confirm no sensitive data appears.
+6. Validate invoice compliance in the E-Invoicing Compliance panel.
+7. Open `Accuracy & Exceptions`.
+8. Confirm metrics and recommendations update.
+9. Confirm no sensitive data appears.
 
 ## Future Path
 

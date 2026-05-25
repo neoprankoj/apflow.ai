@@ -207,6 +207,26 @@ class UsageMetricStatus(StrEnum):
     UNLIMITED = "unlimited"
 
 
+class ComplianceCheckStatus(StrEnum):
+    PASS = "pass"
+    WARNING = "warning"
+    FAIL = "fail"
+    NOT_APPLICABLE = "not_applicable"
+
+
+class ComplianceSeverity(StrEnum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
+class InvoiceComplianceStatus(StrEnum):
+    COMPLIANT_FOR_PROFILE = "compliant_for_profile"
+    NEEDS_REVIEW = "needs_review"
+    NOT_COMPLIANT = "not_compliant"
+    UNKNOWN = "unknown"
+
+
 class ERPAdapterType(StrEnum):
     PRIORITY = "priority"
     ODOO = "odoo"
@@ -392,6 +412,7 @@ class AccuracyAnalyticsResponse(APFlowModel):
     payment_status_health: list[AnalyticsBreakdownItem] = Field(default_factory=list)
     vendor_self_service: list[AnalyticsMetric] = Field(default_factory=list)
     notification_health: list[AnalyticsMetric] = Field(default_factory=list)
+    compliance_health: list[AnalyticsMetric] = Field(default_factory=list)
     top_blockers: list[AnalyticsExceptionItem] = Field(default_factory=list)
     recommendations: list[str] = Field(default_factory=list)
 
@@ -1019,6 +1040,52 @@ class ManualUsageEventRequest(APFlowModel):
     quantity: int = Field(default=1, ge=1, le=100)
     source: UsageEventSource = UsageEventSource.USER
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class ComplianceProfileRead(APFlowModel):
+    key: str
+    label: str
+    country_or_region: str
+    description: str
+    validation_only: bool = True
+    certified_integration: bool = False
+    required_fields: list[str] = Field(default_factory=list)
+    recommended_fields: list[str] = Field(default_factory=list)
+
+
+class ComplianceCheckResult(APFlowModel):
+    key: str
+    label: str
+    status: ComplianceCheckStatus
+    severity: ComplianceSeverity
+    message: str
+    field: str | None = None
+    next_step: str | None = None
+
+
+class InvoiceComplianceResult(APFlowModel):
+    tenant_id: UUID
+    invoice_id: UUID
+    profile_key: str
+    status: InvoiceComplianceStatus
+    summary: str
+    checks: list[ComplianceCheckResult] = Field(default_factory=list)
+    missing_required_fields: list[str] = Field(default_factory=list)
+    missing_recommended_fields: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    legal_disclaimer: str
+
+
+class ComplianceSummary(APFlowModel):
+    tenant_id: UUID
+    profile_key: str
+    total_checked: int = 0
+    compliant_count: int = 0
+    needs_review_count: int = 0
+    not_compliant_count: int = 0
+    warnings_count: int = 0
+    common_missing_fields: dict[str, int] = Field(default_factory=dict)
 
 
 class OCRProviderMetadata(APFlowModel):

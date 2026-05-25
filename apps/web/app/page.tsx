@@ -40,6 +40,7 @@ import { ApprovalInbox } from "./approval-inbox";
 import { APWorkflowGuide } from "./ap-workflow-guide";
 import { AnalyticsDashboardPanel } from "./analytics-dashboard-panel";
 import { AuditTimeline, type AuditEvent } from "./audit-timeline";
+import { CompliancePanel } from "./compliance-panel";
 import { InvoiceUploadPanel } from "./invoice-upload-panel";
 import { NotificationSettingsPanel } from "./notification-settings-panel";
 import { PaymentStatusPanel } from "./payment-status-panel";
@@ -520,6 +521,7 @@ export default function Dashboard() {
     { id: "overview", label: "Overview" },
     { id: "workflow-guide", label: "Workflow Guide" },
     { id: "accuracy-analytics", label: "Analytics" },
+    { id: "e-invoicing-compliance", label: "Compliance" },
     { id: "usage-plan", label: "Usage" },
     { id: "audit-trail", label: "Audit Trail" },
     { id: "upload-invoice", label: "Upload Invoice" },
@@ -1095,6 +1097,13 @@ export default function Dashboard() {
           <AnalyticsDashboardPanel
             accessToken={accessToken}
             apiBaseUrl={apiBaseUrl}
+            tenantId={tenantId}
+          />
+
+          <CompliancePanel
+            accessToken={accessToken}
+            apiBaseUrl={apiBaseUrl}
+            invoices={invoices}
             tenantId={tenantId}
           />
 

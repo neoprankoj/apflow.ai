@@ -26,6 +26,7 @@ APFlow AI is tenant-first and deny-by-default.
 - Notification delivery supports mock-only internal delivery history plus Email, Slack, and Teams placeholders. Placeholder providers must not send externally until server-only secrets, retries, and support ownership are configured.
 - Notification provider readiness and delivery history must never expose API keys, webhook URLs, auth headers, raw provider payloads, or full sensitive message bodies. Recipient addresses are redacted and body previews are truncated.
 - Accuracy and exception analytics expose aggregate, tenant-scoped operational metrics only. Analytics responses must not include raw vendor tokens, token hashes, raw OCR provider payloads, webhook URLs, auth headers, full audit metadata, or sensitive chatbot question contents.
+- E-invoicing compliance validation is validation-only and tenant-scoped. It must not include raw OCR provider payloads, vendor tokens, token hashes, tax-authority credentials, government submission payloads, or legal certification claims.
 - Usage metering stores safe tenant-scoped event metadata only. Usage events must not include raw vendor tokens, token hashes, API keys, auth headers, webhook URLs, raw OCR payloads, full notification bodies, or payment-card data. No billing provider is connected in the foundation.
 - Production-like Docker runs should set `USE_IN_MEMORY_REPOSITORIES=false` and use PostgreSQL persistence.
 - Change `AUTH_SECRET_KEY` before enabling auth outside local development.

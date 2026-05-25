@@ -99,6 +99,7 @@ export function AnalyticsDashboardPanel({
             <BreakdownSection items={analytics.payment_status_health} title="Payment Status" />
             <MetricSection items={analytics.vendor_self_service} title="Vendor Self-Service" />
             <MetricSection items={analytics.notification_health} title="Notification Delivery" />
+            <MetricSection items={analytics.compliance_health} title="Compliance Validation" />
             <Recommendations items={analytics.recommendations} />
           </div>
         </>

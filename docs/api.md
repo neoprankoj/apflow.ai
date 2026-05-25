@@ -360,6 +360,18 @@ Usage metering is a foundation only. No real billing provider, checkout flow, pa
 
 Usage metadata is sanitized. Responses must not expose raw vendor tokens, token hashes, API keys, auth headers, webhook URLs, raw OCR payloads, full notification bodies, or secrets.
 
+## E-Invoicing Compliance Validation
+
+Compliance validation endpoints are authenticated, tenant-scoped, and read-only.
+
+- `GET /compliance/profiles` returns validation-only starter profiles.
+- `GET /compliance/invoices/{invoice_id}?tenant_id={uuid}&profile_key=generic_b2b` validates one processed invoice against a selected profile.
+- `GET /compliance/summary?tenant_id={uuid}&profile_key=generic_b2b` returns tenant summary counts and common missing fields.
+
+Starter profiles are `generic_b2b`, `israel_basic`, `eu_vat_basic`, and `us_basic`. They check required and recommended structured invoice fields such as supplier name, tax/VAT ID, invoice number, invoice date, currency, tax amount, line items, and grand total reconciliation.
+
+This is a validation-only foundation. APFlow does not submit invoices to any government, tax authority, PEPPOL network, EU tax platform, or certified e-invoicing provider, and it does not claim legal certification.
+
 Example Priority mapping payload:
 
 ```json
