@@ -19,11 +19,12 @@ APFlow demonstrates a complete AP manager workflow:
 - Show manual/mock payment status tracking and vendor-safe payment messages.
 - Prove activity in Audit Trail.
 - Show Accuracy & Exceptions metrics and recommendations after workflow activity.
+- Show Usage & Plan metering as visibility-only commercial readiness.
 - Preview Priority ERP mapping, dry-run sync, import plans, controlled APFlow-side imports, and imported records.
 
 What is real today:
 
-- FastAPI backend, Next.js dashboard, PostgreSQL persistence, auth/RBAC, document upload, OCR.space extraction, review/corrections, approvals, audit events, vendor-safe preview, manual/mock payment status tracking, mock notification delivery history, vendor payment-status chatbot, Accuracy & Exceptions analytics, controlled APFlow-side Priority imports, and runtime verification.
+- FastAPI backend, Next.js dashboard, PostgreSQL persistence, auth/RBAC, document upload, OCR.space extraction, review/corrections, approvals, audit events, vendor-safe preview, manual/mock payment status tracking, mock notification delivery history, vendor payment-status chatbot, Accuracy & Exceptions analytics, usage metering foundation, controlled APFlow-side Priority imports, and runtime verification.
 - Vendor access lifecycle foundation: hashed tokens, one-time raw token display, expiration, revocation, rotation, last-used tracking, and audit events.
 
 What is mock or safe by design:
@@ -38,6 +39,8 @@ Intentionally disabled or deferred:
 - Real Priority writes.
 - Real ERP/bank payment status sync.
 - Real vendor invitation email/Slack/Teams delivery.
+- Stripe or any real billing provider.
+- Customer subscriptions, customer invoices, card storage, and hard usage enforcement.
 - Domain and HTTPS.
 - Public production access.
 - Demo reset unless explicitly enabled for controlled cleanup.
@@ -98,8 +101,9 @@ Intentionally disabled or deferred:
 23. Run Mock Payment Sync and explain it updates APFlow only.
 24. Open Vendor-safe preview and show the safe payment message.
 25. Open Accuracy & Exceptions and show workflow health, blockers, vendor self-service, notification outcomes, and recommended next actions.
-26. Open Audit Trail.
-27. Show approval/export/payment/vendor access/chatbot events as proof of what happened.
+26. Open Usage & Plan and explain that usage metering is visibility-only and warn-only.
+27. Open Audit Trail.
+28. Show approval/export/payment/vendor access/chatbot events as proof of what happened.
 
 Avoid saying that mock ERP export is a real ERP write. Say: "This proves the export handoff path using the mock adapter; real ERP write enablement is intentionally gated."
 

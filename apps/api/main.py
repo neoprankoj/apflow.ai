@@ -17,6 +17,7 @@ from app.api.routes.notifications import router as notifications_router
 from app.api.routes.ocr import router as ocr_router
 from app.api.routes.payments import router as payments_router
 from app.api.routes.review import router as review_router
+from app.api.routes.usage import router as usage_router
 from app.api.routes.vendor import router as vendor_router
 from app.api.routes.workflows import router as workflows_router
 from app.core.config import settings
@@ -63,6 +64,7 @@ def create_app() -> FastAPI:
     app.include_router(notifications_router, prefix="/notifications", tags=["notifications"])
     app.include_router(payments_router, prefix="/payments", tags=["payments"])
     app.include_router(review_router, prefix="/review", tags=["review"])
+    app.include_router(usage_router, prefix="/usage", tags=["usage"])
     app.include_router(vendor_router, prefix="/vendor", tags=["vendor"])
     app.include_router(documents_router, prefix="/documents", tags=["documents"])
     app.include_router(invoices_router, prefix="/invoices", tags=["invoices"])

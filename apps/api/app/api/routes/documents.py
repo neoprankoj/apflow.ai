@@ -49,8 +49,11 @@ from app.core.schemas import (
     OCRExtractedField,
     OCRExtractionResult,
     Permission,
+    UsageEventSource,
+    UsageEventType,
     UploadedInvoiceDocument,
 )
+from app.services.usage_metering_service import UsageMeteringService
 
 router = APIRouter()
 
@@ -90,6 +93,13 @@ async def upload_invoice_document(
         uploaded_by=uploaded_by or context.user.email,
     )
     repository.store_uploaded_document(document)
+    UsageMeteringService(repository).record_usage_event(
+        tenant_id,
+        UsageEventType.INVOICE_UPLOADED,
+        source=UsageEventSource.USER,
+        related_document_id=document.document_id,
+        metadata={"content_type": content_type, "size_bytes": len(content)},
+    )
     return InvoiceUploadResult(document=document, document_reference=reference)
 
 
@@ -126,6 +136,14 @@ def extract_invoice_document(
     _context: CurrentUserContext = Depends(require_permission(Permission.INVOICE_PROCESS)),
 ) -> dict:
     document, raw = _prepare_raw_invoice_from_document(tenant_id, document_id, repository, storage)
+    usage = UsageMeteringService(repository)
+    usage.record_usage_event(
+        tenant_id,
+        UsageEventType.OCR_EXTRACTION_ATTEMPTED,
+        source=UsageEventSource.USER,
+        related_document_id=document_id,
+        metadata={"mime_type": raw.mime_type},
+    )
     extraction = extraction_agent.extract(
         InvoiceExtractionInput(
             raw_invoice_id=raw.raw_invoice_id,
@@ -133,6 +151,15 @@ def extract_invoice_document(
             storage_url=raw.storage_url,
             mime_type=raw.mime_type,
         )
+    )
+    usage.record_usage_event(
+        tenant_id,
+        UsageEventType.OCR_EXTRACTION_FAILED
+        if extraction.ocr_result is not None and extraction.ocr_result.error
+        else UsageEventType.OCR_EXTRACTION_SUCCEEDED,
+        source=UsageEventSource.SYSTEM,
+        related_document_id=document_id,
+        metadata={"provider": _ocr_provider_name(extraction.ocr_result)},
     )
     review_task = review_agent.inspect_extraction(extraction.ocr_result, raw_invoice_id=raw.raw_invoice_id)
     review_tasks = [review_task] if review_task.status != "not_required" else []
@@ -167,6 +194,14 @@ def process_invoice_document(
     _enforce_tenant(payload.tenant_id, context)
     repository.ensure_phase3_fixtures(payload.tenant_id)
     document, raw = _prepare_raw_invoice_from_document(payload.tenant_id, document_id, repository, storage)
+    usage = UsageMeteringService(repository)
+    usage.record_usage_event(
+        payload.tenant_id,
+        UsageEventType.OCR_EXTRACTION_ATTEMPTED,
+        source=UsageEventSource.USER,
+        related_document_id=document_id,
+        metadata={"stage": "process", "mime_type": raw.mime_type},
+    )
     extraction = extraction_agent.extract(
         InvoiceExtractionInput(
             raw_invoice_id=raw.raw_invoice_id,
@@ -175,6 +210,15 @@ def process_invoice_document(
             mime_type=raw.mime_type,
             correlation_id=payload.correlation_id,
         )
+    )
+    usage.record_usage_event(
+        payload.tenant_id,
+        UsageEventType.OCR_EXTRACTION_FAILED
+        if extraction.ocr_result is not None and extraction.ocr_result.error
+        else UsageEventType.OCR_EXTRACTION_SUCCEEDED,
+        source=UsageEventSource.SYSTEM,
+        related_document_id=document_id,
+        metadata={"stage": "process", "provider": _ocr_provider_name(extraction.ocr_result)},
     )
     extraction = _apply_latest_corrected_review_task(payload.tenant_id, raw.raw_invoice_id, extraction, repository)
     pipeline = continue_full_pipeline_from_extraction(
@@ -194,6 +238,15 @@ def process_invoice_document(
         notification_agent=notification_agent,
         review_agent=review_agent,
     )
+    if pipeline.get("invoice_created") and pipeline.get("invoice"):
+        usage.record_usage_event(
+            payload.tenant_id,
+            UsageEventType.INVOICE_PROCESSED,
+            source=UsageEventSource.USER,
+            related_invoice_id=pipeline["invoice"].invoice_id,
+            related_document_id=document_id,
+            metadata={"workflow_status": pipeline["workflow_status"]},
+        )
     return InvoiceProcessFromUploadResult(
         document=document,
         extraction_result=extraction,
@@ -237,6 +290,13 @@ def _prepare_raw_invoice_from_document(
     )
     repository.store_raw_invoice(raw, content=content)
     return document, raw
+
+
+def _ocr_provider_name(ocr_result: OCRExtractionResult | None) -> str | None:
+    if ocr_result is None:
+        return None
+    provider = ocr_result.raw_response.get("provider") if ocr_result.raw_response else None
+    return str(provider) if provider else None
 
 
 def _enforce_tenant(tenant_id: UUID, context: CurrentUserContext) -> None:

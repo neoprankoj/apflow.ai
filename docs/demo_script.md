@@ -149,14 +149,22 @@ If a raw vendor token appears in a screenshot, chat, or support note, rotate or 
 4. Show Recommended Next Actions and explain how they point operators toward OCR cleanup, payment sync, vendor access follow-up, or notification setup.
 5. Confirm no vendor tokens, token hashes, OCR provider payloads, or secrets appear.
 
-## M. Demo Path 12 - AP Manager Demo Checklist
+## M. Demo Path 12 - Usage & Plan
+
+1. Open `Usage & Plan`.
+2. Show the Demo plan and warn-only policy.
+3. Show usage counters for invoice activity, OCR, vendor access, chatbot questions, and notifications.
+4. Explain that no Stripe, customer billing, payment cards, or hard usage enforcement is connected.
+5. Confirm Product Readiness still shows billing provider and subscription management as blockers.
+
+## N. Demo Path 13 - AP Manager Demo Checklist
 
 1. Expand the `Demo checklist` in the AP Workflow Guide.
 2. Walk through each checklist item as a presenter rehearsal path.
 3. Confirm key action messages point to the next step and to Audit Trail proof.
 4. Confirm Priority connector copy separates dry run, import plan, controlled import, and imported records.
 
-## N. AP User Acceptance Pass
+## O. AP User Acceptance Pass
 
 1. Start from the top of the dashboard and confirm the AP manager can identify the next recommended action.
 2. Confirm upload, OCR, review, process, approval, ERP export, and Audit Trail use consistent finance-friendly labels.
@@ -166,7 +174,7 @@ If a raw vendor token appears in a screenshot, chat, or support note, rotate or 
 6. Confirm imported vendors and purchase orders are visible after controlled import.
 7. Confirm no Priority data is changed during sample preview, import plan, controlled import, or readiness checks.
 
-## O. Demo Cleanup
+## P. Demo Cleanup
 
 1. Enable `ALLOW_DEMO_RESET=true` only when needed on private staging.
 2. Use the dashboard reset action or `POST /admin/demo/reset`.

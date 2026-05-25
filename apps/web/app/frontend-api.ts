@@ -326,6 +326,60 @@ export type AccuracyAnalyticsResponse = {
   recommendations: string[];
 };
 
+export type UsageEventRead = {
+  id: string;
+  tenant_id: string;
+  event_type: string;
+  source: string;
+  quantity: number;
+  unit: string;
+  related_invoice_id?: string | null;
+  related_document_id?: string | null;
+  related_vendor_access_id?: string | null;
+  related_payment_status_id?: string | null;
+  related_notification_delivery_id?: string | null;
+  metadata: Record<string, unknown>;
+  occurred_at: string;
+  created_at: string;
+};
+
+export type UsagePlanRead = {
+  plan_key: string;
+  label: string;
+  description: string;
+  monthly_invoice_limit?: number | null;
+  monthly_ocr_limit?: number | null;
+  monthly_vendor_access_limit?: number | null;
+  monthly_chatbot_question_limit?: number | null;
+  monthly_notification_limit?: number | null;
+  overage_policy: string;
+  is_current: boolean;
+};
+
+export type UsageMetricRead = {
+  key: string;
+  label: string;
+  used: number;
+  limit?: number | null;
+  unit: string;
+  percentage?: number | null;
+  status: string;
+  description?: string | null;
+};
+
+export type TenantUsageSummary = {
+  tenant_id: string;
+  period_start: string;
+  period_end: string;
+  current_plan: UsagePlanRead;
+  usage_by_event_type: Record<string, number>;
+  usage_by_category: Record<string, number>;
+  limits: UsageMetricRead[];
+  warnings: string[];
+  recommendations: string[];
+  recent_events: UsageEventRead[];
+};
+
 export type VendorAccessRead = {
   id: string;
   tenant_id: string;
@@ -771,6 +825,38 @@ export function getAccuracyAnalytics(apiBaseUrl: string, token: string, tenantId
     apiBaseUrl,
     `/analytics/accuracy?tenant_id=${encodeURIComponent(tenantId)}`,
     { token, action: "Load accuracy analytics" }
+  );
+}
+
+export function getUsageSummary(apiBaseUrl: string, token: string, tenantId: string, period = "current_month") {
+  const params = new URLSearchParams({ tenant_id: tenantId, period });
+  return apiFetch<TenantUsageSummary>(apiBaseUrl, `/usage/summary?${params.toString()}`, {
+    token,
+    action: "Load usage summary"
+  });
+}
+
+export function listUsageEvents(
+  apiBaseUrl: string,
+  token: string,
+  tenantId: string,
+  filters: { eventType?: string; source?: string; relatedInvoiceId?: string } = {}
+) {
+  const params = new URLSearchParams({ tenant_id: tenantId });
+  if (filters.eventType) params.set("event_type", filters.eventType);
+  if (filters.source) params.set("source", filters.source);
+  if (filters.relatedInvoiceId) params.set("related_invoice_id", filters.relatedInvoiceId);
+  return apiFetch<UsageEventRead[]>(apiBaseUrl, `/usage/events?${params.toString()}`, {
+    token,
+    action: "Load usage events"
+  });
+}
+
+export function listUsagePlans(apiBaseUrl: string, token: string, tenantId: string) {
+  return apiFetch<UsagePlanRead[]>(
+    apiBaseUrl,
+    `/usage/plans?tenant_id=${encodeURIComponent(tenantId)}`,
+    { token, action: "Load usage plans" }
   );
 }
 

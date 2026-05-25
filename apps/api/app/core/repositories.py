@@ -32,6 +32,9 @@ from app.core.schemas import (
     UploadedInvoiceDocument,
     TenantMembershipSchema,
     TenantRecordSchema,
+    UsageEventRead,
+    UsageEventSource,
+    UsageEventType,
     PurchaseOrderInput,
     PurchaseOrderLine,
     PurchaseOrderOutput,
@@ -164,6 +167,7 @@ class InMemoryAPRepository:
     vendor_portal_access: dict[UUID, VendorPortalAccessRecord] = field(default_factory=dict)
     vendor_messages: dict[UUID, VendorMessageResult] = field(default_factory=dict)
     payment_statuses: dict[UUID, PaymentStatusRead] = field(default_factory=dict)
+    usage_events: dict[UUID, UsageEventRead] = field(default_factory=dict)
 
     def create_tenant(
         self,
@@ -828,6 +832,66 @@ class InMemoryAPRepository:
         if related_invoice_id:
             records = [record for record in records if record.related_invoice_id == related_invoice_id]
         return sorted(records, key=lambda record: record.created_at)
+
+    def create_usage_event(
+        self,
+        tenant_id: UUID,
+        event_type: UsageEventType | str,
+        *,
+        source: UsageEventSource | str = UsageEventSource.SYSTEM,
+        quantity: int = 1,
+        unit: str = "event",
+        related_invoice_id: UUID | None = None,
+        related_document_id: UUID | None = None,
+        related_vendor_access_id: UUID | None = None,
+        related_payment_status_id: UUID | None = None,
+        related_notification_delivery_id: UUID | None = None,
+        metadata: dict | None = None,
+        occurred_at: datetime | None = None,
+        event_id: UUID | None = None,
+    ) -> UsageEventRead:
+        now = datetime.now(UTC)
+        record = UsageEventRead(
+            id=event_id or uuid4(),
+            tenant_id=tenant_id,
+            event_type=UsageEventType(event_type),
+            source=UsageEventSource(source),
+            quantity=max(0, quantity),
+            unit=unit,
+            related_invoice_id=related_invoice_id,
+            related_document_id=related_document_id,
+            related_vendor_access_id=related_vendor_access_id,
+            related_payment_status_id=related_payment_status_id,
+            related_notification_delivery_id=related_notification_delivery_id,
+            metadata=metadata or {},
+            occurred_at=occurred_at or now,
+            created_at=now,
+        )
+        self.usage_events[record.id] = record
+        return record
+
+    def list_usage_events(
+        self,
+        tenant_id: UUID,
+        *,
+        event_type: str | None = None,
+        source: str | None = None,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+        related_invoice_id: UUID | None = None,
+    ) -> list[UsageEventRead]:
+        records = [record for record in self.usage_events.values() if record.tenant_id == tenant_id]
+        if event_type:
+            records = [record for record in records if str(record.event_type) == event_type]
+        if source:
+            records = [record for record in records if str(record.source) == source]
+        if date_from:
+            records = [record for record in records if record.occurred_at >= date_from]
+        if date_to:
+            records = [record for record in records if record.occurred_at <= date_to]
+        if related_invoice_id:
+            records = [record for record in records if record.related_invoice_id == related_invoice_id]
+        return sorted(records, key=lambda record: record.occurred_at)
 
     def store_audit_event(self, event: AuditEventInput, audit_event_id: UUID) -> None:
         self.audit_events[audit_event_id] = AuditEventRecord(

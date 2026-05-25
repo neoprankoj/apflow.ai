@@ -46,6 +46,9 @@ from app.core.schemas import (
     UploadedInvoiceDocument,
     TenantMembershipSchema,
     TenantRecordSchema,
+    UsageEventRead,
+    UsageEventSource,
+    UsageEventType,
     PurchaseOrderLine,
     PurchaseOrderOutput,
     UserRecordSchema,
@@ -57,6 +60,7 @@ from app.db import models as dbm
 
 
 DEMO_OPERATIONAL_CLEANUP_MODELS = (
+    dbm.UsageEvent,
     dbm.NotificationDelivery,
     dbm.VendorMessage,
     dbm.VendorPortalAccess,
@@ -924,6 +928,69 @@ class SQLAlchemyAPRepository:
         rows = self.session.scalars(query.order_by(dbm.NotificationDelivery.created_at.asc())).all()
         return [self._notification_delivery(row) for row in rows]
 
+    def create_usage_event(
+        self,
+        tenant_id: UUID,
+        event_type: UsageEventType | str,
+        *,
+        source: UsageEventSource | str = UsageEventSource.SYSTEM,
+        quantity: int = 1,
+        unit: str = "event",
+        related_invoice_id: UUID | None = None,
+        related_document_id: UUID | None = None,
+        related_vendor_access_id: UUID | None = None,
+        related_payment_status_id: UUID | None = None,
+        related_notification_delivery_id: UUID | None = None,
+        metadata: dict | None = None,
+        occurred_at: datetime | None = None,
+        event_id: UUID | None = None,
+    ) -> UsageEventRead:
+        self._ensure_tenant(tenant_id)
+        now = datetime.now(UTC)
+        row = dbm.UsageEvent(
+            id=event_id or uuid4(),
+            tenant_id=tenant_id,
+            event_type=str(event_type),
+            source=str(source),
+            quantity=max(0, quantity),
+            unit=unit,
+            related_invoice_id=related_invoice_id,
+            related_document_id=related_document_id,
+            related_vendor_access_id=related_vendor_access_id,
+            related_payment_status_id=related_payment_status_id,
+            related_notification_delivery_id=related_notification_delivery_id,
+            metadata_json=metadata or {},
+            occurred_at=occurred_at or now,
+            created_at=now,
+        )
+        self.session.add(row)
+        self.session.commit()
+        return self._usage_event(row)
+
+    def list_usage_events(
+        self,
+        tenant_id: UUID,
+        *,
+        event_type: str | None = None,
+        source: str | None = None,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+        related_invoice_id: UUID | None = None,
+    ) -> list[UsageEventRead]:
+        query = select(dbm.UsageEvent).where(dbm.UsageEvent.tenant_id == tenant_id)
+        if event_type:
+            query = query.where(dbm.UsageEvent.event_type == event_type)
+        if source:
+            query = query.where(dbm.UsageEvent.source == source)
+        if date_from:
+            query = query.where(dbm.UsageEvent.occurred_at >= date_from)
+        if date_to:
+            query = query.where(dbm.UsageEvent.occurred_at <= date_to)
+        if related_invoice_id:
+            query = query.where(dbm.UsageEvent.related_invoice_id == related_invoice_id)
+        rows = self.session.scalars(query.order_by(dbm.UsageEvent.occurred_at.asc())).all()
+        return [self._usage_event(row) for row in rows]
+
     def store_audit_event(self, event: AuditEventInput, audit_event_id: UUID) -> None:
         self._ensure_tenant(event.tenant_id)
         self.session.add(
@@ -1381,6 +1448,24 @@ class SQLAlchemyAPRepository:
             created_at=row.created_at,
             updated_at=row.updated_at,
             delivered_at=row.delivered_at,
+        )
+
+    def _usage_event(self, row: dbm.UsageEvent) -> UsageEventRead:
+        return UsageEventRead(
+            id=row.id,
+            tenant_id=row.tenant_id,
+            event_type=UsageEventType(row.event_type),
+            source=UsageEventSource(row.source),
+            quantity=row.quantity,
+            unit=row.unit,
+            related_invoice_id=row.related_invoice_id,
+            related_document_id=row.related_document_id,
+            related_vendor_access_id=row.related_vendor_access_id,
+            related_payment_status_id=row.related_payment_status_id,
+            related_notification_delivery_id=row.related_notification_delivery_id,
+            metadata=row.metadata_json,
+            occurred_at=row.occurred_at,
+            created_at=row.created_at,
         )
 
     def _review_task(self, row: dbm.HumanReviewTask) -> HumanReviewTask:

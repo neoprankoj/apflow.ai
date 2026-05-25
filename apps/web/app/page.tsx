@@ -45,6 +45,7 @@ import { NotificationSettingsPanel } from "./notification-settings-panel";
 import { PaymentStatusPanel } from "./payment-status-panel";
 import { PriorityMappingAdmin } from "./priority-mapping-admin";
 import { ProductReadinessPanel } from "./product-readiness-panel";
+import { UsageBillingPanel } from "./usage-billing-panel";
 import { VendorAccessAdmin } from "./vendor-access-admin";
 
 const DEMO_EMAIL = "demo-owner@apflow.local";
@@ -519,6 +520,7 @@ export default function Dashboard() {
     { id: "overview", label: "Overview" },
     { id: "workflow-guide", label: "Workflow Guide" },
     { id: "accuracy-analytics", label: "Analytics" },
+    { id: "usage-plan", label: "Usage" },
     { id: "audit-trail", label: "Audit Trail" },
     { id: "upload-invoice", label: "Upload Invoice" },
     { id: "ocr-review", label: "OCR Review" },
@@ -1091,6 +1093,12 @@ export default function Dashboard() {
           />
 
           <AnalyticsDashboardPanel
+            accessToken={accessToken}
+            apiBaseUrl={apiBaseUrl}
+            tenantId={tenantId}
+          />
+
+          <UsageBillingPanel
             accessToken={accessToken}
             apiBaseUrl={apiBaseUrl}
             tenantId={tenantId}

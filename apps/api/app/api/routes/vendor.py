@@ -35,6 +35,8 @@ from app.core.schemas import (
     VendorMessageResult,
     VendorPortalAccessCreate,
     VendorPortalAccessResult,
+    UsageEventSource,
+    UsageEventType,
 )
 from app.core.vendor_portal import (
     generate_vendor_access_token,
@@ -46,6 +48,7 @@ from app.core.vendor_portal import (
     vendor_invoice_status,
 )
 from app.api.dependencies import get_monitoring_agent
+from app.services.usage_metering_service import UsageMeteringService
 
 router = APIRouter()
 
@@ -77,6 +80,13 @@ def create_vendor_access(
             entity_id=record.vendor_id,
             metadata={"email": payload.email, "access_id": str(record.access_id), "token_prefix": record.token_prefix},
         )
+    )
+    UsageMeteringService(repository).record_usage_event(
+        payload.tenant_id,
+        UsageEventType.VENDOR_ACCESS_CREATED,
+        source=UsageEventSource.USER,
+        related_vendor_access_id=record.access_id,
+        metadata={"vendor_id": str(record.vendor_id), "mode": "demo"},
     )
     return VendorPortalAccessResult(
         access_id=record.access_id,
@@ -123,6 +133,13 @@ def create_vendor_access_for_admin(
             entity_id=record.vendor_id,
             metadata={"access_id": str(record.access_id), "token_prefix": record.token_prefix, "email": record.email},
         )
+    )
+    UsageMeteringService(repository).record_usage_event(
+        tenant_id,
+        UsageEventType.VENDOR_ACCESS_CREATED,
+        source=UsageEventSource.USER,
+        related_vendor_access_id=record.access_id,
+        metadata={"vendor_id": str(record.vendor_id)},
     )
     return VendorAccessCreatedResponse(
         **_vendor_access_read(repository, record).model_dump(),
@@ -326,7 +343,17 @@ def vendor_chat(
         repository,
         audit_agent,
     )
-    return chatbot_agent.answer(payload, access.vendor_id, _vendor_name(repository, payload.tenant_id, access.vendor_id))
+    response = chatbot_agent.answer(payload, access.vendor_id, _vendor_name(repository, payload.tenant_id, access.vendor_id))
+    UsageMeteringService(repository).record_usage_event(
+        payload.tenant_id,
+        UsageEventType.VENDOR_CHATBOT_QUESTION_REFUSED
+        if response.refused
+        else UsageEventType.VENDOR_CHATBOT_QUESTION_ANSWERED,
+        source=UsageEventSource.VENDOR,
+        related_vendor_access_id=access.access_id,
+        metadata={"intent": response.intent, "confidence": response.confidence},
+    )
+    return response
 
 
 @router.get("/messages", response_model=list[VendorMessageResult])
@@ -366,6 +393,13 @@ def _resolve_vendor_access(
         )
         raise HTTPException(status_code=403, detail="Invalid vendor access")
     access = repository.mark_vendor_access_used(tenant_id, access.access_id)
+    UsageMeteringService(repository).record_usage_event(
+        tenant_id,
+        UsageEventType.VENDOR_ACCESS_USED,
+        source=UsageEventSource.VENDOR,
+        related_vendor_access_id=access.access_id,
+        metadata={"vendor_id": str(access.vendor_id)},
+    )
     if audit_agent is not None:
         audit_agent.record(
             AuditEventInput(

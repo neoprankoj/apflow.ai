@@ -13,7 +13,10 @@ from app.core.schemas import (
     PaymentStatusSyncRequest,
     PaymentStatusUpdate,
     PaymentStatusValue,
+    UsageEventSource,
+    UsageEventType,
 )
+from app.services.usage_metering_service import UsageMeteringService
 
 
 class PaymentStatusService:
@@ -63,6 +66,14 @@ class PaymentStatusService:
                 "safe_vendor_message": patched.safe_vendor_message,
             },
         )
+        UsageMeteringService(self.repository).record_usage_event(
+            tenant_id,
+            UsageEventType.PAYMENT_STATUS_UPDATED,
+            source=UsageEventSource.USER,
+            related_invoice_id=patched.invoice_id,
+            related_payment_status_id=patched.id,
+            metadata={"status": str(patched.status), "source": str(patched.source)},
+        )
         return patched
 
     def run_mock_sync(self, request: PaymentStatusSyncRequest, context: CurrentUserContext) -> list[PaymentStatusRead]:
@@ -107,6 +118,14 @@ class PaymentStatusService:
                     "message": "Mock payment sync updated APFlow payment status only.",
                 },
             )
+            UsageMeteringService(self.repository).record_usage_event(
+                request.tenant_id,
+                UsageEventType.PAYMENT_STATUS_UPDATED,
+                source=UsageEventSource.MOCK,
+                related_invoice_id=invoice.invoice_id,
+                related_payment_status_id=record.id,
+                metadata={"status": str(record.status), "source": str(record.source)},
+            )
         self._record_audit(
             request.tenant_id,
             context,
@@ -117,6 +136,14 @@ class PaymentStatusService:
                 "mode": request.mode,
                 "message": "Mock payment sync updated APFlow payment statuses only.",
             },
+        )
+        UsageMeteringService(self.repository).record_usage_event(
+            request.tenant_id,
+            UsageEventType.PAYMENT_MOCK_SYNC_RUN,
+            source=UsageEventSource.MOCK,
+            quantity=max(1, len(results)),
+            related_invoice_id=request.invoice_id,
+            metadata={"records_processed": len(results), "mode": request.mode},
         )
         return results
 

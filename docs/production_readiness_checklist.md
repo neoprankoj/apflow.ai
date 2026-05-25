@@ -42,6 +42,7 @@ Current pilot blockers:
 - Payment status and vendor chatbot foundations exist, but real ERP payment status sync is missing.
 - Real notification delivery is missing.
 - Foundational accuracy and exception analytics exist, but SLA trends and advanced operational reporting are still missing.
+- Usage metering foundation exists, but real billing provider, subscriptions, invoices, and overage policy are not connected.
 - Real customer Priority mapping/write flow is not live.
 
 ### Production Ready
@@ -62,7 +63,7 @@ Current production blockers:
 - Production vendor access is not ready.
 - Notification abstraction and mock delivery exist, but real email/Slack/Teams providers are not configured.
 - Real ERP payment status sync is missing.
-- Billing and usage metering are missing.
+- Usage metering foundation exists, but billing provider, subscription management, customer invoices, and usage enforcement are missing.
 - Foundational accuracy analytics exist, but advanced SLA, trend, and per-supplier analytics are not production-grade yet.
 - E-invoicing/tax compliance requirements are not complete.
 
@@ -89,5 +90,6 @@ Use the Product Readiness Gate in the Admin area before demos, pilots, or produc
 - [Vendor Payment-Status Chatbot](vendor_payment_chatbot.md)
 - [Notification Delivery Abstraction](notifications.md)
 - [Accuracy & Exception Analytics](analytics.md)
+- [Usage Metering / Billing Foundation](usage_metering.md)
 - [Staging Operations](operations_staging.md)
 - [Staging Release Checklist](staging_release_checklist.md)

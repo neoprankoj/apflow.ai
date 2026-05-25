@@ -347,6 +347,19 @@ The response summarizes:
 
 Analytics are built from existing APFlow data. They do not expose raw vendor tokens, token hashes, provider secrets, raw OCR payloads, full audit metadata, or external analytics identifiers.
 
+## Usage Metering
+
+Usage metering endpoints are authenticated and tenant-scoped.
+
+- `GET /usage/summary?tenant_id={uuid}&period=current_month` returns tenant usage totals, category counts, warn-only plan limits, warnings, recommendations, and recent usage events.
+- `GET /usage/events?tenant_id={uuid}` lists tenant usage events. Owner/admin audit-style access is required.
+- `GET /usage/plans?tenant_id={uuid}` returns static plan placeholders: Demo, Starter, Growth, and Enterprise.
+- `POST /usage/events/manual-test` records a safe admin-only test usage event for QA.
+
+Usage metering is a foundation only. No real billing provider, checkout flow, payment-card storage, customer subscription lifecycle, customer invoice generation, or hard usage blocking is connected.
+
+Usage metadata is sanitized. Responses must not expose raw vendor tokens, token hashes, API keys, auth headers, webhook URLs, raw OCR payloads, full notification bodies, or secrets.
+
 Example Priority mapping payload:
 
 ```json

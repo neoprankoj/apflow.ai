@@ -104,6 +104,9 @@ def test_payment_and_vendor_gaps_are_pilot_or_production_blockers(auth_enabled):
     assert checks["analytics_dashboard_available"]["status"] == "pass"
     assert checks["accuracy_exception_visibility_available"]["status"] == "pass"
     assert checks["accuracy_analytics_ready"]["status"] == "pass"
+    assert checks["usage_metering_foundation_available"]["status"] == "pass"
+    assert checks["usage_metering_configured"]["status"] == "pass"
+    assert checks["billing_provider_connected"]["status"] == "fail"
     assert checks["production_vendor_access_ready"]["status"] == "warning"
     assert "Production access hardening" in body["pilot_ready"]["blockers"]
     assert "Payment status sync" in body["pilot_ready"]["blockers"]
