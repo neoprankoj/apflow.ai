@@ -56,6 +56,7 @@ Recommendation:
 - [ ] Restore drill documented or tested.
 - [ ] Backup/restore drill plan reviewed in [Backup / Restore / Disaster Recovery Drill](backup_restore_drill.md).
 - [ ] Public ports reviewed.
+- [ ] Public port/firewall hardening plan reviewed in [Public Port / Firewall Hardening Checklist](public_port_firewall_hardening.md).
 - [ ] Internal service exposure reviewed.
 - [ ] Security headers plan reviewed.
 - [ ] TLS configuration plan reviewed.
@@ -83,12 +84,13 @@ Should not be public in the future:
 Inspection commands:
 
 ```bash
+bash scripts/check_public_ports.sh
 docker compose ps
 sudo ss -tulpn
 sudo ufw status verbose
 ```
 
-If any internal service is reachable publicly, stop the domain cutover and fix firewall/proxy exposure first.
+If any internal service is reachable publicly, stop the domain cutover and fix firewall/proxy exposure first. PR #67 adds the checklist and read-only inspection helper only; it does not change live firewall rules.
 
 ## F. Reverse Proxy Route Plan
 

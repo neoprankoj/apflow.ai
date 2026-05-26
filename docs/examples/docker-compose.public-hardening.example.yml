@@ -1,0 +1,29 @@
+# Template only. Do not apply without completing docs/public_port_firewall_hardening.md.
+# This example shows future public-exposure hardening patterns. It is not active Compose config.
+
+services:
+  # Future reverse proxy owns public ingress.
+  # caddy:
+  #   ports:
+  #     - "80:80"
+  #     - "443:443"
+
+  # If host-level proxy access is still required, bind app ports to localhost only.
+  api:
+    ports:
+      - "127.0.0.1:8000:8000"
+
+  web:
+    ports:
+      - "127.0.0.1:3000:3000"
+
+  # Internal services should not publish public host ports in staging/prod.
+  # Prefer no `ports` section, and use Docker internal networking instead.
+  postgres:
+    ports: []
+
+  redis:
+    ports: []
+
+  minio:
+    ports: []
