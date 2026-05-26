@@ -52,7 +52,7 @@ APFlow AI is tenant-first and deny-by-default.
 - Startup logs may include environment, auth mode, repository mode, OCR provider, storage provider, ERP adapters, and public URLs; they must not include passwords, tokens, OCR keys, MinIO secrets, or database passwords.
 - `scripts/seed_demo_data.py` prints demo login details but does not print bearer tokens. Deterministic seed modes do not invoke live OCR providers. Rotate seeded credentials before giving access beyond a private staging demo.
 - Admin demo seed profiles may generate one-time vendor access links for supplier demos. Token hashes must never be returned, and any exposed raw token must be revoked or rotated after the demo.
-- Back up PostgreSQL and document storage volumes before upgrades. Do not run `docker compose down -v` on staging unless deleting persistent data is intentional.
+- Back up PostgreSQL and document storage volumes before upgrades. Use [backup_restore_drill.md](backup_restore_drill.md) for the staging backup and temporary restore drill. Do not run `docker compose down -v` on staging unless deleting persistent data is intentional.
 - Real VPS staging should be exposed only through HTTPS reverse proxy domains. Do not expose PostgreSQL, Redis, MinIO, FastAPI, or Next.js service ports directly except through trusted firewall rules.
 - `scripts/check_staging.sh` and `scripts/verify_runtime.py --auth-enabled` are intended to validate HTTPS health, auth, upload/process, ERP export, and vendor-safe status without printing secrets.
 - Use `scripts/restore_postgres.sh` without `--yes` as a dry-run before any destructive restore. The `--yes` mode drops and recreates the `apflow` database.

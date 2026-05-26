@@ -219,6 +219,7 @@ Demo materials:
 - `docs/demo_seed_profiles.md` for repeatable demo and pilot data packs.
 - `docs/pilot_readiness_review.md` for the post-PR #62 gap closure review, remaining pilot blockers, and go/no-go checklist.
 - `docs/public_access_https_readiness.md` for the Domain + HTTPS planning checklist before public exposure.
+- `docs/backup_restore_drill.md` for staging backup, temporary restore drill, document storage backup, and rollback procedure.
 - `docs/production_readiness_checklist.md` for Demo/Pilot/Production readiness gates and current blockers.
 - `docs/production_security.md` for production access, demo-mode, tenant isolation, RBAC, and vendor-safe guardrails.
 - `docs/vendor_access.md` for vendor access lifecycle, token handling, revocation, rotation, and vendor-safe data boundaries.

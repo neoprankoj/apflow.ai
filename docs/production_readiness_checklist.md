@@ -62,6 +62,7 @@ Current production blockers:
 - Auth must be enabled and JWT secrets must be non-default.
 - Production secret rotation and operational controls must be finalized.
 - Public DB/Redis/MinIO exposure must be hardened.
+- Backup/restore drill foundation is documented, but scheduled/offsite backups and recent restore evidence are still required for production.
 - Production vendor access is not ready.
 - Notification abstraction and mock delivery exist, but real email/Slack/Teams providers are not configured.
 - Real ERP payment status sync is missing.
@@ -87,6 +88,12 @@ Domain and HTTPS are not connected yet. Public access hardening is still pending
 
 PR #64 adds the planning checklist, Nginx vs Caddy decision framework, public port review, reverse proxy route plan, security header plan, TLS checklist, and rollback criteria in [Public Access / Domain / HTTPS Readiness](public_access_https_readiness.md). It does not change DNS, issue certificates, modify live proxy config, or launch production.
 
+## Backup / Restore / Disaster Recovery Readiness
+
+PR #65 adds the staging backup/restore drill plan and safe helper scripts in [Backup / Restore / Disaster Recovery Drill](backup_restore_drill.md). It documents PostgreSQL backup, temporary restore verification, document storage backup for filesystem and MinIO modes, config inventory, restore verification, and rollback procedure.
+
+Production Ready remains no until scheduled backups, offsite encrypted copies, retention policy, and a recent restore drill are implemented and verified.
+
 ## Operator Rule
 
 Use the Product Readiness Gate in the Admin area before demos, pilots, or production discussions:
@@ -99,6 +106,7 @@ Use the Product Readiness Gate in the Admin area before demos, pilots, or produc
 
 - [Pilot Readiness Review](pilot_readiness_review.md)
 - [Public Access / Domain / HTTPS Readiness](public_access_https_readiness.md)
+- [Backup / Restore / Disaster Recovery Drill](backup_restore_drill.md)
 - [Demo Readiness Pack](demo_readiness_pack.md)
 - [Runbook](runbook.md)
 - [Security](security.md)

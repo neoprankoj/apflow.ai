@@ -54,6 +54,7 @@ Recommendation:
 - [ ] Product Readiness reviewed.
 - [ ] Backup completed.
 - [ ] Restore drill documented or tested.
+- [ ] Backup/restore drill plan reviewed in [Backup / Restore / Disaster Recovery Drill](backup_restore_drill.md).
 - [ ] Public ports reviewed.
 - [ ] Internal service exposure reviewed.
 - [ ] Security headers plan reviewed.
@@ -162,6 +163,7 @@ Before domain cutover:
 
 - [ ] Backup PostgreSQL.
 - [ ] Backup document storage.
+- [ ] Run or review the temporary restore drill in [Backup / Restore / Disaster Recovery Drill](backup_restore_drill.md).
 - [ ] Record current git commit.
 - [ ] Record current Docker images and Compose state.
 - [ ] Test `/health`.
