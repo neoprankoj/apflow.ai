@@ -5,17 +5,19 @@ This checklist prepares APFlow for future Domain + HTTPS by reviewing public por
 ## A. Purpose
 
 - Prepare APFlow for future Domain + HTTPS by reviewing public port exposure.
-- Keep this PR checklist/templates only.
+- Keep firewall changes and public Domain + HTTPS changes out of this PR.
+- Bind staging app/debug ports to localhost through the staging Compose override.
 - Make no live firewall changes.
 - Avoid any command path that could lock out SSH.
 
 ## B. Current Risk Model
 
-- Current staging has several Docker-published ports.
+- Earlier staging checks showed several Docker-published ports bound to all interfaces.
 - Publicly published container ports may be reachable outside the host.
 - UFW alone may not reliably protect Docker-published ports because Docker manipulates iptables/NAT.
-- Desired future model: reverse proxy owns public ingress; app and internal services are bound to localhost or the internal Docker network.
+- Desired model: reverse proxy owns public ingress; app and internal services are bound to localhost or the internal Docker network.
 - UFW and provider firewalls are defense-in-depth, not substitutes for correct Docker bind addresses and reverse proxy topology.
+- PR #68 moves staging Compose bindings for web and API to `127.0.0.1` and removes host publishing for PostgreSQL, Redis, and MinIO. The app still reaches internal services over the Docker network, while Nginx can reach web/API locally.
 
 ## C. Current Inspection Commands
 
@@ -37,19 +39,19 @@ Read-only helper:
 bash scripts/check_public_ports.sh
 ```
 
-## D. Current Expected Public Ports To Review
+## D. Current Expected Ports To Review
 
-Likely current ports to review from staging observations and Compose defaults:
+Ports that were previously observed as publicly bound and must now be checked after PR #68:
 
 - `3000` web.
 - `8000` API.
 - `5432` PostgreSQL.
 - `6379` Redis.
 - `9000` / `9001` MinIO.
-- `80` Nginx/proxy if present.
+- `80` Nginx/proxy if present. This is expected to remain public for current IP-based access.
 - `22` SSH.
 
-The actual list must be confirmed on the VPS with the inspection commands.
+The desired post-PR #68 result is `127.0.0.1` binding for `3000` and `8000`, and no host binding for `5432`, `6379`, `9000`, and `9001`. The actual list must be confirmed on the VPS with the inspection commands.
 
 ## E. Desired Future Public Exposure
 
@@ -70,7 +72,15 @@ Not public:
 
 ## F. Docker Compose Hardening Plan
 
-Future target pattern:
+Current staging target pattern after PR #68:
+
+- Web and API host ports bind to `127.0.0.1`.
+- PostgreSQL, Redis, and MinIO are not host-published.
+- Nginx remains the current public ingress on port `80`.
+- Domain + HTTPS remain deferred.
+- If inspection still shows these service ports on `0.0.0.0` or `[::]`, hardening is incomplete.
+
+Future production/domain target pattern:
 
 - Reverse proxy publishes `80` and `443`.
 - Web service binds to the internal Docker network only, or to `127.0.0.1` if a host proxy needs it.
@@ -194,7 +204,6 @@ No-go if:
 
 - No live firewall changes.
 - No UFW enable/disable.
-- No live Compose behavior changes.
 - No Domain + HTTPS connection.
 - No `.env.staging` changes.
 - No real customer data onboarding.

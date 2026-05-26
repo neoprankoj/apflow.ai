@@ -2,6 +2,8 @@ services:
   api:
     env_file:
       - ${APFLOW_ENV_FILE:-.env.staging.example}
+    ports: !override
+      - "127.0.0.1:8000:8000"
     environment:
       APP_ENV: staging
       USE_IN_MEMORY_REPOSITORIES: "false"
@@ -14,19 +16,24 @@ services:
   web:
     env_file:
       - ${APFLOW_ENV_FILE:-.env.staging.example}
+    ports: !override
+      - "127.0.0.1:3000:3000"
     restart: unless-stopped
 
   postgres:
     env_file:
       - ${APFLOW_ENV_FILE:-.env.staging.example}
+    ports: !override []
     restart: unless-stopped
 
   redis:
+    ports: !override []
     restart: unless-stopped
 
   minio:
     env_file:
       - ${APFLOW_ENV_FILE:-.env.staging.example}
+    ports: !override []
     restart: unless-stopped
 
   caddy:
