@@ -259,6 +259,21 @@ python3 scripts/verify_runtime.py --api-url https://DOMAIN/api --web-url https:/
 
 Use [public_access_https_readiness.md](public_access_https_readiness.md) before applying any domain, TLS, or public proxy change.
 
+## Public Port Inspection
+
+Use the read-only helper before any firewall, proxy, or Domain + HTTPS change:
+
+```bash
+bash scripts/check_public_ports.sh
+sudo ss -tulpn
+sudo ufw status verbose
+docker ps --format 'table {{.Names}}\t{{.Ports}}'
+```
+
+The helper prints Docker services, published ports, listening sockets, UFW status when available, and warnings for internal service ports bound on all interfaces. It does not run `ufw enable`, change firewall rules, or modify iptables.
+
+Full checklist: [public_port_firewall_hardening.md](public_port_firewall_hardening.md).
+
 ## After Demo
 
 Run these checks after the demo:
