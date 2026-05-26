@@ -210,6 +210,27 @@ If staging environment values were changed, recreate the API container so the ne
 APFLOW_ENV_FILE=.env.staging docker compose -f docker-compose.yml -f docker-compose.staging.yml --env-file .env.staging up -d --force-recreate api
 ```
 
+## Pilot Readiness Checkpoint Commands
+
+Run these before any pilot go/no-go review or public access planning session:
+
+```bash
+git log --oneline --max-count=5
+APFLOW_ENV_FILE=.env.staging docker compose -f docker-compose.yml -f docker-compose.staging.yml --env-file .env.staging ps
+curl http://127.0.0.1:8000/health
+curl http://127.0.0.1:8000/ready
+python3 scripts/verify_runtime.py --api-url http://46.101.97.231/api --web-url http://46.101.97.231 --auth-enabled
+docker inspect apflowai-api-1 --format '{{range .Config.Env}}{{println .}}{{end}}' | grep ALLOW_DEMO_RESET
+```
+
+Expected `ALLOW_DEMO_RESET` result:
+
+```text
+ALLOW_DEMO_RESET=false
+```
+
+If the Compose project name changes the API container name, inspect the current API container from `docker compose ps` and run the same environment check against that container. Do not continue a pilot readiness review until `ALLOW_DEMO_RESET=false`, `/health` passes, `/ready` is ready, and the runtime verifier passes.
+
 ## After Demo
 
 Run these checks after the demo:

@@ -217,6 +217,7 @@ Demo materials:
 
 - `docs/demo_readiness_pack.md` for the complete staging demo readiness, walkthrough, safety, and troubleshooting pack.
 - `docs/demo_seed_profiles.md` for repeatable demo and pilot data packs.
+- `docs/pilot_readiness_review.md` for the post-PR #62 gap closure review, remaining pilot blockers, and go/no-go checklist.
 - `docs/production_readiness_checklist.md` for Demo/Pilot/Production readiness gates and current blockers.
 - `docs/production_security.md` for production access, demo-mode, tenant isolation, RBAC, and vendor-safe guardrails.
 - `docs/vendor_access.md` for vendor access lifecycle, token handling, revocation, rotation, and vendor-safe data boundaries.
