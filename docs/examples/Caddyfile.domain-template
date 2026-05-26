@@ -1,0 +1,29 @@
+# Template only. Do not apply without completing docs/public_access_https_readiness.md.
+# Replace example.com with the approved domain during the future domain PR.
+# This template assumes one public domain with the dashboard at / and API under /api/*.
+
+{
+	email ops@example.com
+}
+
+example.com {
+	encode zstd gzip
+
+	# Review headers before enabling in production.
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		X-Frame-Options DENY
+		Permissions-Policy "geolocation=(), microphone=(), camera=()"
+		# Add Strict-Transport-Security only after HTTPS is stable.
+		# Strict-Transport-Security "max-age=31536000; includeSubDomains"
+	}
+
+	handle_path /api/* {
+		reverse_proxy api:8000
+	}
+
+	handle {
+		reverse_proxy web:3000
+	}
+}

@@ -3,6 +3,7 @@
 Use this pack before a private APFlow AI staging demo. It consolidates the operator checklist, AP manager walkthrough, Priority connector walkthrough, and common recovery notes.
 Use [production_readiness_checklist.md](production_readiness_checklist.md) and the Admin Product Readiness Gate when you need to explain why APFlow is demo ready but not yet pilot or production ready.
 Use [pilot_readiness_review.md](pilot_readiness_review.md) before pilot conversations to review closed gaps, remaining blockers, and what not to claim.
+Before any public demo or domain/HTTPS use, follow [public_access_https_readiness.md](public_access_https_readiness.md).
 
 ## A. Demo Purpose
 
@@ -144,6 +145,8 @@ Avoid saying that mock ERP export is a real ERP write. Say: "This proves the exp
 - Demo reset should be disabled after use.
 - Demo seed profiles should be disabled after use by setting `ALLOW_DEMO_RESET=false`.
 - Domain and HTTPS are deferred until real AP-user access and final security hardening are ready.
+- Do not use real customer data before the public access and security checklist is complete.
+- Use seed profiles for demos, then keep `ALLOW_DEMO_RESET=false` after seeding.
 - Do not claim certified e-invoicing, production readiness, real ERP writeback, real Email/Slack/Teams delivery, live billing, or tax-authority submission.
 - Do not paste credentials, API keys, bearer tokens, or invoice PII into public tickets, docs, or chat.
 
