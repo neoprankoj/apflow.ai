@@ -67,6 +67,8 @@ Usage metering now records tenant-scoped activity for invoices, OCR, approvals, 
 
 E-invoicing compliance validation is available as a validation-only foundation. AP managers can check required/recommended invoice fields for starter profiles such as Generic B2B, Israel Basic, EU VAT Basic, and US Basic. APFlow does not submit invoices to any government, tax authority, PEPPOL network, or certified e-invoicing provider; see `docs/compliance_validation.md`.
 
+Demo seed profiles reset a demo tenant into deterministic AP manager, vendor self-service, Priority connector, compliance, analytics-rich, or clean-minimal states. Seeding is admin-only, tenant-scoped, requires `ALLOW_DEMO_RESET=true` plus `SEED_DEMO_PROFILE`, and remains blocked in production; see `docs/demo_seed_profiles.md`.
+
 ## Local Layout
 
 ```text
@@ -214,6 +216,7 @@ The dashboard also includes a guided demo walkthrough for PDF/image upload, extr
 Demo materials:
 
 - `docs/demo_readiness_pack.md` for the complete staging demo readiness, walkthrough, safety, and troubleshooting pack.
+- `docs/demo_seed_profiles.md` for repeatable demo and pilot data packs.
 - `docs/production_readiness_checklist.md` for Demo/Pilot/Production readiness gates and current blockers.
 - `docs/production_security.md` for production access, demo-mode, tenant isolation, RBAC, and vendor-safe guardrails.
 - `docs/vendor_access.md` for vendor access lifecycle, token handling, revocation, rotation, and vendor-safe data boundaries.

@@ -127,6 +127,31 @@ Production additionally requires `AUTH_ENABLED=true` and rejects `DEMO_MODE=true
 
 Never enable demo reset in production. Production settings reject `ALLOW_DEMO_RESET=true` during startup.
 
+## Demo Seed Profiles
+
+Admin -> Demo Seed Profiles provides deterministic tenant data packs for repeatable demos:
+
+- `clean_minimal`
+- `ap_manager_demo`
+- `vendor_self_service_demo`
+- `priority_connector_demo`
+- `compliance_demo`
+- `analytics_rich_demo`
+
+The API endpoints are `GET /admin/demo/seed-profiles` and `POST /admin/demo/seed-profile`. Running a profile requires owner/admin access, `ALLOW_DEMO_RESET=true`, and confirmation text `SEED_DEMO_PROFILE`. The operation is tenant-scoped and blocked in production.
+
+Recommended flow:
+
+1. Set `ALLOW_DEMO_RESET=true` in `.env.staging` on the VPS only.
+2. Recreate the API container.
+3. Run the desired profile from Admin -> Demo Seed Profiles.
+4. Copy any one-time vendor token only if needed for the demo.
+5. Set `ALLOW_DEMO_RESET=false`.
+6. Recreate the API container again.
+7. Run the browser smoke checklist.
+
+Details are in [demo_seed_profiles.md](demo_seed_profiles.md).
+
 ## Demo Operations
 
 For the complete demo readiness flow, use [demo_readiness_pack.md](demo_readiness_pack.md).
@@ -170,6 +195,7 @@ python3 scripts/verify_runtime.py --api-url http://46.101.97.231/api --web-url h
 Confirm before presenting:
 
 - `ALLOW_DEMO_RESET=false` unless you are intentionally resetting.
+- If you need known data, use Admin -> Demo Seed Profiles and the explicit `SEED_DEMO_PROFILE` confirmation.
 - OCR provider is `ocr_space`.
 - OCR.space engine 2 is the recommended staging engine.
 - Priority mode is mock.
@@ -189,6 +215,7 @@ APFLOW_ENV_FILE=.env.staging docker compose -f docker-compose.yml -f docker-comp
 Run these checks after the demo:
 
 - Confirm `ALLOW_DEMO_RESET=false`.
+- Revoke or rotate any vendor token that appeared in screenshots, chat, logs, or docs.
 - Confirm Priority writes are disabled.
 - Confirm no secrets, bearer tokens, OCR keys, or real invoice PII were exposed in screenshots, logs, docs, or chat.
 - Confirm `/health` and `/ready` still pass.

@@ -18,6 +18,9 @@ from app.core.schemas import (
     AuditEventInput,
     CanonicalInvoice,
     CurrentUserContext,
+    DemoSeedProfileRead,
+    DemoSeedRequest,
+    DemoSeedResult,
     HumanReviewFieldIssue,
     HumanReviewStatus,
     HumanReviewTask,
@@ -29,8 +32,42 @@ from app.core.schemas import (
     WorkflowState,
     WorkflowStatus,
 )
+from app.services.demo_seed_service import CONFIRM_TEXT, DemoSeedService
 
 router = APIRouter()
+
+
+@router.get("/demo/seed-profiles", response_model=list[DemoSeedProfileRead])
+def list_demo_seed_profiles(
+    _context: CurrentUserContext = Depends(require_permission(Permission.TENANT_ADMIN)),
+    repository: InMemoryAPRepository = Depends(get_repository),
+) -> list[DemoSeedProfileRead]:
+    return DemoSeedService(repository).list_profiles()
+
+
+@router.post("/demo/seed-profile", response_model=DemoSeedResult)
+def run_demo_seed_profile(
+    request: DemoSeedRequest,
+    context: CurrentUserContext = Depends(require_permission(Permission.TENANT_ADMIN)),
+    repository: InMemoryAPRepository = Depends(get_repository),
+) -> DemoSeedResult:
+    if settings.app_env == "production":
+        raise HTTPException(status_code=403, detail="Demo seed profiles are disabled in production")
+    if not settings.allow_demo_reset:
+        raise HTTPException(status_code=403, detail="Demo seeding is disabled")
+    if request.tenant_id != context.tenant.id:
+        raise HTTPException(status_code=403, detail="Tenant access denied")
+    if request.confirm_text != CONFIRM_TEXT:
+        raise HTTPException(status_code=400, detail=f"Type {CONFIRM_TEXT} to seed this tenant")
+    try:
+        return DemoSeedService(repository).seed_profile(
+            tenant_id=request.tenant_id,
+            profile_key=request.profile_key,
+            actor_id=context.user.email,
+            actor_user_id=context.user.id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.post("/demo/reset")

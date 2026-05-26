@@ -1025,6 +1025,7 @@ class InMemoryAPRepository:
     def clear_demo_operational_data(self, tenant_id: UUID) -> dict[str, int]:
         invoice_ids = {record.invoice_id for record in self.list_invoices(tenant_id)}
         cleared = {
+            "usage_events": sum(record.tenant_id == tenant_id for record in self.usage_events.values()),
             "payment_statuses": sum(record.tenant_id == tenant_id for record in self.payment_statuses.values()),
             "notification_deliveries": sum(
                 record.tenant_id == tenant_id for record in self.notification_deliveries.values()
@@ -1070,6 +1071,11 @@ class InMemoryAPRepository:
         self.payment_statuses = {
             payment_status_id: record
             for payment_status_id, record in self.payment_statuses.items()
+            if record.tenant_id != tenant_id
+        }
+        self.usage_events = {
+            usage_event_id: record
+            for usage_event_id, record in self.usage_events.items()
             if record.tenant_id != tenant_id
         }
         self.approval_tasks = {

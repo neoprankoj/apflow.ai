@@ -12,7 +12,8 @@ Use this script for a private staging demo. Keep the presenter flow deterministi
 6. Confirm demo reset is disabled unless you intentionally enabled `ALLOW_DEMO_RESET=true`.
 7. Confirm Priority mode is mock and Priority writes are disabled.
 8. Confirm the known working invoice PDF is available.
-9. If you need a prepared state, seed it explicitly:
+9. If you need a prepared state, prefer Admin -> Demo Seed Profiles and select one of the documented profiles in [demo_seed_profiles.md](demo_seed_profiles.md).
+10. Older script seed modes are still available when you need a narrow legacy reset:
    - clean: `python scripts/seed_demo_data.py --api-base-url <api-url> --mode clean`
    - approval ready: `python scripts/seed_demo_data.py --api-base-url <api-url> --mode approval-ready`
    - review required: `python scripts/seed_demo_data.py --api-base-url <api-url> --mode review-required`
@@ -173,6 +174,16 @@ If a raw vendor token appears in a screenshot, chat, or support note, rotate or 
 3. Confirm key action messages point to the next step and to Audit Trail proof.
 4. Confirm Priority connector copy separates dry run, import plan, controlled import, and imported records.
 
+## O1. Demo Path 14a - Demo Seed Profiles
+
+1. Open Admin -> Demo Seed Profiles.
+2. Explain that profiles reset only the current tenant and are blocked in production.
+3. Select `Analytics-Rich Demo` for a full dashboard walkthrough or `Clean Minimal` for a live upload demo.
+4. Type `SEED_DEMO_PROFILE`.
+5. Run the seed only when `ALLOW_DEMO_RESET=true` has been temporarily enabled on private staging.
+6. Copy one-time vendor tokens only if needed, then rotate or revoke any token that appears in screenshots or notes.
+7. Disable `ALLOW_DEMO_RESET` again after setup.
+
 ## P. AP User Acceptance Pass
 
 1. Start from the top of the dashboard and confirm the AP manager can identify the next recommended action.
@@ -186,7 +197,7 @@ If a raw vendor token appears in a screenshot, chat, or support note, rotate or 
 ## Q. Demo Cleanup
 
 1. Enable `ALLOW_DEMO_RESET=true` only when needed on private staging.
-2. Use the dashboard reset action or `POST /admin/demo/reset`.
+2. Use Admin -> Demo Seed Profiles for a known profile, or use the dashboard reset action / `POST /admin/demo/reset` for legacy cleanup.
 3. Confirm the response says `Demo data reset successfully.`
 4. Set `ALLOW_DEMO_RESET=false` again.
 5. Restart the API service after changing the staging env file.

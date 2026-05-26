@@ -41,6 +41,7 @@ import { APWorkflowGuide } from "./ap-workflow-guide";
 import { AnalyticsDashboardPanel } from "./analytics-dashboard-panel";
 import { AuditTimeline, type AuditEvent } from "./audit-timeline";
 import { CompliancePanel } from "./compliance-panel";
+import { DemoSeedAdminPanel } from "./demo-seed-admin-panel";
 import { InvoiceUploadPanel } from "./invoice-upload-panel";
 import { NotificationSettingsPanel } from "./notification-settings-panel";
 import { PaymentStatusPanel } from "./payment-status-panel";
@@ -534,6 +535,7 @@ export default function Dashboard() {
     { id: "vendor-portal-preview", label: "Vendor Portal Preview" },
     { id: "vendor-access-admin", label: "Vendor Access" },
     { id: "product-readiness", label: "Readiness" },
+    { id: "demo-seed-profiles", label: "Demo Seeds" },
     { id: "admin", label: "Admin" }
   ];
   const selectedProviderName = selectedOcrProvider?.provider ?? "mock";
@@ -1117,6 +1119,13 @@ export default function Dashboard() {
             accessToken={accessToken}
             apiBaseUrl={apiBaseUrl}
             canAdmin={canAdmin}
+          />
+
+          <DemoSeedAdminPanel
+            accessToken={accessToken}
+            apiBaseUrl={apiBaseUrl}
+            canAdmin={canAdmin}
+            tenantId={tenantId}
           />
 
           <VendorAccessAdmin
