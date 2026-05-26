@@ -2,6 +2,7 @@
 
 Use this pack before a private APFlow AI staging demo. It consolidates the operator checklist, AP manager walkthrough, Priority connector walkthrough, and common recovery notes.
 Use [production_readiness_checklist.md](production_readiness_checklist.md) and the Admin Product Readiness Gate when you need to explain why APFlow is demo ready but not yet pilot or production ready.
+Use [pilot_readiness_review.md](pilot_readiness_review.md) before pilot conversations to review closed gaps, remaining blockers, and what not to claim.
 
 ## A. Demo Purpose
 
@@ -70,6 +71,8 @@ Intentionally disabled or deferred:
 - [ ] Confirm Tenant Session shows Demo Owner / owner / API ready.
 - [ ] Confirm `ALLOW_DEMO_RESET=false` unless a reset is intentionally being performed.
 - [ ] If a seeded state is needed, choose the profile in [demo_seed_profiles.md](demo_seed_profiles.md) before the walkthrough.
+- [ ] Recommended demo profile: use `ap_manager_demo` for the core AP workflow, `vendor_self_service_demo` for vendor access/chatbot, `priority_connector_demo` for Priority, `compliance_demo` for compliance, or `analytics_rich_demo` for metrics-heavy walkthroughs.
+- [ ] After any seed run, set `ALLOW_DEMO_RESET=false`, recreate the API container, and verify the flag before presenting.
 - [ ] Confirm mock ERP export works on an approval-ready invoice.
 - [ ] Confirm Priority mode is mock.
 - [ ] Confirm Priority writes are disabled.
@@ -141,6 +144,7 @@ Avoid saying that mock ERP export is a real ERP write. Say: "This proves the exp
 - Demo reset should be disabled after use.
 - Demo seed profiles should be disabled after use by setting `ALLOW_DEMO_RESET=false`.
 - Domain and HTTPS are deferred until real AP-user access and final security hardening are ready.
+- Do not claim certified e-invoicing, production readiness, real ERP writeback, real Email/Slack/Teams delivery, live billing, or tax-authority submission.
 - Do not paste credentials, API keys, bearer tokens, or invoice PII into public tickets, docs, or chat.
 
 ## G. OCR Troubleshooting

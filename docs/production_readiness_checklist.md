@@ -69,6 +69,14 @@ Current production blockers:
 - Foundational accuracy analytics exist, but advanced SLA, trend, and per-supplier analytics are not production-grade yet.
 - E-invoicing compliance validation foundation exists, but certified e-invoicing submission, PEPPOL, and tax-authority integrations are not connected.
 
+## Status After PR #62
+
+- Demo Ready: yes. The AP manager workflow, Priority safety ladder, payment status, vendor access, chatbot, notifications foundation, analytics, usage metering, compliance validation, seed profiles, and audit proof are available for controlled staging demos.
+- Pilot Ready: partially ready, but not fully ready. The product is pilot-shaped, but real customer use still needs public access hardening, real notification provider configuration, real ERP payment sync planning, customer-specific Priority mapping validation, backup/restore rehearsal, and legal/privacy preparation.
+- Production Ready: no. `APP_ENV` is staging, domain/HTTPS are deferred, demo-mode behavior exists for staging, real billing and certified e-invoicing are not connected, and production monitoring, incident response, and secrets operations remain incomplete.
+
+For the final gap closure review and go/no-go checklist, use [Pilot Readiness Review](pilot_readiness_review.md).
+
 ## Why Domain + HTTPS Is Deferred
 
 Domain + HTTPS should happen after the AP user workflow and access/security posture are ready for real users. Connecting a public domain before pilot/production blockers are resolved can create a false signal that APFlow is production ready.
@@ -83,6 +91,7 @@ Use the Product Readiness Gate in the Admin area before demos, pilots, or produc
 
 ## Related Docs
 
+- [Pilot Readiness Review](pilot_readiness_review.md)
 - [Demo Readiness Pack](demo_readiness_pack.md)
 - [Runbook](runbook.md)
 - [Security](security.md)
