@@ -311,6 +311,8 @@ docker compose exec postgres pg_dump -U apflow -d apflow > apflow-backup.sql
 
 Also back up named Docker volumes or the host volume directory used for document storage.
 
+For the complete non-destructive staging backup and restore drill, use [backup_restore_drill.md](backup_restore_drill.md).
+
 For staging, use the checked helper:
 
 ```powershell
@@ -318,6 +320,13 @@ bash scripts/backup_postgres.sh
 bash scripts/restore_postgres.sh backups/apflow-20260507T120000Z.sql
 # destructive restore only after reviewing the dry run
 bash scripts/restore_postgres.sh backups/apflow-20260507T120000Z.sql --yes
+```
+
+For the custom-format backup and temporary restore drill helpers:
+
+```powershell
+bash scripts/backup_staging.sh
+bash scripts/restore_drill_staging.sh backups/apflow-postgres-YYYYMMDDTHHMMSSZ.dump
 ```
 
 ## Runtime Modes

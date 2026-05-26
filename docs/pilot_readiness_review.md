@@ -85,7 +85,7 @@ APFlow must not be claimed as production-ready while these remain true:
 Recommended next work:
 
 1. PR #64 - Public Access / Domain / HTTPS Readiness Plan. This is a planning, checklist, and template PR only.
-2. PR #65 - Backup / Restore / Disaster Recovery Drill.
+2. PR #65 - Backup / Restore / Disaster Recovery Drill. This should prove a non-destructive staging restore path before public access work.
 3. PR #66 - Real Notification Provider Configuration Gate.
 4. PR #67 - Customer-Specific Priority Mapping Pilot Checklist.
 5. PR #68 - Real ERP Payment Sync Read-Only Foundation.
