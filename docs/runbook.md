@@ -306,7 +306,7 @@ docker compose down -v
 Back up PostgreSQL before upgrades:
 
 ```powershell
-docker compose exec postgres pg_dump -U apflow -d apflow > apflow-backup.sql
+bash scripts/backup_staging.sh
 ```
 
 Also back up named Docker volumes or the host volume directory used for document storage.
@@ -328,6 +328,13 @@ For the custom-format backup and temporary restore drill helpers:
 bash scripts/backup_staging.sh
 bash scripts/restore_drill_staging.sh backups/apflow-postgres-YYYYMMDDTHHMMSSZ.dump
 ```
+
+Staging drill note:
+
+- A manual drill after PR #65 verified that `psql -U app_user -d apflow` is the working database identity even when the container environment reports `POSTGRES_USER=apflow`.
+- A custom-format backup with `pg_dump -U app_user -d apflow -Fc` produced a valid non-empty dump.
+- A temporary restore database `apflow_restore_drill_*` restored successfully, listed 25 tables, and was dropped.
+- `/health` and `/ready` remained OK after the drill.
 
 ## Runtime Modes
 
