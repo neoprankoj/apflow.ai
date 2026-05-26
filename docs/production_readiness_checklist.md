@@ -81,6 +81,12 @@ For the final gap closure review and go/no-go checklist, use [Pilot Readiness Re
 
 Domain + HTTPS should happen after the AP user workflow and access/security posture are ready for real users. Connecting a public domain before pilot/production blockers are resolved can create a false signal that APFlow is production ready.
 
+## Public Access / Domain / HTTPS Readiness
+
+Domain and HTTPS are not connected yet. Public access hardening is still pending, and Production Ready remains no.
+
+PR #64 adds the planning checklist, Nginx vs Caddy decision framework, public port review, reverse proxy route plan, security header plan, TLS checklist, and rollback criteria in [Public Access / Domain / HTTPS Readiness](public_access_https_readiness.md). It does not change DNS, issue certificates, modify live proxy config, or launch production.
+
 ## Operator Rule
 
 Use the Product Readiness Gate in the Admin area before demos, pilots, or production discussions:
@@ -92,6 +98,7 @@ Use the Product Readiness Gate in the Admin area before demos, pilots, or produc
 ## Related Docs
 
 - [Pilot Readiness Review](pilot_readiness_review.md)
+- [Public Access / Domain / HTTPS Readiness](public_access_https_readiness.md)
 - [Demo Readiness Pack](demo_readiness_pack.md)
 - [Runbook](runbook.md)
 - [Security](security.md)

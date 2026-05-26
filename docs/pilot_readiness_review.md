@@ -84,7 +84,7 @@ APFlow must not be claimed as production-ready while these remain true:
 
 Recommended next work:
 
-1. PR #64 - Public Access / Domain / HTTPS Readiness Plan.
+1. PR #64 - Public Access / Domain / HTTPS Readiness Plan. This is a planning, checklist, and template PR only.
 2. PR #65 - Backup / Restore / Disaster Recovery Drill.
 3. PR #66 - Real Notification Provider Configuration Gate.
 4. PR #67 - Customer-Specific Priority Mapping Pilot Checklist.
@@ -92,7 +92,7 @@ Recommended next work:
 6. PR #69 - Legal / Privacy / Data Handling Pack.
 7. PR #70 - Domain + HTTPS Deployment.
 
-Domain + HTTPS should not be PR #64 unless the security docs and operator checklist say the app is ready for public exposure. PR #64 should prepare the access plan and hardening checklist, not flip public production access.
+Domain + HTTPS remains later. PR #64 should prepare the access plan and hardening checklist, not flip public production access.
 
 ## G. Go / No-Go Checklist For Pilot
 

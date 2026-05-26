@@ -231,6 +231,34 @@ ALLOW_DEMO_RESET=false
 
 If the Compose project name changes the API container name, inspect the current API container from `docker compose ps` and run the same environment check against that container. Do not continue a pilot readiness review until `ALLOW_DEMO_RESET=false`, `/health` passes, `/ready` is ready, and the runtime verifier passes.
 
+## Public Exposure Preflight Commands
+
+Run these before changing DNS, proxy config, firewall rules, or HTTPS settings:
+
+```bash
+git log --oneline --max-count=5
+docker compose ps
+curl http://127.0.0.1:8000/health
+curl http://127.0.0.1:8000/ready
+sudo ss -tulpn
+sudo ufw status verbose
+docker inspect apflowai-api-1 --format '{{range .Config.Env}}{{println .}}{{end}}' | grep ALLOW_DEMO_RESET
+```
+
+Expected `ALLOW_DEMO_RESET` result:
+
+```text
+ALLOW_DEMO_RESET=false
+```
+
+Future HTTPS verifier template:
+
+```bash
+python3 scripts/verify_runtime.py --api-url https://DOMAIN/api --web-url https://DOMAIN --auth-enabled
+```
+
+Use [public_access_https_readiness.md](public_access_https_readiness.md) before applying any domain, TLS, or public proxy change.
+
 ## After Demo
 
 Run these checks after the demo:
