@@ -61,8 +61,8 @@ Current production blockers:
 - Demo reset must be disabled for production.
 - Auth must be enabled and JWT secrets must be non-default.
 - Production secret rotation and operational controls must be finalized.
-- Public DB/Redis/MinIO exposure must be hardened.
-- Public port/firewall hardening checklist exists, but direct internal service exposure still must be remediated before production.
+- Public DB/Redis/MinIO exposure must remain hardened and verified before any production launch.
+- Public port/firewall hardening checklist exists, and staging Compose is expected to bind app/internal service ports to localhost. External verification is still required before production.
 - Backup/restore drill foundation is documented, but scheduled/offsite backups and recent restore evidence are still required for production.
 - Production vendor access is not ready.
 - Notification abstraction and mock delivery exist, but real email/Slack/Teams providers are not configured.
@@ -89,7 +89,9 @@ Domain and HTTPS are not connected yet. Public access hardening is still pending
 
 PR #64 adds the planning checklist, Nginx vs Caddy decision framework, public port review, reverse proxy route plan, security header plan, TLS checklist, and rollback criteria in [Public Access / Domain / HTTPS Readiness](public_access_https_readiness.md). It does not change DNS, issue certificates, modify live proxy config, or launch production.
 
-PR #67 adds [Public Port / Firewall Hardening Checklist](public_port_firewall_hardening.md) and a read-only `scripts/check_public_ports.sh` helper. It does not change live firewall rules or Compose port bindings.
+PR #67 adds [Public Port / Firewall Hardening Checklist](public_port_firewall_hardening.md) and a read-only `scripts/check_public_ports.sh` helper.
+
+PR #68 updates staging Compose bindings so web/API are expected to bind to `127.0.0.1` and PostgreSQL, Redis, and MinIO are not host-published. Nginx remains the current public ingress on port `80`; Domain + HTTPS and firewall changes remain deferred.
 
 ## Backup / Restore / Disaster Recovery Readiness
 

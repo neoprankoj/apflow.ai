@@ -270,7 +270,7 @@ sudo ufw status verbose
 docker ps --format 'table {{.Names}}\t{{.Ports}}'
 ```
 
-The helper prints Docker services, published ports, listening sockets, UFW status when available, and warnings for internal service ports bound on all interfaces. It does not run `ufw enable`, change firewall rules, or modify iptables.
+The helper prints Docker services, published ports, listening sockets, UFW status when available, warnings for internal service ports bound on all interfaces, and OK lines for localhost-only bindings. After PR #68, ports `3000` and `8000` should be `127.0.0.1` only, while `5432`, `6379`, `9000`, and `9001` should not be host-published. It does not run `ufw enable`, change firewall rules, or modify iptables.
 
 Full checklist: [public_port_firewall_hardening.md](public_port_firewall_hardening.md).
 

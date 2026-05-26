@@ -88,13 +88,14 @@ Recommended next work:
 2. PR #65 - Backup / Restore / Disaster Recovery Drill. This should prove a non-destructive staging restore path before public access work.
 3. PR #66 - Backup / Restore Scripts DB Role Detection Fix.
 4. PR #67 - Public Port / Firewall Hardening Checklist.
-5. PR #68 - Real Notification Provider Configuration Gate.
-6. PR #69 - Customer-Specific Priority Mapping Pilot Checklist.
-7. PR #70 - Real ERP Payment Sync Read-Only Foundation.
-8. Later - Legal / Privacy / Data Handling Pack.
-9. Later - Domain + HTTPS Deployment.
+5. PR #68 - Localhost-Only Service Binding / Compose Hardening.
+6. Later - Real Notification Provider Configuration Gate.
+7. Later - Customer-Specific Priority Mapping Pilot Checklist.
+8. Later - Real ERP Payment Sync Read-Only Foundation.
+9. Later - Legal / Privacy / Data Handling Pack.
+10. Later - Domain + HTTPS Deployment.
 
-Domain + HTTPS remains later. PR #64 and PR #67 prepare access and firewall hardening checklists; they do not flip public production access.
+Domain + HTTPS remains later. PR #64 and PR #67 prepare access and firewall hardening checklists. PR #68 hardens staging Compose bind addresses, but it does not flip public production access or connect HTTPS.
 
 ## G. Go / No-Go Checklist For Pilot
 

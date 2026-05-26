@@ -16,7 +16,7 @@ This PR does not change DNS, issue certificates, alter live proxy config, or mod
 - Staging is served by public IP today.
 - If Nginx is currently serving the public web route on the VPS, verify it explicitly before changing anything. This repo also includes optional Caddy proxy templates under `deploy/`.
 - Docker Compose services include API, web, PostgreSQL, Redis, and MinIO.
-- The base Compose file publishes development-friendly container ports for API, web, PostgreSQL, Redis, and MinIO. Before public Domain + HTTPS, confirm the VPS firewall or proxy topology prevents direct public access to internal services.
+- The base Compose file publishes development-friendly container ports for API, web, PostgreSQL, Redis, and MinIO. The staging Compose override is expected to bind web/API to `127.0.0.1` for host-level Nginx and remove host publishing for PostgreSQL, Redis, and MinIO.
 - Product Readiness should still show Production Ready: no.
 - Priority writes remain disabled.
 - `ALLOW_DEMO_RESET` should be false after seed testing.
@@ -90,7 +90,7 @@ sudo ss -tulpn
 sudo ufw status verbose
 ```
 
-If any internal service is reachable publicly, stop the domain cutover and fix firewall/proxy exposure first. PR #67 adds the checklist and read-only inspection helper only; it does not change live firewall rules.
+If any internal service is reachable publicly, stop the domain cutover and fix firewall/proxy exposure first. PR #67 added the checklist and read-only inspection helper. PR #68 hardens staging Compose bind addresses but does not change live firewall rules.
 
 ## F. Reverse Proxy Route Plan
 
