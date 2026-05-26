@@ -24,6 +24,7 @@ This drill defines the recovery path APFlow should prove before Domain + HTTPS o
 ## C. Current Storage Assumptions
 
 - PostgreSQL container service is `postgres`.
+- The active database role may differ from `POSTGRES_USER` if the Docker volume was initialized before the current Compose env. The staging drill verified `app_user` against database `apflow`.
 - Document storage provider may be filesystem or MinIO depending runtime configuration.
 - `DOCUMENT_STORAGE_PROVIDER` and `DOCUMENT_STORAGE_PATH` must be checked from the running API environment.
 - MinIO may be available even when the app uses filesystem document storage.
@@ -46,13 +47,23 @@ Preferred helper:
 scripts/backup_staging.sh
 ```
 
+The helper defaults to `app_user` / `apflow`, not `POSTGRES_USER`, because `POSTGRES_USER` can reflect current container env rather than the role that exists in an already-initialized database volume.
+
+Safe overrides:
+
+```bash
+APFLOW_BACKUP_DB_USER=app_user APFLOW_BACKUP_DB_NAME=apflow scripts/backup_staging.sh
+```
+
 Manual custom-format dump:
 
 ```bash
 mkdir -p backups
 BACKUP_TS=$(date -u +"%Y%m%dT%H%M%SZ")
 APFLOW_ENV_FILE=.env.staging docker compose -f docker-compose.yml -f docker-compose.staging.yml --env-file .env.staging exec -T postgres sh -lc \
-  'pg_dump -U "${POSTGRES_USER:-apflow}" -d "${POSTGRES_DB:-apflow}" -Fc' \
+  'psql -U app_user -d apflow -v ON_ERROR_STOP=1 -c "select current_user, current_database();"'
+APFLOW_ENV_FILE=.env.staging docker compose -f docker-compose.yml -f docker-compose.staging.yml --env-file .env.staging exec -T postgres sh -lc \
+  'pg_dump -U app_user -d apflow -Fc' \
   > "backups/apflow-postgres-${BACKUP_TS}.dump"
 ```
 
@@ -82,6 +93,8 @@ Preferred helper:
 scripts/restore_drill_staging.sh backups/apflow-postgres-YYYYMMDDTHHMMSSZ.dump
 ```
 
+The restore drill helper uses the same `APFLOW_BACKUP_DB_USER` and `APFLOW_BACKUP_DB_NAME` overrides. It rejects missing or 0-byte backup files before creating the temporary database, and it refuses to use the active DB name as the restore target.
+
 Manual drill outline:
 
 ```bash
@@ -89,21 +102,46 @@ BACKUP_TS=$(date -u +"%Y%m%dT%H%M%SZ")
 RESTORE_DB="apflow_restore_drill_${BACKUP_TS}"
 
 APFLOW_ENV_FILE=.env.staging docker compose -f docker-compose.yml -f docker-compose.staging.yml --env-file .env.staging exec -T postgres sh -lc \
-  'createdb -U "${POSTGRES_USER:-apflow}" "$1"' sh "$RESTORE_DB"
+  'createdb -U app_user "$1"' sh "$RESTORE_DB"
 
 cat "backups/apflow-postgres-${BACKUP_TS}.dump" | APFLOW_ENV_FILE=.env.staging docker compose -f docker-compose.yml -f docker-compose.staging.yml --env-file .env.staging exec -T postgres sh -lc \
-  'pg_restore -U "${POSTGRES_USER:-apflow}" -d "$1"' sh "$RESTORE_DB"
+  'pg_restore -U app_user -d "$1"' sh "$RESTORE_DB"
 
 APFLOW_ENV_FILE=.env.staging docker compose -f docker-compose.yml -f docker-compose.staging.yml --env-file .env.staging exec -T postgres sh -lc \
-  'psql -U "${POSTGRES_USER:-apflow}" -d "$1" -c "\dt"' sh "$RESTORE_DB"
+  'psql -U app_user -d "$1" -c "\dt"' sh "$RESTORE_DB"
 
 APFLOW_ENV_FILE=.env.staging docker compose -f docker-compose.yml -f docker-compose.staging.yml --env-file .env.staging exec -T postgres sh -lc \
-  'dropdb -U "${POSTGRES_USER:-apflow}" "$1"' sh "$RESTORE_DB"
+  'dropdb -U app_user "$1"' sh "$RESTORE_DB"
 ```
 
 If you need to inspect the temporary DB after a failed drill, rerun the helper with `KEEP_RESTORE_DB=true` and drop it manually after review.
 
-## F. Document Storage Backup
+## F. Troubleshooting Database Roles
+
+Symptom:
+
+```text
+pg_dump: FATAL: role "apflow" does not exist
+```
+
+Cause:
+
+- The Postgres container environment may show `POSTGRES_USER=apflow`, but an existing database volume can retain the role/database that were created earlier.
+- On staging, the working role/database were verified manually as `app_user` / `apflow`.
+
+Fix:
+
+- Use the current helper defaults, which are `app_user` / `apflow`.
+- If a future environment uses another role or DB name, set:
+
+```bash
+APFLOW_BACKUP_DB_USER=actual_user APFLOW_BACKUP_DB_NAME=actual_db scripts/backup_staging.sh
+APFLOW_BACKUP_DB_USER=actual_user APFLOW_BACKUP_DB_NAME=actual_db scripts/restore_drill_staging.sh backups/apflow-postgres-YYYYMMDDTHHMMSSZ.dump
+```
+
+If a backup command produces a 0-byte dump, treat it as invalid and delete it. The helper scripts now remove incomplete dump files on `pg_dump` failure and reject empty backup files before restore drills.
+
+## G. Document Storage Backup
 
 Handle both document storage modes.
 
@@ -135,7 +173,7 @@ mc mirror apflow-minio/BUCKET "backups/minio-BUCKET-${BACKUP_TS}/"
 
 Use server-only environment values or secure shell history practices for real credentials.
 
-## G. Config / State Inventory
+## H. Config / State Inventory
 
 Record enough state to reproduce or roll back a deployment:
 
@@ -158,7 +196,7 @@ sudo caddy validate --config /path/to/Caddyfile
 
 Do not commit generated backup inventories because they may contain environment-derived paths or operational details.
 
-## H. Restore Verification Checklist
+## I. Restore Verification Checklist
 
 After a restore drill or real restore:
 
@@ -173,7 +211,7 @@ After a restore drill or real restore:
 - [ ] Payment statuses exist if expected.
 - [ ] Usage, analytics, and compliance panels load.
 
-## I. Disaster Rollback Checklist
+## J. Disaster Rollback Checklist
 
 - [ ] Record current git commit before deploy.
 - [ ] Restore previous git commit if code rollback is needed.
@@ -187,7 +225,7 @@ After a restore drill or real restore:
 
 Code rollback does not automatically roll back database migrations. Inspect migration history before restoring an older application version.
 
-## J. Frequency Recommendation
+## K. Frequency Recommendation
 
 For staging:
 
@@ -204,7 +242,7 @@ For future production:
 - Periodic restore drill.
 - Retention policy.
 
-## K. What This PR Does Not Do
+## L. What This PR Does Not Do
 
 - No real scheduled backups.
 - No cloud backup provider.

@@ -91,7 +91,7 @@ Do **not** run `docker system prune --volumes` on staging unless you intentional
 
 ## D. PostgreSQL backup
 
-Current Compose defaults are `POSTGRES_USER=apflow` and `POSTGRES_DB=apflow`. Confirm them against `.env.staging` before using manual commands.
+The initialized staging database role can differ from `POSTGRES_USER` in the current container environment. A post-PR #65 drill verified `app_user` / `apflow` as the working staging backup identity. Confirm the working role with `psql` before using manual commands, or use the checked helper.
 
 Manual dump:
 
@@ -102,16 +102,16 @@ APFLOW_ENV_FILE=.env.staging docker compose \
   -f docker-compose.yml \
   -f docker-compose.staging.yml \
   --env-file .env.staging exec -T postgres \
-  pg_dump -U apflow -d apflow --clean --if-exists > "backups/apflow_${timestamp}.sql"
+  sh -lc 'pg_dump -U app_user -d apflow -Fc' > "backups/apflow-postgres-${timestamp}.dump"
 ```
 
 Preferred helper already in the repo:
 
 ```bash
-scripts/backup_postgres.sh
+scripts/backup_staging.sh
 ```
 
-The helper creates a timestamped dump, fails on an empty file, and prints the resulting file size.
+The helper creates a timestamped custom-format dump, verifies the database connection first, deletes incomplete dump files on failure, fails on an empty file, and prints the resulting file size.
 
 ## E. PostgreSQL restore
 
@@ -127,19 +127,25 @@ APFLOW_ENV_FILE=.env.staging docker compose \
   --env-file .env.staging stop api web
 ```
 
-3. Dry-run the checked helper:
+3. Prefer the non-destructive temporary restore drill before any destructive restore:
+
+```bash
+scripts/restore_drill_staging.sh backups/apflow-postgres-YYYYMMDDTHHMMSSZ.dump
+```
+
+4. Dry-run the destructive checked helper only if a real restore is required:
 
 ```bash
 scripts/restore_postgres.sh backups/apflow-YYYYMMDDTHHMMSSZ.sql
 ```
 
-4. Perform the destructive restore only after review:
+5. Perform the destructive restore only after review:
 
 ```bash
 scripts/restore_postgres.sh backups/apflow-YYYYMMDDTHHMMSSZ.sql --yes
 ```
 
-5. Re-run readiness and runtime verification after services restart.
+6. Re-run readiness and runtime verification after services restart.
 
 ## F. Document storage backup
 
