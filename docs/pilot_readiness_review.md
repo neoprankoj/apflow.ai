@@ -60,7 +60,7 @@ The app is pilot-shaped, but real customer pilot use is still blocked by:
 - Billing provider is not connected.
 - Certified e-invoicing or tax-authority submission is not implemented.
 - Backup/restore drill should be repeated before pilot.
-- Monitoring and log retention are still basic.
+- Operations health script exists, but external uptime/alert provider, log retention, and scheduled/offsite backup monitoring are still future work.
 - Legal, privacy, and customer data handling drafts exist, but qualified counsel review and customer-specific terms are still required.
 
 ## E. Current Production-Readiness Blockers
@@ -94,9 +94,10 @@ Recommended next work:
 8. Later - Customer-Specific Priority Mapping Pilot Checklist.
 9. Later - Real ERP Payment Sync Read-Only Foundation.
 10. PR #70 - Legal / Privacy / Data Handling Pack.
-11. Later - Domain + HTTPS Deployment.
+11. PR #71 - Monitoring / Operations Health Foundation.
+12. Later - Domain + HTTPS Deployment.
 
-Domain + HTTPS remains later. PR #64 and PR #67 prepare access and firewall hardening checklists. PR #68 hardens staging Compose bind addresses. PR #69 adds reverse proxy and security-header planning/templates. PR #70 adds legal/privacy/data-handling draft documents, but it does not create lawyer-approved terms, claim compliance, flip public production access, connect HTTPS, issue certificates, or change live behavior.
+Domain + HTTPS remains later. PR #64 and PR #67 prepare access and firewall hardening checklists. PR #68 hardens staging Compose bind addresses. PR #69 adds reverse proxy and security-header planning/templates. PR #70 adds legal/privacy/data-handling draft documents. PR #71 adds read-only staging operations health checks, but it does not connect external monitoring, alerting, log aggregation, HTTPS, or live infrastructure changes.
 
 ## G. Go / No-Go Checklist For Pilot
 
@@ -105,6 +106,7 @@ Domain + HTTPS remains later. PR #64 and PR #67 prepare access and firewall hard
 - [ ] Product Readiness reviewed.
 - [ ] Backup completed.
 - [ ] Restore tested or documented.
+- [ ] Operations health check reviewed.
 - [ ] Security guardrails reviewed.
 - [ ] Vendor access tested.
 - [ ] Vendor chatbot tested.

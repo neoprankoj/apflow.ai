@@ -55,6 +55,8 @@ Recommendation:
 - [ ] Legal/privacy/data handling draft pack reviewed in [Legal / Privacy / Data Handling Pack](legal_privacy_data_pack.md).
 - [ ] Counsel review completed before real customer pilot data or customer-facing legal terms.
 - [ ] Backup completed.
+- [ ] Operations health check run with `bash scripts/check_operations_health.sh http://46.101.97.231`.
+- [ ] Backup age acceptable for Domain + HTTPS work.
 - [ ] Restore drill documented or tested.
 - [ ] Backup/restore drill plan reviewed in [Backup / Restore / Disaster Recovery Drill](backup_restore_drill.md).
 - [ ] Public ports reviewed.
@@ -88,6 +90,7 @@ Inspection commands:
 ```bash
 bash scripts/check_public_ports.sh
 bash scripts/check_reverse_proxy.sh
+bash scripts/check_operations_health.sh http://46.101.97.231
 docker compose ps
 sudo ss -tulpn
 sudo ufw status verbose
@@ -186,6 +189,7 @@ Go only if:
 - [ ] Product Readiness reviewed.
 - [ ] Demo reset off.
 - [ ] Backups complete.
+- [ ] Operations health check passes or warnings are understood.
 - [ ] Direct internal ports closed or explicitly protected.
 - [ ] HTTPS config tested.
 - [ ] Runtime verifier passes through HTTPS.

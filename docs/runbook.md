@@ -247,6 +247,30 @@ Before any real customer pilot or real customer document upload:
 
 Do not claim production readiness, GDPR/SOC 2/ISO compliance, certified e-invoicing, tax authority submission, real billing, or real notification delivery from these draft documents.
 
+## Operations Health Check
+
+Use the read-only operations health helper before demos, risky changes, Domain + HTTPS work, or pilot data import:
+
+```bash
+bash -n scripts/check_operations_health.sh
+bash scripts/check_operations_health.sh http://46.101.97.231
+python3 scripts/verify_runtime.py --api-url http://46.101.97.231/api --web-url http://46.101.97.231 --auth-enabled
+```
+
+The helper checks Docker Compose service status, local API health/readiness, optional public proxy health, PostgreSQL readiness, disk usage, Docker disk usage, backup freshness, `ALLOW_DEMO_RESET`, public port exposure, and reverse proxy status. It does not restart services, delete files, prune Docker resources, change firewall rules, reload proxy config, issue certificates, send alerts, or print secrets.
+
+Troubleshooting:
+
+- API unhealthy: check `docker compose ps`, then API logs with `APFLOW_ENV_FILE=.env.staging docker compose -f docker-compose.yml -f docker-compose.staging.yml --env-file .env.staging logs api --tail=120`.
+- Web not reachable: check web container status and logs with the same Compose files.
+- Backup stale or missing: run the backup flow before risky work; repeat the restore drill before real customer pilot data.
+- Disk high: inspect `df -h /` and `docker system df`; do not delete data or prune Docker until a current backup exists and the cleanup plan is understood.
+- `ALLOW_DEMO_RESET=true`: set it back to false on the VPS, recreate the API container, and recheck before demos or pilot review.
+- Public port exposure warning: stop Domain + HTTPS work and review [public_port_firewall_hardening.md](public_port_firewall_hardening.md).
+- Reverse proxy warning: review [reverse_proxy_security_hardening.md](reverse_proxy_security_hardening.md) and validate Nginx before reload.
+
+Full checklist: [operations_health.md](operations_health.md).
+
 ## Public Exposure Preflight Commands
 
 Run these before changing DNS, proxy config, firewall rules, or HTTPS settings:
