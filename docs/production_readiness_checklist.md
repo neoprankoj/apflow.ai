@@ -45,6 +45,7 @@ Current pilot blockers:
 - Foundational accuracy and exception analytics exist, but SLA trends and advanced operational reporting are still missing.
 - Usage metering foundation exists, but real billing provider, subscriptions, invoices, and overage policy are not connected.
 - Pilot data packs exist for repeatable demos and QA, but real customer onboarding data governance is still needed.
+- Draft legal/privacy/data-handling docs exist, but qualified counsel review and customer-specific terms are still required.
 - Real customer Priority mapping/write flow is not live.
 
 ### Production Ready
@@ -95,6 +96,16 @@ PR #68 updates staging Compose bindings so web/API are expected to bind to `127.
 
 PR #69 adds [Reverse Proxy Security Hardening](reverse_proxy_security_hardening.md), updated Nginx/Caddy templates, and a read-only reverse proxy inspection helper. It does not change live proxy config, connect Domain + HTTPS, issue certificates, or make Production Ready pass.
 
+## Legal / Privacy / Data Handling Readiness
+
+PR #70 adds draft legal/privacy/data-handling materials:
+
+- [Legal / Privacy / Data Handling Pack](legal_privacy_data_pack.md)
+- [Customer Data Handling Summary](customer_data_handling_summary.md)
+- [Pilot Terms Outline](pilot_terms_outline.md)
+
+These documents are operational readiness drafts only. They are not legal advice, not lawyer-approved terms, not a DPA, not a production SLA, and not a GDPR/SOC 2/ISO compliance claim. Production Ready remains no until counsel review, customer contracts, DPA terms, retention/deletion processes, monitoring, backups, and production access controls are finalized.
+
 ## Backup / Restore / Disaster Recovery Readiness
 
 PR #65 adds the staging backup/restore drill plan and safe helper scripts in [Backup / Restore / Disaster Recovery Drill](backup_restore_drill.md). It documents PostgreSQL backup, temporary restore verification, document storage backup for filesystem and MinIO modes, config inventory, restore verification, and rollback procedure.
@@ -115,6 +126,9 @@ Use the Product Readiness Gate in the Admin area before demos, pilots, or produc
 - [Public Access / Domain / HTTPS Readiness](public_access_https_readiness.md)
 - [Public Port / Firewall Hardening Checklist](public_port_firewall_hardening.md)
 - [Reverse Proxy Security Hardening](reverse_proxy_security_hardening.md)
+- [Legal / Privacy / Data Handling Pack](legal_privacy_data_pack.md)
+- [Customer Data Handling Summary](customer_data_handling_summary.md)
+- [Pilot Terms Outline](pilot_terms_outline.md)
 - [Backup / Restore / Disaster Recovery Drill](backup_restore_drill.md)
 - [Demo Readiness Pack](demo_readiness_pack.md)
 - [Runbook](runbook.md)

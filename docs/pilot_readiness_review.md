@@ -6,7 +6,7 @@ This review is the post-PR #62 checkpoint for APFlow's demo, pilot, and producti
 
 APFlow is now demo-ready and pilot-shaped. The private staging app can demonstrate the end-to-end AP manager workflow, vendor-safe self-service, payment-status visibility, analytics, usage metering, compliance validation, Priority connector safety gates, deterministic seed profiles, and audit proof.
 
-APFlow is not production-ready yet. Pilot readiness still requires public access hardening, operational checks, real provider gates, customer-specific ERP validation, and legal/privacy preparation.
+APFlow is not production-ready yet. Pilot readiness still requires public access hardening, operational checks, real provider gates, customer-specific ERP validation, and counsel-reviewed legal/privacy preparation.
 
 Domain + HTTPS remain intentionally deferred. They should be connected only after final access/public exposure hardening confirms the app is safe to place behind a real customer-facing URL.
 
@@ -61,7 +61,7 @@ The app is pilot-shaped, but real customer pilot use is still blocked by:
 - Certified e-invoicing or tax-authority submission is not implemented.
 - Backup/restore drill should be repeated before pilot.
 - Monitoring and log retention are still basic.
-- Legal, privacy, and customer data handling docs likely still need completion.
+- Legal, privacy, and customer data handling drafts exist, but qualified counsel review and customer-specific terms are still required.
 
 ## E. Current Production-Readiness Blockers
 
@@ -93,10 +93,10 @@ Recommended next work:
 7. Later - Real Notification Provider Configuration Gate.
 8. Later - Customer-Specific Priority Mapping Pilot Checklist.
 9. Later - Real ERP Payment Sync Read-Only Foundation.
-10. Later - Legal / Privacy / Data Handling Pack.
+10. PR #70 - Legal / Privacy / Data Handling Pack.
 11. Later - Domain + HTTPS Deployment.
 
-Domain + HTTPS remains later. PR #64 and PR #67 prepare access and firewall hardening checklists. PR #68 hardens staging Compose bind addresses. PR #69 adds reverse proxy and security-header planning/templates, but it does not flip public production access, connect HTTPS, issue certificates, or change live proxy config.
+Domain + HTTPS remains later. PR #64 and PR #67 prepare access and firewall hardening checklists. PR #68 hardens staging Compose bind addresses. PR #69 adds reverse proxy and security-header planning/templates. PR #70 adds legal/privacy/data-handling draft documents, but it does not create lawyer-approved terms, claim compliance, flip public production access, connect HTTPS, issue certificates, or change live behavior.
 
 ## G. Go / No-Go Checklist For Pilot
 
@@ -111,6 +111,7 @@ Domain + HTTPS remains later. PR #64 and PR #67 prepare access and firewall hard
 - [ ] Mock notifications tested.
 - [ ] Priority writes disabled unless explicitly approved.
 - [ ] Customer data boundaries confirmed.
+- [ ] Legal/privacy/data handling pack reviewed with counsel before real customer data.
 - [ ] Domain/HTTPS status confirmed.
 - [ ] Pilot limitations explained to the customer.
 
@@ -119,6 +120,8 @@ Domain + HTTPS remains later. PR #64 and PR #67 prepare access and firewall hard
 Do not claim:
 
 - APFlow is production-ready.
+- APFlow legal/privacy documents are lawyer-reviewed.
+- APFlow is GDPR/SOC 2/ISO certified.
 - APFlow is certified for e-invoicing.
 - APFlow performs real ERP writeback until tested and approved for the customer tenant.
 - APFlow sends real Email, Slack, or Teams notifications yet.

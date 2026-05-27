@@ -52,6 +52,8 @@ Recommendation:
 - [ ] DNS A record points to the VPS IP only when ready.
 - [ ] `ALLOW_DEMO_RESET=false`.
 - [ ] Product Readiness reviewed.
+- [ ] Legal/privacy/data handling draft pack reviewed in [Legal / Privacy / Data Handling Pack](legal_privacy_data_pack.md).
+- [ ] Counsel review completed before real customer pilot data or customer-facing legal terms.
 - [ ] Backup completed.
 - [ ] Restore drill documented or tested.
 - [ ] Backup/restore drill plan reviewed in [Backup / Restore / Disaster Recovery Drill](backup_restore_drill.md).
@@ -209,6 +211,7 @@ No-go if:
 - No real certificate issuance.
 - No production launch.
 - No real customer data onboarding.
+- No legal/compliance certification claim.
 - No live proxy changes.
 - No `.env.staging` changes.
 - No real Priority writes.
