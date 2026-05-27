@@ -231,6 +231,22 @@ ALLOW_DEMO_RESET=false
 
 If the Compose project name changes the API container name, inspect the current API container from `docker compose ps` and run the same environment check against that container. Do not continue a pilot readiness review until `ALLOW_DEMO_RESET=false`, `/health` passes, `/ready` is ready, and the runtime verifier passes.
 
+## Legal / Privacy / Data Handling Preflight
+
+Before any real customer pilot or real customer document upload:
+
+- Review [legal_privacy_data_pack.md](legal_privacy_data_pack.md).
+- Share or adapt [customer_data_handling_summary.md](customer_data_handling_summary.md) only after counsel review.
+- Use [pilot_terms_outline.md](pilot_terms_outline.md) as a non-binding outline for counsel, not as a contract.
+- Confirm the customer-approved data categories and authorized users.
+- Confirm support and incident contacts.
+- Confirm data retention, deletion, export, and backup expectations.
+- Run a backup before importing pilot data.
+- Keep `ALLOW_DEMO_RESET=false`.
+- Keep Priority writes disabled unless a separate customer-specific write rollout is approved.
+
+Do not claim production readiness, GDPR/SOC 2/ISO compliance, certified e-invoicing, tax authority submission, real billing, or real notification delivery from these draft documents.
+
 ## Public Exposure Preflight Commands
 
 Run these before changing DNS, proxy config, firewall rules, or HTTPS settings:

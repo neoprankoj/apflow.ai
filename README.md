@@ -221,6 +221,9 @@ Demo materials:
 - `docs/public_access_https_readiness.md` for the Domain + HTTPS planning checklist before public exposure.
 - `docs/public_port_firewall_hardening.md` for public port inspection, firewall hardening, and Docker bind-address guidance.
 - `docs/reverse_proxy_security_hardening.md` for Nginx/Caddy route, upload limit, timeout, security-header, validation, and rollback planning before Domain + HTTPS.
+- `docs/legal_privacy_data_pack.md` for draft legal/privacy/data-handling readiness before real customer pilots.
+- `docs/customer_data_handling_summary.md` for a clear customer-facing pilot data handling summary.
+- `docs/pilot_terms_outline.md` for a non-binding pilot terms outline requiring counsel review.
 - `docs/backup_restore_drill.md` for staging backup, temporary restore drill, document storage backup, and rollback procedure.
 - `docs/production_readiness_checklist.md` for Demo/Pilot/Production readiness gates and current blockers.
 - `docs/production_security.md` for production access, demo-mode, tenant isolation, RBAC, and vendor-safe guardrails.
