@@ -144,14 +144,14 @@ def selected_ocr_provider(ready: dict) -> str:
 
 
 def verify_mock_pipeline_flow(context: RuntimeContext, ocr_provider: str = "mock") -> dict:
+    # Keep unauthenticated local verification isolated so repeated smoke tests do not poison demo fixtures.
+    tenant_id = context.tenant_id if context.token else str(uuid4())
     invoice_number = f"INV-RUNTIME-{uuid4().hex[:8]}"
-    post(context, "/erp/sync-vendors", {"tenant_id": context.tenant_id, "adapter_type": "priority"})
-    post(context, "/erp/sync-purchase-orders", {"tenant_id": context.tenant_id, "adapter_type": "priority"})
     pipeline = post(
         context,
         "/invoices/full-mock-pipeline",
         {
-            "tenant_id": context.tenant_id,
+            "tenant_id": tenant_id,
             "source": "upload",
             "file_url": "mock://incoming/runtime-invoice.pdf",
             "metadata": {
@@ -186,26 +186,26 @@ def verify_mock_pipeline_flow(context: RuntimeContext, ocr_provider: str = "mock
     export = post(
         context,
         "/erp/export-invoice",
-        {"tenant_id": context.tenant_id, "adapter_type": "priority", "invoice_id": invoice_id},
+        {"tenant_id": tenant_id, "adapter_type": "priority", "invoice_id": invoice_id},
     )
-    invoices = get(context, f"/invoices?tenant_id={context.tenant_id}")
+    invoices = get(context, f"/invoices?tenant_id={tenant_id}")
     vendor_id = next(item["vendor_id"] for item in invoices if item["invoice_id"] == invoice_id)
     assert vendor_id, "runtime invoice was not linked to a vendor"
     access = post(
         context,
         "/vendor/access",
-        {"tenant_id": context.tenant_id, "vendor_id": vendor_id, "email": "vendor@example.com"},
+        {"tenant_id": tenant_id, "vendor_id": vendor_id, "email": "vendor@example.com"},
     )
     token = access["access_token"]
     vendor_invoices = get(
         context,
-        f"/vendor/invoices?tenant_id={context.tenant_id}&access_token={urllib.parse.quote(token)}",
+        f"/vendor/invoices?tenant_id={tenant_id}&access_token={urllib.parse.quote(token)}",
     )
     message = post(
         context,
         f"/vendor/messages?access_token={urllib.parse.quote(token)}",
         {
-            "tenant_id": context.tenant_id,
+            "tenant_id": tenant_id,
             "invoice_id": invoice_id,
             "sender_email": "vendor@example.com",
             "message": "Please confirm payment timing.",
@@ -215,7 +215,7 @@ def verify_mock_pipeline_flow(context: RuntimeContext, ocr_provider: str = "mock
         context,
         f"/vendor/chat?access_token={urllib.parse.quote(token)}",
         {
-            "tenant_id": context.tenant_id,
+            "tenant_id": tenant_id,
             "invoice_id": invoice_id,
             "question": "What is the payment status?",
         },
