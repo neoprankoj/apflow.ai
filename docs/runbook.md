@@ -38,6 +38,21 @@ Notification events are stored locally for:
 
 No real email, Slack, Teams, or webhook delivery happens in the current phase.
 
+## Notification Provider Readiness Gate
+
+Use [notification_provider_readiness.md](notification_provider_readiness.md) before configuring any real Email, Slack, or Teams provider.
+
+```bash
+curl -H "Authorization: Bearer <token>" "http://127.0.0.1:8000/notifications/readiness?tenant_id=<tenant-id>"
+```
+
+Operational rules:
+
+- Keep `NOTIFICATION_DEFAULT_PROVIDER=mock` for demos.
+- Keep `NOTIFICATION_REAL_DELIVERY_ENABLED=false` until provider secrets, sender-domain SPF/DKIM/DMARC, Domain + HTTPS, and test recipients are reviewed.
+- Do not paste SMTP passwords, webhook URLs, or provider API keys into tickets, docs, browser screenshots, or audit metadata.
+- If a provider secret is exposed, disable real delivery, rotate the secret, and use mock-only tests until the rollout is reviewed.
+
 ## Payment Status
 
 Payment status tracking is currently APFlow-internal and manual/mock only.

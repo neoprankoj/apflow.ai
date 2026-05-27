@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from app.agents.observability.audit_logging_agent import AuditLoggingAgent
+from app.core.config import Settings, settings
 from app.core.repositories import InMemoryAPRepository
 from app.core.schemas import (
     ActorType,
@@ -12,6 +13,10 @@ from app.core.schemas import (
     NotificationDeliveryRead,
     NotificationDeliveryStatus,
     NotificationProviderRead,
+    NotificationProviderReadiness,
+    NotificationProviderReadinessMode,
+    NotificationProviderReadinessStatus,
+    NotificationReadinessResponse,
     NotificationRecipientType,
     NotificationSummary,
     NotificationTestRequest,
@@ -22,6 +27,9 @@ from app.services.usage_metering_service import UsageMeteringService
 
 
 MAX_PREVIEW_LENGTH = 280
+REAL_PROVIDER_IMPLEMENTATION_PENDING = (
+    "Real Email, Slack, and Teams delivery implementations are pending; this build will not send external messages."
+)
 
 
 @dataclass(frozen=True)
@@ -113,6 +121,9 @@ class NotificationService:
 
     def list_providers(self) -> list[NotificationProviderRead]:
         return [provider.readiness() for provider in self.providers.values()]
+
+    def provider_readiness(self) -> NotificationReadinessResponse:
+        return get_notification_provider_readiness(settings)
 
     def test_provider(self, request: NotificationTestRequest, context: CurrentUserContext) -> NotificationDeliveryRead:
         payload = NotificationSendPayload(
@@ -274,3 +285,145 @@ def _safe_metadata(metadata: dict | None) -> dict:
         for key, value in metadata.items()
         if all(term not in str(key).casefold() for term in blocked)
     }
+
+
+def get_notification_provider_readiness(app_settings: Settings = settings) -> NotificationReadinessResponse:
+    real_delivery_enabled = bool(app_settings.notification_real_delivery_enabled)
+    providers = [
+        _mock_readiness(),
+        _email_readiness(app_settings, real_delivery_enabled),
+        _webhook_readiness(
+            provider="slack",
+            label="Slack",
+            configured=_has_value(app_settings.slack_webhook_url),
+            missing_secret_name="SLACK_WEBHOOK_URL",
+            real_delivery_enabled=real_delivery_enabled,
+        ),
+        _webhook_readiness(
+            provider="teams",
+            label="Microsoft Teams",
+            configured=_has_value(app_settings.teams_webhook_url),
+            missing_secret_name="TEAMS_WEBHOOK_URL",
+            real_delivery_enabled=real_delivery_enabled,
+        ),
+    ]
+    warnings = [
+        "Mock remains the default safe provider for demos.",
+        "Real provider secrets must stay server-side and are never returned by this endpoint.",
+    ]
+    if not real_delivery_enabled:
+        warnings.append("Real external notification delivery is disabled by NOTIFICATION_REAL_DELIVERY_ENABLED=false.")
+    warnings.append(REAL_PROVIDER_IMPLEMENTATION_PENDING)
+    return NotificationReadinessResponse(
+        environment=app_settings.app_env,
+        default_provider=app_settings.notification_default_provider,
+        providers=providers,
+        domain_requirements=[
+            "Choose a sender domain and sender email before real email delivery.",
+            "Plan SPF, DKIM, and DMARC before sending customer or vendor email.",
+            "Use HTTPS public URLs before sharing vendor links or notification callbacks externally.",
+            "Approve a test recipient list before provider-backed tests.",
+        ],
+        global_warnings=warnings,
+        real_delivery_enabled=real_delivery_enabled,
+    )
+
+
+def _mock_readiness() -> NotificationProviderReadiness:
+    return NotificationProviderReadiness(
+        provider="mock",
+        label="Mock",
+        configured=True,
+        enabled=True,
+        mode=NotificationProviderReadinessMode.MOCK,
+        can_send_real_messages=False,
+        status=NotificationProviderReadinessStatus.MOCK_ONLY,
+        safe_to_test=True,
+        notes=["Safe demo provider. Records delivery history inside APFlow only."],
+    )
+
+
+def _email_readiness(app_settings: Settings, real_delivery_enabled: bool) -> NotificationProviderReadiness:
+    missing = _missing_requirements(
+        {
+            "EMAIL_FROM_ADDRESS": app_settings.email_from_address,
+            "SMTP_HOST": app_settings.smtp_host,
+            "SMTP_PORT": app_settings.smtp_port,
+            "SMTP_USERNAME": app_settings.smtp_username,
+            "SMTP_PASSWORD": app_settings.smtp_password,
+        }
+    )
+    configured = not missing
+    return _real_provider_readiness(
+        provider="email",
+        label="Email / SMTP",
+        configured=configured,
+        missing_requirements=missing + ["Sender-domain SPF/DKIM/DMARC review"],
+        real_delivery_enabled=real_delivery_enabled,
+        notes=[
+            "SMTP credentials must be stored server-side only.",
+            "Sender-domain authentication must be reviewed before real customer or vendor email.",
+        ],
+    )
+
+
+def _webhook_readiness(
+    *,
+    provider: str,
+    label: str,
+    configured: bool,
+    missing_secret_name: str,
+    real_delivery_enabled: bool,
+) -> NotificationProviderReadiness:
+    missing = [] if configured else [missing_secret_name]
+    return _real_provider_readiness(
+        provider=provider,
+        label=label,
+        configured=configured,
+        missing_requirements=missing,
+        real_delivery_enabled=real_delivery_enabled,
+        notes=[f"{label} webhook values are never returned by this endpoint."],
+    )
+
+
+def _real_provider_readiness(
+    *,
+    provider: str,
+    label: str,
+    configured: bool,
+    missing_requirements: list[str],
+    real_delivery_enabled: bool,
+    notes: list[str],
+) -> NotificationProviderReadiness:
+    requirements = list(missing_requirements)
+    if not real_delivery_enabled:
+        requirements.append("NOTIFICATION_REAL_DELIVERY_ENABLED=true")
+    enabled = False
+    mode = NotificationProviderReadinessMode.PLACEHOLDER
+    status = NotificationProviderReadinessStatus.NOT_CONFIGURED
+    if configured and not real_delivery_enabled:
+        mode = NotificationProviderReadinessMode.DISABLED
+        status = NotificationProviderReadinessStatus.BLOCKED
+    if configured and real_delivery_enabled:
+        mode = NotificationProviderReadinessMode.REAL_CONFIGURED
+        status = NotificationProviderReadinessStatus.BLOCKED
+    return NotificationProviderReadiness(
+        provider=provider,
+        label=label,
+        configured=configured,
+        enabled=enabled,
+        mode=mode,
+        can_send_real_messages=False,
+        status=status,
+        missing_requirements=requirements,
+        safe_to_test=False,
+        notes=notes + [REAL_PROVIDER_IMPLEMENTATION_PENDING],
+    )
+
+
+def _missing_requirements(requirements: dict[str, object]) -> list[str]:
+    return [name for name, value in requirements.items() if not _has_value(value)]
+
+
+def _has_value(value: object) -> bool:
+    return bool(str(value or "").strip())

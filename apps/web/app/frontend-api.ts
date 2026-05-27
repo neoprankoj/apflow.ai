@@ -262,6 +262,29 @@ export type NotificationProviderRead = {
   safe_message: string;
 };
 
+export type NotificationProviderReadiness = {
+  provider: string;
+  label: string;
+  configured: boolean;
+  enabled: boolean;
+  mode: "mock" | "placeholder" | "real_configured" | "disabled" | string;
+  can_send_real_messages: boolean;
+  status: "ready" | "not_configured" | "blocked" | "mock_only" | string;
+  missing_requirements: string[];
+  safe_to_test: boolean;
+  notes: string[];
+};
+
+export type NotificationReadinessResponse = {
+  generated_at: string;
+  environment: string;
+  default_provider: string;
+  providers: NotificationProviderReadiness[];
+  domain_requirements: string[];
+  global_warnings: string[];
+  real_delivery_enabled: boolean;
+};
+
 export type NotificationDeliveryRead = {
   id: string;
   tenant_id: string;
@@ -873,6 +896,14 @@ export function listNotificationProviders(apiBaseUrl: string, token: string, ten
     apiBaseUrl,
     `/notifications/providers?tenant_id=${encodeURIComponent(tenantId)}`,
     { token, action: "Load notification providers" }
+  );
+}
+
+export function getNotificationReadiness(apiBaseUrl: string, token: string, tenantId: string) {
+  return apiFetch<NotificationReadinessResponse>(
+    apiBaseUrl,
+    `/notifications/readiness?tenant_id=${encodeURIComponent(tenantId)}`,
+    { token, action: "Load notification readiness" }
   );
 }
 

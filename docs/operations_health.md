@@ -25,6 +25,7 @@ The operations health flow checks:
 - `ALLOW_DEMO_RESET` status.
 - Public port exposure inspection.
 - Reverse proxy inspection.
+- Real notification provider gate reminder in [Notification Provider Readiness](notification_provider_readiness.md).
 - Runtime verifier reminder.
 
 ## C. What This Does Not Do
@@ -32,6 +33,7 @@ The operations health flow checks:
 - No uptime provider.
 - No real alerts.
 - No SMS, email, Slack, Teams, or webhook notifications.
+- No real notification provider connection; mock remains the safe default.
 - No log aggregation.
 - No automated remediation.
 - No destructive cleanup.

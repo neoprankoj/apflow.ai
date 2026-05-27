@@ -5,6 +5,7 @@ Use [production_readiness_checklist.md](production_readiness_checklist.md) and t
 Use [pilot_readiness_review.md](pilot_readiness_review.md) before pilot conversations to review closed gaps, remaining blockers, and what not to claim.
 Before any public demo or domain/HTTPS use, follow [public_access_https_readiness.md](public_access_https_readiness.md).
 Before any real customer pilot or real customer data upload, review [legal_privacy_data_pack.md](legal_privacy_data_pack.md), [customer_data_handling_summary.md](customer_data_handling_summary.md), and [pilot_terms_outline.md](pilot_terms_outline.md) with qualified counsel.
+Before any real Email, Slack, or Teams delivery, review [notification_provider_readiness.md](notification_provider_readiness.md); mock notifications remain the safe demo path.
 
 ## A. Demo Purpose
 
@@ -41,7 +42,7 @@ Intentionally disabled or deferred:
 
 - Real Priority writes.
 - Real ERP/bank payment status sync.
-- Real vendor invitation email/Slack/Teams delivery.
+- Real vendor invitation email/Slack/Teams delivery. The configuration gate exists, but external delivery is still disabled by default.
 - Stripe or any real billing provider.
 - Customer subscriptions, customer invoices, card storage, and hard usage enforcement.
 - Domain and HTTPS.

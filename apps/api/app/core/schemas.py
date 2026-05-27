@@ -157,6 +157,20 @@ class NotificationDeliveryStatus(StrEnum):
     DISABLED = "disabled"
 
 
+class NotificationProviderReadinessMode(StrEnum):
+    MOCK = "mock"
+    PLACEHOLDER = "placeholder"
+    REAL_CONFIGURED = "real_configured"
+    DISABLED = "disabled"
+
+
+class NotificationProviderReadinessStatus(StrEnum):
+    READY = "ready"
+    NOT_CONFIGURED = "not_configured"
+    BLOCKED = "blocked"
+    MOCK_ONLY = "mock_only"
+
+
 class NotificationRecipientType(StrEnum):
     INTERNAL_USER = "internal_user"
     VENDOR = "vendor"
@@ -935,6 +949,29 @@ class NotificationProviderRead(APFlowModel):
     enabled: bool
     mode: str
     safe_message: str
+
+
+class NotificationProviderReadiness(APFlowModel):
+    provider: str
+    label: str
+    configured: bool
+    enabled: bool
+    mode: NotificationProviderReadinessMode
+    can_send_real_messages: bool
+    status: NotificationProviderReadinessStatus
+    missing_requirements: list[str] = Field(default_factory=list)
+    safe_to_test: bool
+    notes: list[str] = Field(default_factory=list)
+
+
+class NotificationReadinessResponse(APFlowModel):
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    environment: str
+    default_provider: str
+    providers: list[NotificationProviderReadiness] = Field(default_factory=list)
+    domain_requirements: list[str] = Field(default_factory=list)
+    global_warnings: list[str] = Field(default_factory=list)
+    real_delivery_enabled: bool = False
 
 
 class NotificationTestRequest(APFlowModel):
