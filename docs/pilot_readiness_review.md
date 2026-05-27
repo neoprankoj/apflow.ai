@@ -89,13 +89,14 @@ Recommended next work:
 3. PR #66 - Backup / Restore Scripts DB Role Detection Fix.
 4. PR #67 - Public Port / Firewall Hardening Checklist.
 5. PR #68 - Localhost-Only Service Binding / Compose Hardening.
-6. Later - Real Notification Provider Configuration Gate.
-7. Later - Customer-Specific Priority Mapping Pilot Checklist.
-8. Later - Real ERP Payment Sync Read-Only Foundation.
-9. Later - Legal / Privacy / Data Handling Pack.
-10. Later - Domain + HTTPS Deployment.
+6. PR #69 - Security Headers / Reverse Proxy Hardening Plan.
+7. Later - Real Notification Provider Configuration Gate.
+8. Later - Customer-Specific Priority Mapping Pilot Checklist.
+9. Later - Real ERP Payment Sync Read-Only Foundation.
+10. Later - Legal / Privacy / Data Handling Pack.
+11. Later - Domain + HTTPS Deployment.
 
-Domain + HTTPS remains later. PR #64 and PR #67 prepare access and firewall hardening checklists. PR #68 hardens staging Compose bind addresses, but it does not flip public production access or connect HTTPS.
+Domain + HTTPS remains later. PR #64 and PR #67 prepare access and firewall hardening checklists. PR #68 hardens staging Compose bind addresses. PR #69 adds reverse proxy and security-header planning/templates, but it does not flip public production access, connect HTTPS, issue certificates, or change live proxy config.
 
 ## G. Go / No-Go Checklist For Pilot
 

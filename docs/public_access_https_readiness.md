@@ -58,7 +58,7 @@ Recommendation:
 - [ ] Public ports reviewed.
 - [ ] Public port/firewall hardening plan reviewed in [Public Port / Firewall Hardening Checklist](public_port_firewall_hardening.md).
 - [ ] Internal service exposure reviewed.
-- [ ] Security headers plan reviewed.
+- [ ] Reverse proxy and security headers plan reviewed in [Reverse Proxy Security Hardening](reverse_proxy_security_hardening.md).
 - [ ] TLS configuration plan reviewed.
 - [ ] Vendor access links will use HTTPS base URL.
 - [ ] API base URL configured for HTTPS.
@@ -85,12 +85,13 @@ Inspection commands:
 
 ```bash
 bash scripts/check_public_ports.sh
+bash scripts/check_reverse_proxy.sh
 docker compose ps
 sudo ss -tulpn
 sudo ufw status verbose
 ```
 
-If any internal service is reachable publicly, stop the domain cutover and fix firewall/proxy exposure first. PR #67 added the checklist and read-only inspection helper. PR #68 hardens staging Compose bind addresses but does not change live firewall rules.
+If any internal service is reachable publicly, stop the domain cutover and fix firewall/proxy exposure first. PR #67 added the checklist and read-only inspection helper. PR #68 hardens staging Compose bind addresses but does not change live firewall rules. PR #69 adds reverse proxy security hardening templates and inspection guidance without changing live proxy config.
 
 ## F. Reverse Proxy Route Plan
 
@@ -132,6 +133,8 @@ Review and test these headers before enabling them broadly:
 - `Content-Security-Policy`, staged carefully because Next.js may need testing.
 
 Do not blindly add strict CSP during the domain step. Start in report-only mode or test with the full AP, vendor, Priority Admin, and dashboard flows.
+
+Use [Reverse Proxy Security Hardening](reverse_proxy_security_hardening.md) for the detailed proxy header, timeout, upload limit, vendor-token safety, validation, and rollback checklist before applying any live Nginx or Caddy change.
 
 ## H. TLS / HTTPS Checklist
 

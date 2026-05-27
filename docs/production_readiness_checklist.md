@@ -93,6 +93,8 @@ PR #67 adds [Public Port / Firewall Hardening Checklist](public_port_firewall_ha
 
 PR #68 updates staging Compose bindings so web/API are expected to bind to `127.0.0.1` and PostgreSQL, Redis, and MinIO are not host-published. Nginx remains the current public ingress on port `80`; Domain + HTTPS and firewall changes remain deferred.
 
+PR #69 adds [Reverse Proxy Security Hardening](reverse_proxy_security_hardening.md), updated Nginx/Caddy templates, and a read-only reverse proxy inspection helper. It does not change live proxy config, connect Domain + HTTPS, issue certificates, or make Production Ready pass.
+
 ## Backup / Restore / Disaster Recovery Readiness
 
 PR #65 adds the staging backup/restore drill plan and safe helper scripts in [Backup / Restore / Disaster Recovery Drill](backup_restore_drill.md). It documents PostgreSQL backup, temporary restore verification, document storage backup for filesystem and MinIO modes, config inventory, restore verification, and rollback procedure.
@@ -112,6 +114,7 @@ Use the Product Readiness Gate in the Admin area before demos, pilots, or produc
 - [Pilot Readiness Review](pilot_readiness_review.md)
 - [Public Access / Domain / HTTPS Readiness](public_access_https_readiness.md)
 - [Public Port / Firewall Hardening Checklist](public_port_firewall_hardening.md)
+- [Reverse Proxy Security Hardening](reverse_proxy_security_hardening.md)
 - [Backup / Restore / Disaster Recovery Drill](backup_restore_drill.md)
 - [Demo Readiness Pack](demo_readiness_pack.md)
 - [Runbook](runbook.md)

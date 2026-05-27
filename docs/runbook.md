@@ -258,6 +258,7 @@ python3 scripts/verify_runtime.py --api-url https://DOMAIN/api --web-url https:/
 ```
 
 Use [public_access_https_readiness.md](public_access_https_readiness.md) before applying any domain, TLS, or public proxy change.
+Use [reverse_proxy_security_hardening.md](reverse_proxy_security_hardening.md) before applying any live Nginx/Caddy route, timeout, upload limit, or security-header change.
 
 ## Public Port Inspection
 
@@ -273,6 +274,19 @@ docker ps --format 'table {{.Names}}\t{{.Ports}}'
 The helper prints Docker services, published ports, listening sockets, UFW status when available, warnings for internal service ports bound on all interfaces, and OK lines for localhost-only bindings. After PR #68, ports `3000` and `8000` should be `127.0.0.1` only, while `5432`, `6379`, `9000`, and `9001` should not be host-published. It does not run `ufw enable`, change firewall rules, or modify iptables.
 
 Full checklist: [public_port_firewall_hardening.md](public_port_firewall_hardening.md).
+
+## Reverse Proxy Inspection
+
+Use the read-only helper before changing live Nginx/Caddy config, Domain + HTTPS, or security headers:
+
+```bash
+bash scripts/check_reverse_proxy.sh
+bash scripts/check_reverse_proxy.sh http://46.101.97.231
+```
+
+The helper prints Nginx installation/version status, attempts `sudo nginx -t` only when passwordless sudo is available, reports listeners on `80` and `443`, checks localhost web/API health when services are reachable, and checks public `/api/health` when `APFLOW_PUBLIC_BASE_URL` or an argument is provided. It does not modify proxy config, reload services, restart services, issue certificates, or print secrets.
+
+Full checklist: [reverse_proxy_security_hardening.md](reverse_proxy_security_hardening.md).
 
 ## After Demo
 
