@@ -271,6 +271,43 @@ Troubleshooting:
 
 Full checklist: [operations_health.md](operations_health.md).
 
+## Backup Schedule And Age Policy
+
+Use [scheduled_backup_policy.md](scheduled_backup_policy.md) for backup frequency, backup age thresholds, retention draft, cron template, and systemd timer templates. The templates are documentation only; do not install them blindly and do not add deletion logic.
+
+Useful commands:
+
+```bash
+bash scripts/backup_staging.sh
+bash scripts/check_backup_age.sh
+bash scripts/restore_drill_staging.sh backups/<backup>.dump
+bash scripts/check_operations_health.sh http://46.101.97.231
+```
+
+If the scripts are executable on the host, the equivalent `./scripts/backup_staging.sh`, `./scripts/check_backup_age.sh`, `./scripts/restore_drill_staging.sh backups/<backup>.dump`, and `./scripts/check_operations_health.sh http://46.101.97.231` forms are also acceptable.
+
+Backup age policy:
+
+- Green: latest valid backup is `<= 24` hours old.
+- Warning: latest valid backup is `> 24` hours old.
+- Critical: no valid backup exists, latest valid backup is `> 72` hours old before risky work, or only zero-byte dumps exist.
+
+Cron template, example only:
+
+```cron
+15 2 * * * cd /opt/b2b-app/apflowai && ./scripts/backup_staging.sh >> backups/logs/backup-staging.log 2>&1
+```
+
+Before installing any schedule:
+
+- Run `bash scripts/backup_staging.sh` manually.
+- Run `bash scripts/check_backup_age.sh`.
+- Confirm the backup file is non-zero.
+- Run `bash scripts/restore_drill_staging.sh backups/<backup>.dump`.
+- Ensure `backups/logs/` exists.
+- Review [apflow-backup-staging.service](examples/apflow-backup-staging.service) and [apflow-backup-staging.timer](examples/apflow-backup-staging.timer) if choosing systemd.
+- Do not paste secrets into crontab, unit files, logs, or shell history.
+
 ## Public Exposure Preflight Commands
 
 Run these before changing DNS, proxy config, firewall rules, or HTTPS settings:

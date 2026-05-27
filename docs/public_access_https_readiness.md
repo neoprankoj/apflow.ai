@@ -56,7 +56,8 @@ Recommendation:
 - [ ] Counsel review completed before real customer pilot data or customer-facing legal terms.
 - [ ] Backup completed.
 - [ ] Operations health check run with `bash scripts/check_operations_health.sh http://46.101.97.231`.
-- [ ] Backup age acceptable for Domain + HTTPS work.
+- [ ] Backup age green or consciously accepted under [Scheduled Backup Policy](scheduled_backup_policy.md).
+- [ ] Latest backup file is non-zero.
 - [ ] Restore drill documented or tested.
 - [ ] Backup/restore drill plan reviewed in [Backup / Restore / Disaster Recovery Drill](backup_restore_drill.md).
 - [ ] Public ports reviewed.
@@ -189,6 +190,8 @@ Go only if:
 - [ ] Product Readiness reviewed.
 - [ ] Demo reset off.
 - [ ] Backups complete.
+- [ ] Latest backup is fresh under the scheduled backup policy, or stale backup risk is consciously accepted and documented.
+- [ ] Recent restore drill passed.
 - [ ] Operations health check passes or warnings are understood.
 - [ ] Direct internal ports closed or explicitly protected.
 - [ ] HTTPS config tested.

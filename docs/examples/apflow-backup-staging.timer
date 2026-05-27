@@ -1,0 +1,15 @@
+# Template only. Review before installing.
+# Do not install on production without a separate production backup plan review.
+# This runs the matching apflow-backup-staging.service daily at 02:15 UTC.
+# Check logs and backup freshness after the first scheduled run.
+
+[Unit]
+Description=Run APFlow staging PostgreSQL backup daily
+
+[Timer]
+OnCalendar=*-*-* 02:15:00 UTC
+Persistent=true
+Unit=apflow-backup-staging.service
+
+[Install]
+WantedBy=timers.target

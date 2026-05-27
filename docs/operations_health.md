@@ -21,7 +21,7 @@ The operations health flow checks:
 - PostgreSQL readiness.
 - Root filesystem disk usage.
 - Docker disk usage when available.
-- Backup freshness.
+- Backup freshness using the policy in [Scheduled Backup Policy](scheduled_backup_policy.md).
 - `ALLOW_DEMO_RESET` status.
 - Public port exposure inspection.
 - Reverse proxy inspection.
@@ -69,10 +69,14 @@ python3 scripts/verify_runtime.py --api-url http://46.101.97.231/api --web-url h
 
 ## F. Backup Freshness Policy
 
-- Warn if the latest `backups/*.dump` file is older than 24 hours before risky work.
-- Treat no backup as critical before Domain + HTTPS or real customer pilot data.
+- Green: latest valid backup is `<= 24` hours old.
+- Warning: latest valid backup is `> 24` hours old.
+- Critical: no valid backup exists, or latest valid backup is `> 72` hours old before risky work.
+- Treat no valid backup as blocking before Domain + HTTPS or real customer pilot data.
+- Reject zero-byte dumps as invalid.
 - Repeat the backup/restore drill before a real customer pilot.
 - Do not delete old backups from health checks.
+- Full policy: [Scheduled Backup Policy](scheduled_backup_policy.md).
 
 ## G. Operational Escalation
 

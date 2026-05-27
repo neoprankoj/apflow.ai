@@ -225,6 +225,7 @@ Demo materials:
 - `docs/customer_data_handling_summary.md` for a clear customer-facing pilot data handling summary.
 - `docs/pilot_terms_outline.md` for a non-binding pilot terms outline requiring counsel review.
 - `docs/operations_health.md` for the read-only staging health checklist and operations health command.
+- `docs/scheduled_backup_policy.md` for backup frequency, age thresholds, retention draft, and cron/systemd scheduling templates.
 - `docs/backup_restore_drill.md` for staging backup, temporary restore drill, document storage backup, and rollback procedure.
 - `docs/production_readiness_checklist.md` for Demo/Pilot/Production readiness gates and current blockers.
 - `docs/production_security.md` for production access, demo-mode, tenant isolation, RBAC, and vendor-safe guardrails.
