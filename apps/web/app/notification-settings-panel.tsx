@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, RefreshCw, Send } from "lucide-react";
+import { Bell, RefreshCw, Send, ShieldCheck } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader } from "../components/ui/card";
@@ -9,15 +9,26 @@ import { LoadingSkeleton } from "../components/ui/loading-skeleton";
 import { StatusBadge } from "../components/ui/status-badge";
 import {
   getNotificationSummary,
+  getNotificationReadiness,
   listNotificationDeliveries,
   listNotificationProviders,
   NotificationDeliveryRead,
   NotificationProviderRead,
+  NotificationReadinessResponse,
   NotificationSummary,
   sendTestNotification
 } from "./frontend-api";
 
 const channels = ["mock", "email", "slack", "teams"];
+const emailReadinessChecklist = [
+  "Domain selected",
+  "Sender email chosen",
+  "SPF planned",
+  "DKIM planned",
+  "DMARC planned",
+  "SMTP credentials stored server-side only",
+  "Test recipient approved"
+];
 
 export function NotificationSettingsPanel({
   accessToken,
@@ -31,6 +42,7 @@ export function NotificationSettingsPanel({
   tenantId: string | null;
 }) {
   const [providers, setProviders] = useState<NotificationProviderRead[]>([]);
+  const [readiness, setReadiness] = useState<NotificationReadinessResponse | null>(null);
   const [deliveries, setDeliveries] = useState<NotificationDeliveryRead[]>([]);
   const [summary, setSummary] = useState<NotificationSummary | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -48,12 +60,14 @@ export function NotificationSettingsPanel({
     setIsLoading(true);
     setError(null);
     try {
-      const [loadedProviders, loadedDeliveries, loadedSummary] = await Promise.all([
+      const [loadedProviders, loadedReadiness, loadedDeliveries, loadedSummary] = await Promise.all([
         listNotificationProviders(apiBaseUrl, accessToken, tenantId),
+        getNotificationReadiness(apiBaseUrl, accessToken, tenantId),
         listNotificationDeliveries(apiBaseUrl, accessToken, tenantId),
         getNotificationSummary(apiBaseUrl, accessToken, tenantId)
       ]);
       setProviders(loadedProviders);
+      setReadiness(loadedReadiness);
       setDeliveries(loadedDeliveries.slice(-8).reverse());
       setSummary(loadedSummary);
     } catch (err) {
@@ -133,6 +147,69 @@ export function NotificationSettingsPanel({
           </Card>
         ))}
       </div>
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4 text-primary" />
+            <h3 className="text-base font-semibold">Real Provider Readiness</h3>
+          </div>
+          <p className="mt-1 text-sm text-muted">
+            Mock notifications are safe for demos. Real external delivery remains disabled until provider secrets and sender-domain setup are reviewed.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {isLoading ? (
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {[0, 1, 2, 3].map((item) => <LoadingSkeleton className="h-28 w-full" key={item} />)}
+            </div>
+          ) : readiness ? (
+            <>
+              <div className="flex flex-wrap items-center gap-3 text-sm">
+                <StatusBadge status={readiness.real_delivery_enabled ? "enabled" : "disabled"} />
+                <span className="text-muted">Real delivery enabled: {readiness.real_delivery_enabled ? "Yes" : "No"}</span>
+                <span className="text-muted">Default provider: {label(readiness.default_provider)}</span>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                {readiness.providers.map((provider) => (
+                  <div className="rounded-md border border-border p-4" key={provider.provider}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-medium">{provider.label}</p>
+                        <p className="mt-1 text-sm text-muted">{provider.notes[0] ?? "Provider readiness is safe to view."}</p>
+                      </div>
+                      <StatusBadge status={provider.status} />
+                    </div>
+                    {provider.missing_requirements.length ? (
+                      <ul className="mt-3 space-y-1 text-xs text-muted">
+                        {provider.missing_requirements.slice(0, 3).map((requirement) => (
+                          <li key={requirement}>{requirement}</li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+              <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                <div className="rounded-md border border-border p-4">
+                  <p className="text-sm font-medium">Email Setup Checklist</p>
+                  <ul className="mt-2 grid gap-1 text-sm text-muted sm:grid-cols-2">
+                    {emailReadinessChecklist.map((item) => <li key={item}>{item}</li>)}
+                  </ul>
+                </div>
+                <div className="rounded-md border border-border p-4">
+                  <p className="text-sm font-medium">Domain and Delivery Notes</p>
+                  <ul className="mt-2 space-y-1 text-sm text-muted">
+                    {readiness.domain_requirements.map((item) => <li key={item}>{item}</li>)}
+                  </ul>
+                </div>
+              </div>
+            </>
+          ) : (
+            <EmptyState title="No readiness loaded" description="Sign in to load safe real provider readiness." />
+          )}
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
         <Card>

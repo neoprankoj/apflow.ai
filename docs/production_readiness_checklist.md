@@ -67,7 +67,7 @@ Current production blockers:
 - Backup/restore drill foundation and scheduled backup policy are documented, but live schedule installation, offsite backups, backup failure alerts, retention automation, and recent production restore evidence are still required for production.
 - Operations health script and backup age check exist for staging, but external monitoring, alerting, log retention, and production incident operations are still missing.
 - Production vendor access is not ready.
-- Notification abstraction and mock delivery exist, but real email/Slack/Teams providers are not configured.
+- Notification abstraction, mock delivery, and a real-provider configuration gate exist, but real email/Slack/Teams providers are not connected for external delivery.
 - Real ERP payment status sync is missing.
 - Usage metering foundation exists, but billing provider, subscription management, customer invoices, and usage enforcement are missing.
 - Foundational accuracy analytics exist, but advanced SLA, trend, and per-supplier analytics are not production-grade yet.
@@ -121,6 +121,10 @@ PR #72 adds [Scheduled Backup Policy](scheduled_backup_policy.md), `scripts/chec
 
 Production Ready remains no until scheduled backups are installed and observed, offsite encrypted copies exist, backup-failure alerting exists, retention automation is reviewed, and a recent restore drill is implemented and verified.
 
+PR #73 adds [Notification Provider Readiness](notification_provider_readiness.md), a safe `/notifications/readiness` API, and Admin UI visibility for the real Email/Slack/Teams configuration gate. Mock remains the default provider, real delivery requires `NOTIFICATION_REAL_DELIVERY_ENABLED=true`, and provider secrets/webhook URLs are not returned.
+
+Production Ready remains no because real provider implementations, sender-domain SPF/DKIM/DMARC verification, approved test recipients, Domain + HTTPS, alerting, and support ownership are still required before external customer/vendor notifications.
+
 ## Operator Rule
 
 Use the Product Readiness Gate in the Admin area before demos, pilots, or production discussions:
@@ -140,6 +144,7 @@ Use the Product Readiness Gate in the Admin area before demos, pilots, or produc
 - [Pilot Terms Outline](pilot_terms_outline.md)
 - [Operations Health](operations_health.md)
 - [Scheduled Backup Policy](scheduled_backup_policy.md)
+- [Notification Provider Readiness](notification_provider_readiness.md)
 - [Backup / Restore / Disaster Recovery Drill](backup_restore_drill.md)
 - [Demo Readiness Pack](demo_readiness_pack.md)
 - [Runbook](runbook.md)

@@ -15,11 +15,29 @@ def auth_enabled() -> Iterator[None]:
         "demo_mode": settings.demo_mode,
         "use_in_memory_repositories": settings.use_in_memory_repositories,
         "ocr_provider": settings.ocr_provider,
+        "notification_default_provider": settings.notification_default_provider,
+        "notification_real_delivery_enabled": settings.notification_real_delivery_enabled,
+        "email_from_address": settings.email_from_address,
+        "smtp_host": settings.smtp_host,
+        "smtp_port": settings.smtp_port,
+        "smtp_username": settings.smtp_username,
+        "smtp_password": settings.smtp_password,
+        "slack_webhook_url": settings.slack_webhook_url,
+        "teams_webhook_url": settings.teams_webhook_url,
     }
     settings.auth_enabled = True
     settings.demo_mode = False
     settings.use_in_memory_repositories = True
     settings.ocr_provider = "mock"
+    settings.notification_default_provider = "mock"
+    settings.notification_real_delivery_enabled = False
+    settings.email_from_address = ""
+    settings.smtp_host = ""
+    settings.smtp_port = ""
+    settings.smtp_username = ""
+    settings.smtp_password = ""
+    settings.slack_webhook_url = ""
+    settings.teams_webhook_url = ""
     _clear_dependency_caches()
     yield
     for key, value in previous.items():
@@ -45,6 +63,103 @@ def test_provider_list_returns_safe_placeholder_statuses(auth_enabled):
     assert providers["teams"]["configured"] is False
     assert "secret" not in response.text.casefold()
     assert "webhook" not in response.text.casefold()
+
+
+def test_notification_readiness_requires_auth(auth_enabled):
+    client = TestClient(create_app())
+    owner = _register(client, "notifications-readiness-auth@example.com")
+
+    response = client.get(f"/notifications/readiness?tenant_id={owner['tenant']['id']}")
+
+    assert response.status_code == 401
+
+
+def test_notification_readiness_reports_mock_safe_and_real_missing(auth_enabled):
+    client = TestClient(create_app())
+    owner = _register(client, "notifications-readiness@example.com")
+
+    response = client.get(
+        f"/notifications/readiness?tenant_id={owner['tenant']['id']}",
+        headers=_auth_headers(owner["access_token"]),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    providers = {item["provider"]: item for item in body["providers"]}
+    assert body["default_provider"] == "mock"
+    assert body["real_delivery_enabled"] is False
+    assert providers["mock"]["status"] == "mock_only"
+    assert providers["mock"]["safe_to_test"] is True
+    assert providers["email"]["configured"] is False
+    assert providers["slack"]["configured"] is False
+    assert providers["teams"]["configured"] is False
+    assert providers["email"]["can_send_real_messages"] is False
+    assert "SMTP_HOST" in providers["email"]["missing_requirements"]
+    assert "SLACK_WEBHOOK_URL" in providers["slack"]["missing_requirements"]
+    assert "TEAMS_WEBHOOK_URL" in providers["teams"]["missing_requirements"]
+
+
+def test_real_delivery_disabled_blocks_partially_configured_provider(auth_enabled):
+    previous = settings.slack_webhook_url
+    settings.slack_webhook_url = "https://hooks.slack.example/secret-value"
+    try:
+        client = TestClient(create_app())
+        owner = _register(client, "notifications-readiness-blocked@example.com")
+
+        response = client.get(
+            f"/notifications/readiness?tenant_id={owner['tenant']['id']}",
+            headers=_auth_headers(owner["access_token"]),
+        )
+    finally:
+        settings.slack_webhook_url = previous
+
+    assert response.status_code == 200
+    providers = {item["provider"]: item for item in response.json()["providers"]}
+    assert providers["slack"]["configured"] is True
+    assert providers["slack"]["enabled"] is False
+    assert providers["slack"]["status"] == "blocked"
+    assert providers["slack"]["can_send_real_messages"] is False
+    assert "NOTIFICATION_REAL_DELIVERY_ENABLED=true" in providers["slack"]["missing_requirements"]
+
+
+def test_notification_readiness_does_not_expose_provider_secrets(auth_enabled):
+    previous = {
+        "notification_real_delivery_enabled": settings.notification_real_delivery_enabled,
+        "email_from_address": settings.email_from_address,
+        "smtp_host": settings.smtp_host,
+        "smtp_port": settings.smtp_port,
+        "smtp_username": settings.smtp_username,
+        "smtp_password": settings.smtp_password,
+        "slack_webhook_url": settings.slack_webhook_url,
+        "teams_webhook_url": settings.teams_webhook_url,
+    }
+    settings.notification_real_delivery_enabled = True
+    settings.email_from_address = "apflow@example.com"
+    settings.smtp_host = "smtp.secret.example"
+    settings.smtp_port = "587"
+    settings.smtp_username = "smtp-user-secret"
+    settings.smtp_password = "smtp-password-secret"
+    settings.slack_webhook_url = "https://hooks.slack.example/secret-webhook"
+    settings.teams_webhook_url = "https://outlook.office.example/secret-webhook"
+    try:
+        client = TestClient(create_app())
+        owner = _register(client, "notifications-readiness-secrets@example.com")
+
+        response = client.get(
+            f"/notifications/readiness?tenant_id={owner['tenant']['id']}",
+            headers=_auth_headers(owner["access_token"]),
+        )
+    finally:
+        for key, value in previous.items():
+            setattr(settings, key, value)
+
+    assert response.status_code == 200
+    serialized = response.text
+    assert "smtp-password-secret" not in serialized
+    assert "smtp-user-secret" not in serialized
+    assert "secret-webhook" not in serialized
+    assert "hooks.slack.example" not in serialized
+    assert "outlook.office.example" not in serialized
 
 
 def test_mock_provider_test_records_delivery_and_audit_event(auth_enabled):

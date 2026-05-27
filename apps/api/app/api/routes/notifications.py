@@ -10,6 +10,7 @@ from app.core.schemas import (
     CurrentUserContext,
     NotificationDeliveryRead,
     NotificationProviderRead,
+    NotificationReadinessResponse,
     NotificationSummary,
     NotificationTestRequest,
     Permission,
@@ -33,6 +34,15 @@ def list_notification_providers(
     _context: CurrentUserContext = Depends(require_permission(Permission.NOTIFICATION_READ)),
 ) -> list[NotificationProviderRead]:
     return service.list_providers()
+
+
+@router.get("/readiness", response_model=NotificationReadinessResponse)
+def get_notification_readiness(
+    _tenant_id: UUID = Depends(resolve_tenant_id),
+    service: NotificationService = Depends(_service),
+    _context: CurrentUserContext = Depends(require_permission(Permission.NOTIFICATION_READ)),
+) -> NotificationReadinessResponse:
+    return service.provider_readiness()
 
 
 @router.post("/test", response_model=NotificationDeliveryRead)

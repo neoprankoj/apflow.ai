@@ -127,6 +127,10 @@ Use this short checklist before merging frontend UI changes.
 - [ ] Notification Settings loads in the Admin area.
 - [ ] Mock provider shows configured/enabled.
 - [ ] Email, Slack, and Teams show not configured.
+- [ ] Real Provider Readiness loads without exposing SMTP passwords, webhook URLs, API keys, or raw provider secrets.
+- [ ] Real delivery enabled shows `No` by default.
+- [ ] Email readiness shows domain, sender email, SPF, DKIM, DMARC, server-side credential, and approved test-recipient requirements.
+- [ ] Slack and Teams readiness show blocked/not configured until server-side webhooks and real delivery are approved.
 - [ ] Sending a mock test notification records a delivery inside APFlow only.
 - [ ] Email/Slack/Teams tests return safe not-configured messages and do not send externally.
 - [ ] Delivery History shows status, channel, event type, redacted recipient, preview, and timestamp.

@@ -21,7 +21,7 @@ Domain + HTTPS remain intentionally deferred. They should be connected only afte
 | Vendor access lifecycle | Foundation closed | PR #55 | Admin-created vendor access, hashed tokens, one-time raw token display, expiration, revocation, rotation, and audit events exist. | Real invitation delivery and support lifecycle are not connected. |
 | Vendor access UX and supplier matching | Closed | PR #56 | Browser-friendly `/vendor` links and safer supplier matching make vendor access usable in QA. | Customer supplier master matching still needs validation against real tenant data. |
 | Vendor payment-status chatbot | MVP closed | PR #57 | Deterministic rules-based chatbot answers vendor-safe invoice/payment questions and refuses unsafe topics. | No external LLM is used; escalation, rate limits, and support handoff still need pilot review. |
-| Notification delivery abstraction | Foundation closed | PR #58 | Mock provider records delivery; Email, Slack, and Teams placeholders are safe and not configured. | Real notification providers and invitation delivery are not connected. |
+| Notification delivery abstraction | Foundation closed | PR #58 / PR #73 | Mock provider records delivery; Email, Slack, and Teams placeholders are safe and the real-provider configuration gate is visible. | Real provider implementations, sender-domain authentication, and invitation delivery are not connected. |
 | Accuracy and exception analytics | Foundation closed | PR #59 | Dashboard summarizes workflow volume, OCR/review health, blockers, approvals, payment, vendor, chatbot, and notification activity. | SLA trends, alerting, and advanced per-customer analytics are not production-grade yet. |
 | Usage metering and billing foundation | Foundation closed | PR #60 | Usage events, tenant usage summary, plan placeholders, and warn-only UI exist. | Stripe/billing provider, subscription management, invoices, and enforcement are not connected. |
 | E-invoicing compliance validation | Foundation closed | PR #61 | Validation-only profiles check required/recommended invoice fields and tax/VAT warnings. | No certified submission, PEPPOL, tax-authority, or government integration exists. |
@@ -52,7 +52,7 @@ The app is pilot-shaped, but real customer pilot use is still blocked by:
 
 - Domain + HTTPS are not connected yet.
 - Public access hardening still needs a final review.
-- Real notification providers are not configured.
+- Real notification providers have a configuration gate, but external delivery is not connected and remains disabled by default.
 - Real ERP payment status sync is not connected.
 - Real Priority writes are not enabled.
 - Customer-specific Priority mappings have not been validated with real tenant data.
@@ -91,7 +91,7 @@ Recommended next work:
 4. PR #67 - Public Port / Firewall Hardening Checklist.
 5. PR #68 - Localhost-Only Service Binding / Compose Hardening.
 6. PR #69 - Security Headers / Reverse Proxy Hardening Plan.
-7. Later - Real Notification Provider Configuration Gate.
+7. PR #73 - Real Notification Provider Configuration Gate.
 8. Later - Customer-Specific Priority Mapping Pilot Checklist.
 9. Later - Real ERP Payment Sync Read-Only Foundation.
 10. PR #70 - Legal / Privacy / Data Handling Pack.
@@ -99,7 +99,7 @@ Recommended next work:
 12. PR #72 - Scheduled Backup Plan / Backup Age Policy.
 13. Later - Domain + HTTPS Deployment.
 
-Domain + HTTPS remains later. PR #64 and PR #67 prepare access and firewall hardening checklists. PR #68 hardens staging Compose bind addresses. PR #69 adds reverse proxy and security-header planning/templates. PR #70 adds legal/privacy/data-handling draft documents. PR #71 adds read-only staging operations health checks. PR #72 adds backup schedule and age policy templates, but it does not install live schedules, connect offsite backups, delete backups, connect alerts, or change live infrastructure.
+Domain + HTTPS remains later. PR #64 and PR #67 prepare access and firewall hardening checklists. PR #68 hardens staging Compose bind addresses. PR #69 adds reverse proxy and security-header planning/templates. PR #70 adds legal/privacy/data-handling draft documents. PR #71 adds read-only staging operations health checks. PR #72 adds backup schedule and age policy templates, but it does not install live schedules, connect offsite backups, delete backups, connect alerts, or change live infrastructure. PR #73 adds real notification provider readiness visibility, but it does not send real Email, Slack, or Teams notifications.
 
 ## G. Go / No-Go Checklist For Pilot
 
@@ -114,6 +114,7 @@ Domain + HTTPS remains later. PR #64 and PR #67 prepare access and firewall hard
 - [ ] Vendor access tested.
 - [ ] Vendor chatbot tested.
 - [ ] Mock notifications tested.
+- [ ] Real Provider Readiness reviewed in [notification_provider_readiness.md](notification_provider_readiness.md).
 - [ ] Priority writes disabled unless explicitly approved.
 - [ ] Customer data boundaries confirmed.
 - [ ] Legal/privacy/data handling pack reviewed with counsel before real customer data.

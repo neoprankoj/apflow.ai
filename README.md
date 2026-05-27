@@ -59,7 +59,7 @@ Vendor portal access now has a production-shaped lifecycle foundation: admin-cre
 
 Payment status tracking has a tenant-scoped manual/mock foundation for invoice payment lifecycle visibility. AP managers can run a mock payment sync, update internal APFlow payment state, see safe payment status in Vendor Preview, let vendors ask rules-based payment-status questions, and audit changes. No real bank, payment provider, or ERP payment-status sync is connected yet; see `docs/payment_status.md`.
 
-Notification delivery now has a mock/provider abstraction foundation. Admins can view provider readiness, send mock test notifications, and inspect tenant-scoped delivery history. Email, Slack, and Teams remain safe placeholders and do not send externally; see `docs/notifications.md`.
+Notification delivery now has a mock/provider abstraction foundation plus a real-provider configuration gate. Admins can view safe readiness, send mock test notifications, and inspect tenant-scoped delivery history. Email, Slack, and Teams remain safe placeholders and do not send externally by default; see `docs/notifications.md` and `docs/notification_provider_readiness.md`.
 
 Accuracy and exception analytics summarize APFlow workflow health from existing tenant-scoped data: invoice volume, review rate, blockers, OCR/provider issues, approvals, exports, payment status, vendor self-service, and notification outcomes. No external analytics service is connected; see `docs/analytics.md`.
 
@@ -232,6 +232,7 @@ Demo materials:
 - `docs/vendor_access.md` for vendor access lifecycle, token handling, revocation, rotation, and vendor-safe data boundaries.
 - `docs/vendor_payment_chatbot.md` for the rules-based vendor payment-status chatbot and refusal rules.
 - `docs/notifications.md` for mock notification delivery, placeholder providers, and future Email/Slack/Teams extension points.
+- `docs/notification_provider_readiness.md` for the real notification provider configuration gate, sender-domain checklist, and no-real-delivery-by-default policy.
 - `docs/analytics.md` for Accuracy & Exceptions metrics, safety boundaries, and future analytics path.
 - `docs/usage_metering.md` for usage events, warn-only plan placeholders, and future billing integration path.
 - `docs/compliance_validation.md` for validation-only e-invoicing readiness profiles and safety boundaries.

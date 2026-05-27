@@ -18,6 +18,15 @@ def auth_enabled() -> Iterator[None]:
     settings.priority_erp_mode = "mock"
     settings.priority_erp_enable_writes = False
     settings.priority_erp_read_only_fetch_enabled = False
+    settings.notification_default_provider = "mock"
+    settings.notification_real_delivery_enabled = False
+    settings.email_from_address = ""
+    settings.smtp_host = ""
+    settings.smtp_port = ""
+    settings.smtp_username = ""
+    settings.smtp_password = ""
+    settings.slack_webhook_url = ""
+    settings.teams_webhook_url = ""
     _clear_dependency_caches()
     yield
     _restore_settings(previous)
@@ -100,7 +109,12 @@ def test_payment_and_vendor_gaps_are_pilot_or_production_blockers(auth_enabled):
     assert checks["vendor_payment_chatbot_available"]["status"] == "pass"
     assert checks["notification_delivery_abstraction_available"]["status"] == "pass"
     assert checks["mock_notification_provider_available"]["status"] == "pass"
+    assert checks["real_notification_provider_gate_available"]["status"] == "pass"
     assert checks["real_email_provider_configured"]["status"] == "fail"
+    assert checks["real_slack_provider_configured"]["status"] == "fail"
+    assert checks["real_teams_provider_configured"]["status"] == "fail"
+    assert checks["sender_domain_authentication_ready"]["status"] == "fail"
+    assert checks["real_external_delivery_enabled"]["status"] == "fail"
     assert checks["analytics_dashboard_available"]["status"] == "pass"
     assert checks["accuracy_exception_visibility_available"]["status"] == "pass"
     assert checks["accuracy_analytics_ready"]["status"] == "pass"
@@ -120,6 +134,10 @@ def test_product_readiness_response_does_not_expose_secrets(auth_enabled):
     settings.priority_erp_username = "priority-user"
     settings.priority_erp_password = "priority-password"
     settings.priority_erp_api_key = "priority-api-key"
+    settings.smtp_username = "smtp-secret-user"
+    settings.smtp_password = "smtp-secret-password"
+    settings.slack_webhook_url = "https://hooks.slack.example/secret"
+    settings.teams_webhook_url = "https://teams.example/secret"
     try:
         client = TestClient(create_app())
         owner = _register(client, "secret-safe@example.com")
@@ -136,6 +154,10 @@ def test_product_readiness_response_does_not_expose_secrets(auth_enabled):
     assert "priority-user" not in serialized
     assert "priority-password" not in serialized
     assert "priority-api-key" not in serialized
+    assert "smtp-secret-user" not in serialized
+    assert "smtp-secret-password" not in serialized
+    assert "hooks.slack.example" not in serialized
+    assert "teams.example" not in serialized
 
 
 def test_existing_ready_endpoint_shape_is_unchanged(auth_enabled):
@@ -206,6 +228,15 @@ def _snapshot_settings() -> dict:
         "priority_erp_username": settings.priority_erp_username,
         "priority_erp_password": settings.priority_erp_password,
         "priority_erp_api_key": settings.priority_erp_api_key,
+        "notification_default_provider": settings.notification_default_provider,
+        "notification_real_delivery_enabled": settings.notification_real_delivery_enabled,
+        "email_from_address": settings.email_from_address,
+        "smtp_host": settings.smtp_host,
+        "smtp_port": settings.smtp_port,
+        "smtp_username": settings.smtp_username,
+        "smtp_password": settings.smtp_password,
+        "slack_webhook_url": settings.slack_webhook_url,
+        "teams_webhook_url": settings.teams_webhook_url,
     }
 
 

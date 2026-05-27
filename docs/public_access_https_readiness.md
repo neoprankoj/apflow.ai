@@ -54,6 +54,9 @@ Recommendation:
 - [ ] Product Readiness reviewed.
 - [ ] Legal/privacy/data handling draft pack reviewed in [Legal / Privacy / Data Handling Pack](legal_privacy_data_pack.md).
 - [ ] Counsel review completed before real customer pilot data or customer-facing legal terms.
+- [ ] Real notification provider gate reviewed in [Notification Provider Readiness](notification_provider_readiness.md).
+- [ ] Confirm `NOTIFICATION_REAL_DELIVERY_ENABLED=false` unless a separate approved provider rollout is underway.
+- [ ] Confirm no vendor/customer notification links are sent externally before HTTPS is active.
 - [ ] Backup completed.
 - [ ] Operations health check run with `bash scripts/check_operations_health.sh http://46.101.97.231`.
 - [ ] Backup age green or consciously accepted under [Scheduled Backup Policy](scheduled_backup_policy.md).

@@ -10,6 +10,7 @@ from app.db.session import SessionLocal
 from app.integrations.ocr.factory import OCRProviderFactory
 from app.integrations.erp.mock_adapters import MockOdooERPAdapter, MockPriorityERPAdapter, MockZohoBooksAdapter
 from app.integrations.storage.mock import FileSystemStorageAdapter, InMemoryStorageAdapter
+from app.services.notification_service import get_notification_provider_readiness
 
 router = APIRouter(tags=["health"])
 
@@ -167,6 +168,12 @@ def _product_readiness_checks() -> list[ProductReadinessCheck]:
     read_only_fetch_enabled = bool(settings.priority_erp_read_only_fetch_enabled)
     https_configured = _uses_https(settings.public_app_url) and _uses_https(settings.api_public_url)
     auth_secret_strong = _auth_secret_is_strong()
+    notification_readiness = get_notification_provider_readiness(settings)
+    notification_providers = {provider.provider: provider for provider in notification_readiness.providers}
+    email_provider = notification_providers["email"]
+    slack_provider = notification_providers["slack"]
+    teams_provider = notification_providers["teams"]
+    any_real_notification_can_send = any(provider.can_send_real_messages for provider in notification_readiness.providers)
 
     return [
         _check(
@@ -380,10 +387,13 @@ def _product_readiness_checks() -> list[ProductReadinessCheck]:
         _check("vendor_chatbot_missing", "Vendor chatbot production hardening", "warning", "pilot", "Vendor chatbot foundation exists, but production support escalation and abuse controls are not complete.", "Define production escalation, abuse controls, and support ownership."),
         _check("notification_delivery_abstraction_available", "Notification delivery abstraction", "pass", "pilot", "Mock notification delivery and provider readiness checks are available.", "Connect a real provider before live external communication."),
         _check("mock_notification_provider_available", "Mock notification provider", "pass", "pilot", "Mock notifications can be recorded inside APFlow without external sends."),
-        _check("real_email_provider_configured", "Real email provider configured", "fail", "pilot", "Email notification provider is not configured.", "Configure and test a real email provider before live supplier/approver notifications."),
-        _check("real_slack_provider_configured", "Real Slack provider configured", "warning", "pilot", "Slack notification provider is not configured.", "Configure only if Slack delivery is needed for a pilot."),
-        _check("real_teams_provider_configured", "Real Teams provider configured", "warning", "pilot", "Teams notification provider is not configured.", "Configure only if Teams delivery is needed for a pilot."),
-        _check("notification_delivery_configured", "Notification delivery configured", "fail", "pilot", "Notification abstraction exists, but real email/Slack/Teams delivery is not configured.", "Configure and test a real notification provider for pilots."),
+        _check("real_notification_provider_gate_available", "Real provider configuration gate", "pass", "pilot", "Safe provider readiness checks are available without exposing secrets.", "Use /notifications/readiness before enabling real delivery."),
+        _check("real_email_provider_configured", "Real email provider configured", "warning" if email_provider.configured else "fail", "pilot", "Email provider configuration placeholders are present." if email_provider.configured else "Email notification provider is not configured.", "Configure SMTP credentials, sender address, and sender-domain authentication before live supplier/approver notifications."),
+        _check("real_slack_provider_configured", "Real Slack provider configured", "warning" if slack_provider.configured else "fail", "pilot", "Slack webhook is present but external delivery remains gated." if slack_provider.configured else "Slack notification provider is not configured.", "Configure only if Slack delivery is needed for a pilot."),
+        _check("real_teams_provider_configured", "Real Teams provider configured", "warning" if teams_provider.configured else "fail", "pilot", "Teams webhook is present but external delivery remains gated." if teams_provider.configured else "Teams notification provider is not configured.", "Configure only if Teams delivery is needed for a pilot."),
+        _check("sender_domain_authentication_ready", "Sender-domain authentication ready", "fail", "pilot", "Sender-domain SPF, DKIM, and DMARC are not confirmed.", "Complete sender-domain authentication before real customer/vendor email."),
+        _check("real_external_delivery_enabled", "Real external notification delivery enabled", "warning" if notification_readiness.real_delivery_enabled else "fail", "pilot", "Real delivery gate is enabled, but provider implementations still require rollout review." if notification_readiness.real_delivery_enabled else "Real external notification delivery is disabled.", "Set NOTIFICATION_REAL_DELIVERY_ENABLED=true only after provider secrets, domain identity, and test recipients are reviewed."),
+        _check("notification_delivery_configured", "Notification delivery configured", "pass" if any_real_notification_can_send else "fail", "pilot", "A real notification provider can send externally." if any_real_notification_can_send else "Notification abstraction exists, but real email/Slack/Teams delivery is not configured.", "Configure and test a real notification provider for pilots."),
         _check("analytics_dashboard_available", "Analytics dashboard available", "pass", "pilot", "Accuracy and exception analytics are available from existing APFlow workflow data."),
         _check("accuracy_exception_visibility_available", "Accuracy and exception visibility", "pass", "pilot", "AP managers can see review rates, blockers, export outcomes, payment status, vendor activity, and notification outcomes."),
         _check("advanced_sla_analytics_ready", "Advanced SLA analytics", "warning", "pilot", "Basic operational analytics exist, but SLA trends and advanced historical analytics are not complete.", "Add time-series SLA trends after pilot data volume is available."),
@@ -402,7 +412,7 @@ def _product_readiness_checks() -> list[ProductReadinessCheck]:
         _check("backup_runbook_documented", "Backup runbook documented", "pass", "operations", "Staging backup/restore operations are documented."),
         _check("public_ports_hardened", "Public ports hardened", "fail", "security", "Production public port hardening is not complete.", "Restrict database/cache/object storage ports before production."),
         _check("production_vendor_access_ready", "Production vendor access ready", "warning", "production", "Vendor access lifecycle foundation exists, but live invitation delivery and support operations are still incomplete.", "Configure email delivery, domain/HTTPS, support ownership, and monitoring before production supplier access."),
-        _check("real_notification_provider_configured", "Real notification provider configured", "fail", "production", "No production notification provider is configured.", "Configure SendGrid/Postmark/Slack/Teams or equivalent."),
+        _check("real_notification_provider_configured", "Real notification provider configured", "pass" if any_real_notification_can_send else "fail", "production", "A production notification provider is configured and can send externally." if any_real_notification_can_send else "No production notification provider can send externally.", "Configure SendGrid/Postmark/SMTP/Slack/Teams or equivalent after provider rollout approval."),
         _check("real_customer_erp_flow_ready", "Real customer ERP flow ready", "fail", "integrations", "Real customer Priority write flow is not live.", "Complete customer-specific mapping, read-only verification, write approval, and rollback plan."),
         _check("billing_configured", "Billing configured", "fail", "production", "Billing is not configured.", "Add commercial billing before production SaaS launch."),
         _check("usage_metering_configured", "Usage metering configured", "pass", "commercial", "Usage metering foundation is configured for core APFlow activity.", "Keep usage limits warn-only until billing is connected."),
