@@ -65,6 +65,7 @@ Current production blockers:
 - Public DB/Redis/MinIO exposure must remain hardened and verified before any production launch.
 - Public port/firewall hardening checklist exists, and staging Compose is expected to bind app/internal service ports to localhost. External verification is still required before production.
 - Backup/restore drill foundation is documented, but scheduled/offsite backups and recent restore evidence are still required for production.
+- Operations health script and backup age check exist for staging, but external monitoring, alerting, log retention, and production incident operations are still missing.
 - Production vendor access is not ready.
 - Notification abstraction and mock delivery exist, but real email/Slack/Teams providers are not configured.
 - Real ERP payment status sync is missing.
@@ -106,6 +107,12 @@ PR #70 adds draft legal/privacy/data-handling materials:
 
 These documents are operational readiness drafts only. They are not legal advice, not lawyer-approved terms, not a DPA, not a production SLA, and not a GDPR/SOC 2/ISO compliance claim. Production Ready remains no until counsel review, customer contracts, DPA terms, retention/deletion processes, monitoring, backups, and production access controls are finalized.
 
+## Monitoring / Operations Health Readiness
+
+PR #71 adds [Operations Health](operations_health.md) and a read-only `scripts/check_operations_health.sh` helper for Docker service status, local API health/readiness, public proxy health, PostgreSQL readiness, disk usage, Docker disk usage, backup freshness, demo reset status, public port inspection, and reverse proxy inspection.
+
+This is an operational foundation only. It does not connect Datadog, Sentry, Grafana Cloud, Better Stack, UptimeRobot, external alerts, SMS/email/Slack notifications, log aggregation, automated remediation, or production incident operations. Production Ready remains no until external monitoring/alerting, log retention, backup alerting, incident response ownership, and production runbooks are finalized.
+
 ## Backup / Restore / Disaster Recovery Readiness
 
 PR #65 adds the staging backup/restore drill plan and safe helper scripts in [Backup / Restore / Disaster Recovery Drill](backup_restore_drill.md). It documents PostgreSQL backup, temporary restore verification, document storage backup for filesystem and MinIO modes, config inventory, restore verification, and rollback procedure.
@@ -129,6 +136,7 @@ Use the Product Readiness Gate in the Admin area before demos, pilots, or produc
 - [Legal / Privacy / Data Handling Pack](legal_privacy_data_pack.md)
 - [Customer Data Handling Summary](customer_data_handling_summary.md)
 - [Pilot Terms Outline](pilot_terms_outline.md)
+- [Operations Health](operations_health.md)
 - [Backup / Restore / Disaster Recovery Drill](backup_restore_drill.md)
 - [Demo Readiness Pack](demo_readiness_pack.md)
 - [Runbook](runbook.md)
