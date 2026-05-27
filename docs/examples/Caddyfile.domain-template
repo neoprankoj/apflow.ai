@@ -1,13 +1,21 @@
-# Template only. Do not apply without completing docs/public_access_https_readiness.md.
-# Replace example.com with the approved domain during the future domain PR.
+# Template only. Do not apply without completing:
+# - docs/public_access_https_readiness.md
+# - docs/reverse_proxy_security_hardening.md
+# Replace apflow.example.com with the approved domain during the future domain PR.
 # This template assumes one public domain with the dashboard at / and API under /api/*.
+# Certificate issuance belongs in the later Domain + HTTPS PR.
 
 {
-	email ops@example.com
+	email ops@apflow.example.com
 }
 
-example.com {
+apflow.example.com {
 	encode zstd gzip
+
+	# Keep upload limits and timeout behavior explicit for invoice PDFs/images and OCR flows.
+	request_body {
+		max_size 25MB
+	}
 
 	# Review headers before enabling in production.
 	header {
@@ -15,15 +23,33 @@ example.com {
 		Referrer-Policy strict-origin-when-cross-origin
 		X-Frame-Options DENY
 		Permissions-Policy "geolocation=(), microphone=(), camera=()"
-		# Add Strict-Transport-Security only after HTTPS is stable.
+		# Enable Strict-Transport-Security only after HTTPS is stable.
 		# Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		# Start CSP as Report-Only after testing Next.js assets, API calls, uploads, and vendor flows.
+		# Content-Security-Policy-Report-Only "default-src 'self'; report-uri /api/security/csp-report"
 	}
 
 	handle_path /api/* {
-		reverse_proxy api:8000
+		reverse_proxy 127.0.0.1:8000 {
+			header_up Host {host}
+			header_up X-Forwarded-Host {host}
+			header_up X-Forwarded-Proto {scheme}
+			transport http {
+				read_timeout 120s
+				write_timeout 120s
+			}
+		}
 	}
 
 	handle {
-		reverse_proxy web:3000
+		reverse_proxy 127.0.0.1:3000 {
+			header_up Host {host}
+			header_up X-Forwarded-Host {host}
+			header_up X-Forwarded-Proto {scheme}
+			transport http {
+				read_timeout 120s
+				write_timeout 120s
+			}
+		}
 	}
 }

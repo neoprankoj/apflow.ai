@@ -186,7 +186,7 @@ Go only if:
 - [ ] Backup/restore drill passed.
 - [ ] `ALLOW_DEMO_RESET=false`.
 - [ ] Internal ports plan reviewed.
-- [ ] Proxy route plan reviewed.
+- [ ] Proxy route and security header plan reviewed in [Reverse Proxy Security Hardening](reverse_proxy_security_hardening.md).
 - [ ] Firewall rules staged.
 - [ ] Rollback documented.
 - [ ] Runtime verifier passes.
