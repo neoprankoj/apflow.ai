@@ -198,22 +198,20 @@ else
 fi
 
 section "Backup freshness"
-LATEST_BACKUP="$(find backups -maxdepth 1 -type f -name '*.dump' -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -n 1 || true)"
-if [[ -z "$LATEST_BACKUP" ]]; then
-  warn "No backups/*.dump file found. This is critical before Domain + HTTPS or real customer pilot data."
-else
-  BACKUP_EPOCH="${LATEST_BACKUP%% *}"
-  BACKUP_FILE="${LATEST_BACKUP#* }"
-  NOW_EPOCH="$(date +%s)"
-  BACKUP_SECONDS="${BACKUP_EPOCH%.*}"
-  BACKUP_AGE_HOURS=$(( (NOW_EPOCH - BACKUP_SECONDS) / 3600 ))
-  printf 'Latest backup: %s\n' "$BACKUP_FILE"
-  printf 'Latest backup age: %s hours\n' "$BACKUP_AGE_HOURS"
-  if (( BACKUP_AGE_HOURS > 24 )); then
-    warn "Latest backup is older than 24 hours."
+if [[ -x scripts/check_backup_age.sh || -f scripts/check_backup_age.sh ]]; then
+  if BACKUP_OUTPUT="$(bash scripts/check_backup_age.sh 2>&1)"; then
+    printf '%s\n' "$BACKUP_OUTPUT"
+    if printf '%s\n' "$BACKUP_OUTPUT" | grep '^WARN:' >/dev/null 2>&1; then
+      warn "Backup age check completed with warning."
+    else
+      ok "Backup age check passed."
+    fi
   else
-    ok "Latest backup is 24 hours old or newer."
+    printf '%s\n' "$BACKUP_OUTPUT"
+    fail "Backup age check is critical. Do not continue Domain + HTTPS or pilot data import until a valid fresh backup exists."
   fi
+else
+  warn "scripts/check_backup_age.sh not found; backup freshness policy could not be checked."
 fi
 
 section "Demo reset flag"

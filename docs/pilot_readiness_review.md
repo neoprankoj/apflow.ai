@@ -61,6 +61,7 @@ The app is pilot-shaped, but real customer pilot use is still blocked by:
 - Certified e-invoicing or tax-authority submission is not implemented.
 - Backup/restore drill should be repeated before pilot.
 - Operations health script exists, but external uptime/alert provider, log retention, and scheduled/offsite backup monitoring are still future work.
+- Scheduled backup policy exists, but offsite encrypted backups, backup failure alerts, and production retention automation are still future work.
 - Legal, privacy, and customer data handling drafts exist, but qualified counsel review and customer-specific terms are still required.
 
 ## E. Current Production-Readiness Blockers
@@ -95,9 +96,10 @@ Recommended next work:
 9. Later - Real ERP Payment Sync Read-Only Foundation.
 10. PR #70 - Legal / Privacy / Data Handling Pack.
 11. PR #71 - Monitoring / Operations Health Foundation.
-12. Later - Domain + HTTPS Deployment.
+12. PR #72 - Scheduled Backup Plan / Backup Age Policy.
+13. Later - Domain + HTTPS Deployment.
 
-Domain + HTTPS remains later. PR #64 and PR #67 prepare access and firewall hardening checklists. PR #68 hardens staging Compose bind addresses. PR #69 adds reverse proxy and security-header planning/templates. PR #70 adds legal/privacy/data-handling draft documents. PR #71 adds read-only staging operations health checks, but it does not connect external monitoring, alerting, log aggregation, HTTPS, or live infrastructure changes.
+Domain + HTTPS remains later. PR #64 and PR #67 prepare access and firewall hardening checklists. PR #68 hardens staging Compose bind addresses. PR #69 adds reverse proxy and security-header planning/templates. PR #70 adds legal/privacy/data-handling draft documents. PR #71 adds read-only staging operations health checks. PR #72 adds backup schedule and age policy templates, but it does not install live schedules, connect offsite backups, delete backups, connect alerts, or change live infrastructure.
 
 ## G. Go / No-Go Checklist For Pilot
 
@@ -105,6 +107,7 @@ Domain + HTTPS remains later. PR #64 and PR #67 prepare access and firewall hard
 - [ ] `ALLOW_DEMO_RESET=false`.
 - [ ] Product Readiness reviewed.
 - [ ] Backup completed.
+- [ ] Backup age checked against [Scheduled Backup Policy](scheduled_backup_policy.md).
 - [ ] Restore tested or documented.
 - [ ] Operations health check reviewed.
 - [ ] Security guardrails reviewed.

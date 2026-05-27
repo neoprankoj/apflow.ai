@@ -1,0 +1,17 @@
+# Template only. Review before installing.
+# Do not install on production without a separate production backup plan review.
+# Ensure /opt/b2b-app/apflowai/backups/logs exists before the first run.
+# Check logs and run scripts/check_backup_age.sh after the first scheduled run.
+# This unit must not contain secrets.
+
+[Unit]
+Description=APFlow staging PostgreSQL backup
+Wants=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/b2b-app/apflowai
+ExecStart=/usr/bin/env bash ./scripts/backup_staging.sh
+StandardOutput=append:/opt/b2b-app/apflowai/backups/logs/backup-staging.log
+StandardError=append:/opt/b2b-app/apflowai/backups/logs/backup-staging.log

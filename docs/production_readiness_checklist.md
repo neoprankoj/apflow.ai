@@ -64,7 +64,7 @@ Current production blockers:
 - Production secret rotation and operational controls must be finalized.
 - Public DB/Redis/MinIO exposure must remain hardened and verified before any production launch.
 - Public port/firewall hardening checklist exists, and staging Compose is expected to bind app/internal service ports to localhost. External verification is still required before production.
-- Backup/restore drill foundation is documented, but scheduled/offsite backups and recent restore evidence are still required for production.
+- Backup/restore drill foundation and scheduled backup policy are documented, but live schedule installation, offsite backups, backup failure alerts, retention automation, and recent production restore evidence are still required for production.
 - Operations health script and backup age check exist for staging, but external monitoring, alerting, log retention, and production incident operations are still missing.
 - Production vendor access is not ready.
 - Notification abstraction and mock delivery exist, but real email/Slack/Teams providers are not configured.
@@ -117,7 +117,9 @@ This is an operational foundation only. It does not connect Datadog, Sentry, Gra
 
 PR #65 adds the staging backup/restore drill plan and safe helper scripts in [Backup / Restore / Disaster Recovery Drill](backup_restore_drill.md). It documents PostgreSQL backup, temporary restore verification, document storage backup for filesystem and MinIO modes, config inventory, restore verification, and rollback procedure.
 
-Production Ready remains no until scheduled backups, offsite encrypted copies, retention policy, and a recent restore drill are implemented and verified.
+PR #72 adds [Scheduled Backup Policy](scheduled_backup_policy.md), `scripts/check_backup_age.sh`, cron/systemd scheduling templates, and a backup age policy. It does not install a live schedule, connect offsite backups, delete old backups, add backup-failure alerts, or make Production Ready pass.
+
+Production Ready remains no until scheduled backups are installed and observed, offsite encrypted copies exist, backup-failure alerting exists, retention automation is reviewed, and a recent restore drill is implemented and verified.
 
 ## Operator Rule
 
@@ -137,6 +139,7 @@ Use the Product Readiness Gate in the Admin area before demos, pilots, or produc
 - [Customer Data Handling Summary](customer_data_handling_summary.md)
 - [Pilot Terms Outline](pilot_terms_outline.md)
 - [Operations Health](operations_health.md)
+- [Scheduled Backup Policy](scheduled_backup_policy.md)
 - [Backup / Restore / Disaster Recovery Drill](backup_restore_drill.md)
 - [Demo Readiness Pack](demo_readiness_pack.md)
 - [Runbook](runbook.md)
